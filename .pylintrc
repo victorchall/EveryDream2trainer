@@ -1,0 +1,5 @@
+[TYPECHECK]
+generated-members=numpy.*, torch.*
+
+[FORMAT]
+max-line-length=160
