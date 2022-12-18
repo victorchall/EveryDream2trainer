@@ -18,9 +18,8 @@ Resuming from a checkpoint, 50 epochs, 6 batch size, 3e-6 learning rate, cosine 
 
     python train.py --resume_ckpt "sd_v1-5_vae" ^
     --max_epochs 50 ^
-    --data_root "R:\everydream-trainer\training_samples\mega\ff7r\man_ff7r\cloud" ^
+    --data_root "input" ^
     --lr_scheduler cosine ^
-    --lr_decay_steps 1500 ^
     --project_name myproj ^
     --batch_size 6 ^
     --sample_steps 200 ^
