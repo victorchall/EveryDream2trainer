@@ -2,7 +2,7 @@
 
 In order to train, you need a base model on which to train.  This is a one-time setup to configure base models when you want to use a particular base.
 
-Make sure the trainer is installed properly first. See [SETUP.md](doc/SETUP.md) for more details. 
+Make sure the trainer is installed properly first. See [SETUP.md](SETUP.md) for more details. 
 
 When you finish you should see something like this, come back to reference this picture as you go through the steps below:
 
