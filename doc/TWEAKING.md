@@ -1,5 +1,39 @@
 # Tweaking settings
 
+Make sure you pay attention to your logs and sample images.  Launch tensorboard in a second command line. See (logging)[doc/LOGGING.md] for more info.
+
+    tensorboard --logdir logs
+
+## Project name
+
+Naming your project will help you track what the heck you're doing when you're floating in checkpoint files later.
+
+You may wish to consider adding "sd1" or "sd2v" or similar to remember what the base was, as you'll also have to tell your inference app what you were using, as its difficult for programs to know what inference YAML to use automatically.  For instance, Automatic1111 webui requires you to copy the v2 inference YAML and rename it to match your checkpoint name so it knows how to load the file, tough it assumes SD 1.x compatible.  Something to keep in mind if you start training on SD2.1.
+
+    --project_name "jets_sd21768v" ^
+
+## Epochs
+
+EveryDream 2.0 has done away with repeats and instead you should set your max_epochs.  Changing epochs has the same effect as changing repeats.  For example, if you had 50 repeats and 5 epochs, you would now set max_epochs to 250.  This is a bit more intuitive as there is no more double meaning for epochs and repeats.
+
+    --max_epochs 250 ^
+
+## Save interval
+
+While EveryDream 1.0 saved a checkpoint every epoch, this is no longer the case as it would produce too many files when repeats are removed.  To balance both people training large and small datasets, you can now set the interval at which checkpoints are saved.  The default is 30 minutes, but you can change it to whatever you want. 
+
+For isntance, if you are working on a very large dataset of thousands of images and lots of different concepts and know it will run for a few hours you may want to save every hour instead, so you would set it to 60.
+
+    --ckpt_every_n_minutes 60 ^
+
+Every save interval, a full ckpt in Diffusers format is saved from which you can continue, and a CKPT format file is also saved for use in your favorite webui.  Keep in mind even save_every_n_epochs 1 is respected, but a pretty bad idea unless you have a lot of disk space...
+
+Additionally, these are saved at the end of training. 
+
+If you wish instead to save every certain number of epochs, you can set the minutes interval 0 and use save_every_n_epochs instead.  This is not recommended for large datasets as it will produce a lot of files.
+
+    --ckpt_every_n_minutes 0 ^
+    --save_every_n_epochs 25 ^
 
 ## Learning Rate
 
@@ -39,7 +73,16 @@ With the above setings, the LR will start at zero, then reach 2e-6 in 50 steps, 
 
 The AdamW optimizer is the default and what was used by EveryDream 1.0.  It's a good optimizer for stable diffusion and appears to be what was used to train SD itself.
 
-AdamW 8bit is quite a bit faster and uses less VRAM.  I currently do recommend using it for most cases as it seems worth the tradeoff. 
+AdamW 8bit is quite a bit faster and uses less VRAM.  I currently **recommend** using it for most cases as it seems worth a potential tradeoff in speed.
 
     --useadam8bit ^
 
+## Sample prompts
+
+You can set your own sample prompts by adding them, one line at a time, to sample_prompts.txt.  Or you can point to another file with --sample_prompts_file.
+
+    --sample_prompts "project_XYZ_test_prompts.txt" ^
+
+Keep in mind a lot of prompts will take longer to generate.  You may also want to adjust sample_steps to a different value to get samples left often.  This is probably a good idea when training a larger dataset that you know will take longer to train, where more frequent samples will not help you.
+
+    --sample_steps 500 ^

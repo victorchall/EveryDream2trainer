@@ -1,7 +1,16 @@
+# Starting a training session
 
 Here are some example commands to get you started, you can copy paste them into your command line and press enter. 
 Make sure the last line does not have ^ but all other lines do.
 
+
+**First, open a command line, then make sure to activate the environment:**
+
+    activate_venv.bat
+
+You should see your command line show ```(venv)``` at the beginning of the line.  If you don't, something went wrong with setup.
+
+I recommend you copy one of the examples below and keep it in a text file for future reference.  Your settings are logged in the logs folder, but you'll need to make a command to start training.  
 
 Training examples:
 
@@ -34,9 +43,11 @@ Training from SD2 512 base model, 18 epochs, 4 batch size, 1.2e-6 learning rate,
     --ckpt_every_n_minutes 30 ^
     --useadam8bit
 
+Training from the "SD21" model on the "jets" dataset on another drive, for 50 epochs, 6 batch size, 1.5e-6 learning rate, cosine scheduler that will decay in 1500 steps, generate samples evern 100 steps, 30 minute checkpoint interval, adam8bit:
+
     python train.py --resume_ckpt "SD21" ^
     --data_root "R:\everydream-trainer\training_samples\mega\gt\objects\jets" ^
-    --max_epochs 50 ^
+    --max_epochs 25 ^
     --lr_scheduler cosine ^
     --lr_decay_steps 1500 ^
     --lr_warmup_steps 20 ^
@@ -44,7 +55,7 @@ Training from SD2 512 base model, 18 epochs, 4 batch size, 1.2e-6 learning rate,
     --batch_size 6 ^
     --sample_steps 100 ^
     --lr 1.5e-6 ^
-    --ckpt_every_n_minutes 15 ^
+    --ckpt_every_n_minutes 30 ^
     --useadam8bit 
 
 
