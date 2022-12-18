@@ -1,0 +1,35 @@
+python -m venv venv
+call "venv\Scripts\activate.bat"
+
+python -m pip install --upgrade pip
+pip install torch==1.12.1+cu116 torchvision==0.13.1+cu116 --extra-index-url https://download.pytorch.org/whl/cu116
+pip install transformers==4.25.1
+pip install diffusers[torch]==0.10.2
+pip install pynvml==11.4.1
+pip install bitsandbytes==0.35.0
+git clone https://github.com/DeXtmL/bitsandbytes-win-prebuilt tmp/bnb_cache
+pip install ftfy==6.1.1
+pip install aiohttp==3.8.3
+pip install tensorboard>=2.11.0
+pip install wandb==0.13.6
+pip install -U -I --no-deps https://github.com/C43H66N12O12S2/stable-diffusion-webui/releases/download/f/xformers-0.0.14.dev0-cp310-cp310-win_amd64.whl
+::pip install "xformers-0.0.15.dev0+affe4da.d20221212-cp38-cp38-win_amd64.whl" --force-reinstall
+pip install pytorch-lightning==1.6.5
+pip install OmegaConf==2.2.3
+pip install numpy==1.22.4
+python utils/patch_bnb.py
+python utils/get_yamls.py
+GOTO :eof
+
+::pip install git+https://github.com/huggingface/diffusers.git@0ca1724#egg=diffusers --force-reinstall
+
+:: use base transformers or precompiled xformers from autowebui project for better performance
+::pip install -U -I --no-deps https://github.com/C43H66N12O12S2/stable-diffusion-webui/releases/download/f/xformers-0.0.14.dev0-cp310-cp310-win_amd64.whl
+:: or compile xformers yourself
+
+:ERROR
+echo Something blew up. Make sure Pyton 3.10.x is installed and in your PATH.
+
+:eof
+ECHO done
+pause
