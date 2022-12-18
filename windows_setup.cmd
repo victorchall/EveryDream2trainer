@@ -21,12 +21,6 @@ python utils/patch_bnb.py
 python utils/get_yamls.py
 GOTO :eof
 
-::pip install git+https://github.com/huggingface/diffusers.git@0ca1724#egg=diffusers --force-reinstall
-
-:: use base transformers or precompiled xformers from autowebui project for better performance
-::pip install -U -I --no-deps https://github.com/C43H66N12O12S2/stable-diffusion-webui/releases/download/f/xformers-0.0.14.dev0-cp310-cp310-win_amd64.whl
-:: or compile xformers yourself
-
 :ERROR
 echo Something blew up. Make sure Pyton 3.10.x is installed and in your PATH.
 

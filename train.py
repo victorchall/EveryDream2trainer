@@ -147,6 +147,12 @@ def main(args):
     set_seed(seed)
     gpu = GPU()
 
+    if args.ckpt_every_n_minutes < 1:
+        args.ckpt_every_n_minutes = 99999
+
+    if args.cond_dropout > 0.25:
+
+
     @torch.no_grad()
     def __save_model(save_path, unet, text_encoder, tokenizer, scheduler, vae):
         """
@@ -198,6 +204,7 @@ def main(args):
             try:
                 pipe.enable_xformers_memory_efficient_attention()
             except Exception as ex:
+                print("failed to load xformers, continuing without it")
                 pass
         return pipe
 
@@ -300,7 +307,7 @@ def main(args):
     default_lr = 2e-6 if args.useadam8bit else 2e-6
     lr = args.lr if args.lr is not None else default_lr
 
-    vae = vae.to(torch.device("cuda"), dtype=torch.float16 if args.sd1 else torch.float32)
+    vae = vae.to(torch.device("cuda"), dtype=torch.float32)
     unet = unet.to(torch.device("cuda"))
     text_encoder = text_encoder.to(torch.device("cuda"))
 
@@ -343,12 +350,17 @@ def main(args):
         flip_p=0.0,
         debug_level=1,
         batch_size=args.batch_size,
-        conditional_dropout=0.03,
+        conditional_dropout=args.cond_dropout,
         resolution=args.resolution,
         tokenizer=tokenizer,
     )
 
-    lr_warmup_steps = int(args.lr_decay_steps / 20) if args.lr_warmup_steps is None else args.lr_warmup_steps
+    epoch_len = math.ceil(len(train_batch) / args.batch_size)
+
+    if args.lr_decay_steps is None or args.lr_decay_steps < 1:
+        args.lr_decay_steps = int(epoch_len * args.max_epochs * 1.2)
+
+    lr_warmup_steps = int(args.lr_decay_steps / 50) if args.lr_warmup_steps is None else args.lr_warmup_steps
 
     lr_scheduler = get_scheduler(
         args.lr_scheduler,
@@ -462,7 +474,7 @@ def main(args):
     )
 
     total_batch_size = args.batch_size * _GRAD_ACCUM_STEPS
-    epoch_len = math.ceil(len(train_batch) / args.batch_size)
+    
 
     unet.train()
     text_encoder.requires_grad_(True)
@@ -476,7 +488,7 @@ def main(args):
     logging.info(f" {Fore.GREEN}Project name: {Style.RESET_ALL}{Fore.LIGHTGREEN_EX}{args.project_name}{Style.RESET_ALL}")
     logging.info(f" {Fore.GREEN}grad_accum: {Style.RESET_ALL}{Fore.LIGHTGREEN_EX}{_GRAD_ACCUM_STEPS}{Style.RESET_ALL}"), 
     logging.info(f" {Fore.GREEN}batch_size: {Style.RESET_ALL}{Fore.LIGHTGREEN_EX}{args.batch_size}{Style.RESET_ALL}")
-    logging.info(f" {Fore.GREEN}total_batch_size: {Style.RESET_ALL}{Fore.LIGHTGREEN_EX}{total_batch_size}")
+    #logging.info(f" {Fore.GREEN}total_batch_size: {Style.RESET_ALL}{Fore.LIGHTGREEN_EX}{total_batch_size}")
     logging.info(f" {Fore.GREEN}epoch_len: {Fore.LIGHTGREEN_EX}{epoch_len}{Style.RESET_ALL}")
 
     epoch_pbar = tqdm(range(args.max_epochs), position=0)
@@ -647,8 +659,8 @@ if __name__ == "__main__":
     argparser = argparse.ArgumentParser(description="EveryDream Training options")
     argparser.add_argument("--resume_ckpt", type=str, required=True, default="sd_v1-5_vae.ckpt")
     argparser.add_argument("--lr_scheduler", type=str, default="constant", help="LR scheduler, (default: constant)", choices=["constant", "linear", "cosine", "polynomial"])
-    argparser.add_argument("--lr_warmup_steps", type=int, default=None, help="Steps to reach max LR during warmup (def: 0.10x of lr_decay_steps), nonfunctional for constant scheduler")
-    argparser.add_argument("--lr_decay_steps", type=int, default=1500, help="Steps to reach minimum LR")
+    argparser.add_argument("--lr_warmup_steps", type=int, default=None, help="Steps to reach max LR during warmup (def: 0.02 of lr_decay_steps), non-functional for constant scheduler")
+    argparser.add_argument("--lr_decay_steps", type=int, default=0, help="Steps to reach minimum LR, default: automatically set")
     argparser.add_argument("--log_step", type=int, default=25, help="How often to log training stats, def: 25, recommend default")
     argparser.add_argument("--max_epochs", type=int, default=300, help="Maximum number of epochs to train for")
     argparser.add_argument("--ckpt_every_n_minutes", type=int, default=20, help="Save checkpoint every n minutes, def: 20")
@@ -669,6 +681,7 @@ if __name__ == "__main__":
     argparser.add_argument("--save_optimizer", action="store_true", default=False, help="saves optimizer state with ckpt, useful for resuming training later")
     argparser.add_argument("--resolution", type=int, default=512, help="resolution to train", choices=supported_resolutions)
     argparser.add_argument("--sd1", action="store_true", default=False, help="set if training SD1.x, else SD2 is assumed")
+    argparser.add_argument("--cond_dropout", type=float, default=0.04, help="Conditional drop out as decimal 0.0-1.0, see docs for more info (def: 0.04)")
     args = argparser.parse_args()
 
     main(args)
