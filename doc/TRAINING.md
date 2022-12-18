@@ -45,8 +45,7 @@ Training from SD2 512 base model, 18 epochs, 4 batch size, 1.2e-6 learning rate,
     --sample_steps 100 ^
     --lr 1.5e-6 ^
     --ckpt_every_n_minutes 15 ^
-    --useadam8bit ^
-    --clip_grad_norm 1 ^
+    --useadam8bit 
 
 
 Copy paste the above to your command line and press enter.
@@ -62,6 +61,8 @@ Warmup and decay only count for some schedulers! Constant is not one of them.
 
 Currently "constant" and "cosine" are recommended.  I'll add support to others upon request.
 
-How to resume:
+## How to resume
+
 Point your resume_ckpt to the path in logs like so:
---resume_ckpt "R:\ed3\logs\myproj20221213-161620\ckpts\myproj-ep22-gs01099" ^
+
+```--resume_ckpt "R:\everydream2trainer\logs\myproj20221213-161620\ckpts\myproj-ep22-gs01099" ^```

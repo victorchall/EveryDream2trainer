@@ -16,4 +16,6 @@ If you find this tool useful, please consider subscribing to the project on Patr
 
 [Training](doc/TRAINING.md)
 
-[Tweaking](doc/TWEAKING.md)
+[Basic Tweaking](doc/TWEAKING.md)
+
+[Advanced Tweaking](doc/ATWEAKING.md)
