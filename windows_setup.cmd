@@ -12,7 +12,7 @@ git clone https://github.com/DeXtmL/bitsandbytes-win-prebuilt tmp/bnb_cache
 pip install ftfy==6.1.1
 pip install aiohttp==3.8.3
 pip install tensorboard>=2.11.0
-pip instal protobuf==3.20.1
+pip install protobuf==3.20.1
 pip install wandb==0.13.6
 pip install pyre-extensions==0.0.23
 pip install -U -I --no-deps https://github.com/C43H66N12O12S2/stable-diffusion-webui/releases/download/f/xformers-0.0.14.dev0-cp310-cp310-win_amd64.whl
