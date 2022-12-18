@@ -3,7 +3,6 @@ call "venv\Scripts\activate.bat"
 echo should be in venv here
 cd .
 python -m pip install --upgrade pip
-pip install numpy==1.22.4
 pip install torch==1.12.1+cu116 torchvision==0.13.1+cu116 --extra-index-url https://download.pytorch.org/whl/cu116
 pip install transformers==4.25.1
 pip install diffusers[torch]==0.10.2
@@ -20,7 +19,7 @@ pip install -U -I --no-deps https://github.com/C43H66N12O12S2/stable-diffusion-w
 ::pip install "xformers-0.0.15.dev0+affe4da.d20221212-cp38-cp38-win_amd64.whl" --force-reinstall
 pip install pytorch-lightning==1.6.5
 pip install OmegaConf==2.2.3
-pip install numpy==1.22.4
+pip install numpy==1.23.5
 python utils/patch_bnb.py
 python utils/get_yamls.py
 GOTO :eof

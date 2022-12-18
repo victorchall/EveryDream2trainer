@@ -56,24 +56,13 @@ A learning rate scheduler can change your learning rate as training progresses.
 
 At this time, ED2.0 supports constant or cosine scheduler. 
 
-The constant scheduler is the default and keeps your LR set to the value you set in the command line.  That's really it for constant!
-
-Cosine scheduler will make the LR warm up, then decay along a smooth curve.  The length of the warmup and the length of the "tail" of the curve are defined by additional arguments.
-
-Here's an example of a cosine scheduler 50 step warmup and 1500 step decay:
-
-    --lr 2e-6 ^
-    --lr_scheduler cosine ^
-    --lr_decay_steps 1500 ^
-    --lr_warmup_steps 50 ^
-
-With the above setings, the LR will start at zero, then reach 2e-6 in 50 steps, then decay back to zero in 1500 steps.  If your training continues past 1500 steps, the LR will climb again along a cosine curve, so keep that in mind!
+The constant scheduler is the default and keeps your LR set to the value you set in the command line.  That's really it for constant!  I recommend sticking with it until you are comfortable with general training.  More info in the [Advanced Tweaking](doc/ATWEAKING.md) document.
 
 ## AdamW vs AdamW 8bit
 
 The AdamW optimizer is the default and what was used by EveryDream 1.0.  It's a good optimizer for stable diffusion and appears to be what was used to train SD itself.
 
-AdamW 8bit is quite a bit faster and uses less VRAM.  I currently **recommend** using it for most cases as it seems worth a potential tradeoff in speed.
+AdamW 8bit is quite a bit faster and uses less VRAM.  I currently **recommend** using it for most cases as it seems worth a potential reduction in quality.
 
     --useadam8bit ^
 

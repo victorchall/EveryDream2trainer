@@ -150,7 +150,8 @@ def main(args):
     if args.ckpt_every_n_minutes < 1:
         args.ckpt_every_n_minutes = 99999
 
-    if args.cond_dropout > 0.25:
+    if args.cond_dropout > 0.26:
+        logging.warning(f"{Fore.YELLOW}cond_dropout is set fairly high: {args.cond_dropout}, make sure this was intended{Style.RESET_ALL}")
 
 
     @torch.no_grad()
@@ -354,6 +355,8 @@ def main(args):
         resolution=args.resolution,
         tokenizer=tokenizer,
     )
+
+    torch.cuda.benchmark = False
 
     epoch_len = math.ceil(len(train_batch) / args.batch_size)
 
