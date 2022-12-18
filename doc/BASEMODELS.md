@@ -6,7 +6,7 @@ Make sure the trainer is installed properly first. See [SETUP.md](doc/SETUP.md) 
 
 When you finish you should see something like this, come back to reference this picture as you go through the steps below:
 
-![models](ckptcache.png)
+![models](ckptcache.png) *(this picture is just an EXAMPLE)*
 
 ## Download models
 
@@ -43,10 +43,10 @@ And the SD2.1 768 model (uses v2-v yaml and "v_prediction" prediction type):
     python utils/convert_original_stable_diffusion_to_diffusers.py --scheduler_type ddim ^
     --original_config_file v2-inference-v.yaml ^
     --image_size 768 ^
-    --checkpoint_path v2-1_768-ema-pruned.ckpt ^
+    --checkpoint_path v2-1_768-nonema-pruned.ckpt ^
     --prediction_type v_prediction ^
     --upcast_attn False ^
-    --dump_path "ckpt_cache/v2-1_768-ema-pruned"
+    --dump_path "ckpt_cache/v2-1_768-nonema-pruned"
 
 And finally the SD2.0 512 base model (generally not recommended base model):
 
