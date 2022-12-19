@@ -6,7 +6,7 @@ You can train resolutions from 512 to 1024 in 64 pixel increments.  General resu
 
     --resolution 640 ^
 
-For instance, if training from the base 1.5 model, you can try trying at 576, 640, or 704. 
+For instance, if training from the base 1.5 model, you can try trying at 576, 640, or 704.
 
 If you are training on a base model that is 768, such as SD 2.1 768-v, you should also probably use 768 as a base number and adjust from there.
 
@@ -47,6 +47,18 @@ There is also warmup, which will default to 2% of the decay steps.  You can manu
 
     --lr_warmup_steps 100 ^
 
-Cosine also has a decay period to define how long it takes to get to zero LR as it tapers.  By default, the trainer sets this to slightly longer than it will take to get to your ```--max_epochs``` number of steps.   However, if you want to tweak, you have to set the number of steps yourself and estimate what that will be. 
+Cosine also has a decay period to define how long it takes to get to zero LR as it tapers.  By default, the trainer sets this to slightly longer than it will take to get to your ```--max_epochs``` number of steps so LR doesn't go all the way to zero and waste compute time.   However, if you want to tweak, you have to set the number of steps yourself and estimate what that will be.  If you set this, be sure to watch your LR log in tensorboard to make sure it does what you expect.
 
-    --lr_decay_steps 0 ^
+    --lr_decay_steps 2500 ^
+
+## Gradient accumulation
+
+Gradient accumulation is sort of like a virtual batch size increase, averaging the learning over more than one step (batch) before applying it to the model update.
+
+Example:
+
+    --grad_accum 2 ^
+
+The above example with combine the loss from 2 batches before applying updates.  This *may* be a good idea for higher resolution training that requires smaller batch size but mega batch sizes are also not the be-all-end all.
+
+Some experimentation shows if you already have batch size in the 6-8 range than grad accumulation of more than 2 just reduces quality, but you can experiment. 

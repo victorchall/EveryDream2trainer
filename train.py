@@ -243,7 +243,10 @@ def main(args):
             ).images[0]
 
             draw = ImageDraw.Draw(image)
-            font = ImageFont.truetype(font="arial.ttf",size=24)
+            try:
+                font = ImageFont.truetype(font="arial.ttf", size=20)
+            except:
+                font = ImageFont.load_default()
             print_msg = f"cfg:{cfg:.1f}"
 
             l, t, r, b = draw.textbbox(xy=(0,0), text=print_msg, font=font)
@@ -258,15 +261,12 @@ def main(args):
         del draw, font
         return image
 
-    #@torch.no_grad()
     def __generate_test_samples(pipe, prompts, gs, log_writer, log_folder, random_captions=False, resolution=512):      
         """
         generates samples at different cfg scales and saves them to disk
         """
         logging.info(f"Generating samples gs:{gs}, for {prompts}")
 
-        #with torch.inference_mode(), suppress_stdout():
-        #with autocast():
         i = 0
         for prompt in prompts:
             if prompt is None or len(prompt) < 2:
@@ -305,8 +305,8 @@ def main(args):
 
     try: 
         hf_ckpt_path = convert_to_hf(args.resume_ckpt)
-        text_encoder = CLIPTextModel.from_pretrained(hf_ckpt_path, subfolder="text_encoder", torch_dtype=torch.float32)
-        vae = AutoencoderKL.from_pretrained(hf_ckpt_path, subfolder="vae", torch_dtype=torch.float32)
+        text_encoder = CLIPTextModel.from_pretrained(hf_ckpt_path, subfolder="text_encoder", torch_dtype=torch.float32 if not args.amp else torch.float16)
+        vae = AutoencoderKL.from_pretrained(hf_ckpt_path, subfolder="vae", torch_dtype=torch.float32 if not args.amp else torch.float16)
         unet = UNet2DConditionModel.from_pretrained(hf_ckpt_path, subfolder="unet", torch_dtype=torch.float32)
         scheduler = DDIMScheduler.from_pretrained(hf_ckpt_path, subfolder="scheduler")
         tokenizer = CLIPTokenizer.from_pretrained(hf_ckpt_path, subfolder="tokenizer", use_fast=False)
@@ -323,7 +323,7 @@ def main(args):
                 f" correctly and a GPU is available: {e}"
             )
 
-    default_lr = 2e-6 if args.useadam8bit else 2e-6
+    default_lr = 2e-6
     lr = args.lr if args.lr is not None else default_lr
 
     vae = vae.to(torch.device("cuda"), dtype=torch.float32)
@@ -339,7 +339,7 @@ def main(args):
         params_to_train = itertools.chain(unet.parameters(), text_encoder.parameters())
 
     betas = (0.9, 0.999)
-    epsilon = 1e-8 if args.mixed_precision == "NO" else 1e-7
+    epsilon = 1e-8 if not args.amp else 1e-8
     weight_decay = 0.01
     if args.useadam8bit:
         logging.info(f"{Fore.CYAN} * Using AdamW 8-bit Optimizer *{Style.RESET_ALL}")
@@ -352,7 +352,7 @@ def main(args):
             weight_decay=weight_decay,
         )
     else:
-        logging.info(f"{Fore.CYAN} * Using AdamW8 standard Optimizer *{Style.RESET_ALL}")
+        logging.info(f"{Fore.CYAN} * Using AdamW standard Optimizer *{Style.RESET_ALL}")
         optimizer = torch.optim.AdamW(
             itertools.chain(params_to_train),
             lr=lr,
@@ -379,7 +379,7 @@ def main(args):
     epoch_len = math.ceil(len(train_batch) / args.batch_size)
 
     if args.lr_decay_steps is None or args.lr_decay_steps < 1:
-        args.lr_decay_steps = int(epoch_len * args.max_epochs * 1.2)
+        args.lr_decay_steps = int(epoch_len * args.max_epochs * 1.3)
 
     lr_warmup_steps = int(args.lr_decay_steps / 50) if args.lr_warmup_steps is None else args.lr_warmup_steps
 
@@ -390,13 +390,13 @@ def main(args):
         num_training_steps=args.lr_decay_steps * _GRAD_ACCUM_STEPS,
     )
 
-    # read prompts from prompts_file.txt
     sample_prompts = []
     with open(args.sample_prompts, "r") as f:
         for line in f:
             sample_prompts.append(line.strip())
 
     log_folder = os.path.join("logs", f"{args.project_name}{log_time}")
+    logging.info(f"Logging to {log_folder}")
 
     if False: #args.wandb is not None and args.wandb: # not yet supported
         log_writer = wandb.init(project="EveryDream2FineTunes", 
@@ -440,7 +440,7 @@ def main(args):
             interrupted=True
             global global_step
             #TODO: save model on ctrl-c
-            interrupted_checkpoint_path = os.path.join(f"{log_folder}/interrupted-gs{global_step}")
+            interrupted_checkpoint_path = os.path.join(f"{log_folder}/ckpts/interrupted-gs{global_step}")
             print()
             logging.error(f"{Fore.LIGHTRED_EX} ************************************************************************{Style.RESET_ALL}")
             logging.error(f"{Fore.LIGHTRED_EX} CTRL-C received, attempting to save model to {interrupted_checkpoint_path}{Style.RESET_ALL}")
@@ -459,9 +459,9 @@ def main(args):
     logging.info(f" saving ckpts every {args.save_every_n_epochs } epochs")
 
     scaler = torch.cuda.amp.GradScaler(
-        enabled=False,
-        #enabled=True if args.sd1 else False,
-        init_scale=2**16,
+        #enabled=False,
+        enabled=True if args.amp else False,
+        init_scale=2**1,
         growth_factor=1.000001,
         backoff_factor=0.9999999,
         growth_interval=50,
@@ -494,7 +494,7 @@ def main(args):
         collate_fn=collate_fn
     )
 
-    total_batch_size = args.batch_size * _GRAD_ACCUM_STEPS
+    total_batch_size = args.batch_size * args.grad_accum
     
 
     unet.train()
@@ -507,7 +507,7 @@ def main(args):
     logging.info(f" scheduler: {scheduler.__class__}")
 
     logging.info(f" {Fore.GREEN}Project name: {Style.RESET_ALL}{Fore.LIGHTGREEN_EX}{args.project_name}{Style.RESET_ALL}")
-    logging.info(f" {Fore.GREEN}grad_accum: {Style.RESET_ALL}{Fore.LIGHTGREEN_EX}{_GRAD_ACCUM_STEPS}{Style.RESET_ALL}"), 
+    logging.info(f" {Fore.GREEN}grad_accum: {Style.RESET_ALL}{Fore.LIGHTGREEN_EX}{args.grad_accum}{Style.RESET_ALL}"), 
     logging.info(f" {Fore.GREEN}batch_size: {Style.RESET_ALL}{Fore.LIGHTGREEN_EX}{args.batch_size}{Style.RESET_ALL}")
     #logging.info(f" {Fore.GREEN}total_batch_size: {Style.RESET_ALL}{Fore.LIGHTGREEN_EX}{total_batch_size}")
     logging.info(f" {Fore.GREEN}epoch_len: {Fore.LIGHTGREEN_EX}{epoch_len}{Style.RESET_ALL}")
@@ -525,7 +525,6 @@ def main(args):
     training_start_time = time.time()
     last_epoch_saved_time = training_start_time
 
-    # (global_step: int, epoch_pbar, gpu, log_writer, **logs):
     append_epoch_log(global_step=global_step, epoch_pbar=epoch_pbar, gpu=gpu, log_writer=log_writer)
 
     torch.cuda.empty_cache()
@@ -541,7 +540,6 @@ def main(args):
             steps_pbar.reset()
             images_per_sec_epoch = []
 
-            #for step, batch in enumerate(self.ctx.train_dataloader):
             for step, batch in enumerate(train_dataloader):
                 step_start_time = time.time()
 
@@ -562,7 +560,8 @@ def main(args):
 
                 cuda_caption = batch["tokens"].to(text_encoder.device)  
 
-                encoder_hidden_states = text_encoder(cuda_caption)
+                with autocast(enabled=args.amp):
+                    encoder_hidden_states = text_encoder(cuda_caption)
 
                 # if clip_skip > 0: #TODO
                 #     encoder_hidden_states = encoder_hidden_states['last_hidden_state'][-clip_skip]
@@ -577,30 +576,35 @@ def main(args):
                     raise ValueError(f"Unknown prediction type {scheduler.config.prediction_type}")
                 #del noise, latents
 
-                #with torch.cuda.amp.autocast(enabled=lowvram):
-                with autocast(): # xformers requires fp16
+                with autocast(): # xformers requires autocast
                     model_pred = unet(noisy_latents, timesteps, encoder_hidden_states.last_hidden_state).sample
 
-                with autocast(enabled=args.sd1):
-                    loss = torch_functional.mse_loss(model_pred.float(), target.float(), reduction="mean")
+                #with autocast(enabled=args.amp):
+                loss = torch_functional.mse_loss(model_pred.float(), target.float(), reduction="mean")
                 #del timesteps, encoder_hidden_states, noisy_latents
 
                 if args.clip_grad_norm is not None:
                     torch.nn.utils.clip_grad_norm_(parameters=unet.parameters(), max_norm=args.clip_grad_norm)
                     torch.nn.utils.clip_grad_norm_(parameters=text_encoder.parameters(), max_norm=args.clip_grad_norm)
                 
-                #with torch.cuda.amp(enabled=False):
-                #if args.mixed_precision in ['bf16','fp16']:
-                if args.sd1:
+                if args.amp:
                     with autocast():
-                        scaler.scale(loss).backward()
-                    scaler.step(optimizer)
-                    scaler.update()
+                        loss.backward()
+                    #scaler.unscale_(optimizer)
+                    #if args.clip_grad_norm is not None:
+                    torch.nn.utils.clip_grad_norm_(parameters=unet.parameters(), max_norm=2)
+                    torch.nn.utils.clip_grad_norm_(parameters=text_encoder.parameters(), max_norm=2)
+                    #scaler.step(optimizer)
+                    #scaler.update()
+                    optimizer.step()
+                    optimizer.zero_grad()
                 else:
                     loss.backward()
-                    optimizer.step()
+                    if ((global_step + 1) % args.grad_accum == 0) or (step == epoch_len - 1):
+                        optimizer.step()
+                        optimizer.zero_grad()
+
                 lr_scheduler.step()
-                optimizer.zero_grad()
 
                 steps_pbar.update(1)
                 global_step += 1
@@ -608,7 +612,6 @@ def main(args):
                 images_per_sec = args.batch_size / (time.time() - step_start_time)
                 images_per_sec_epoch.append(images_per_sec)
 
-                #with torch.no_grad():
                 if (global_step + 1) % args.log_step == 0:
                     lr = lr_scheduler.get_last_lr()[0]
                     logs = {"loss/step": loss.detach().item(), "lr": lr, "img/s": images_per_sec}
@@ -628,7 +631,6 @@ def main(args):
 
                     with torch.no_grad():
                         if sample_prompts is not None and len(sample_prompts) > 0 and len(sample_prompts[0]) > 1:
-                            #(pipe, prompts, gs, log_writer, log_folder, random_captions=False):
                             __generate_test_samples(pipe=pipe, prompts=sample_prompts, log_writer=log_writer, log_folder=log_folder, gs=global_step, resolution=args.resolution)
                         else:
                             max_prompts = min(4,len(batch["captions"]))
@@ -649,12 +651,12 @@ def main(args):
 
                 # end of step
 
-            # end of epoch
             elapsed_epoch_time = (time.time() - epoch_start_time) / 60         
             epoch_times.append(dict(epoch=epoch, time=elapsed_epoch_time))
             log_writer.add_scalar("performance/minutes per epoch", elapsed_epoch_time, global_step)
 
             epoch_pbar.update(1)
+            # end of epoch
 
         # end of training
 
@@ -664,7 +666,7 @@ def main(args):
         total_elapsed_time = time.time() - training_start_time
         logging.info(f"{Fore.CYAN}Training complete{Style.RESET_ALL}")
         logging.info(f"Total training time took {total_elapsed_time:.2f} seconds, total steps: {global_step}")
-        #logging.info(f"Average epoch time: {np.mean([t['time'] for t in epoch_times]) / 60:.2f} minutes")
+        logging.info(f"Average epoch time: {np.mean([t['time'] for t in epoch_times]):.2f} minutes")
 
     except Exception as ex:
         logging.error(f"{Fore.LIGHTYELLOW_EX}Something went wrong, attempting to save model{Style.RESET_ALL}")
@@ -703,7 +705,7 @@ if __name__ == "__main__":
     argparser.add_argument("--wandb", action="store_true", default=False, help="enable wandb logging instead of tensorboard, requires env var WANDB_API_KEY")
     argparser.add_argument("--save_optimizer", action="store_true", default=False, help="saves optimizer state with ckpt, useful for resuming training later")
     argparser.add_argument("--resolution", type=int, default=512, help="resolution to train", choices=supported_resolutions)
-    argparser.add_argument("--sd1", action="store_true", default=False, help="set if training SD1.x, else SD2 is assumed")
+    argparser.add_argument("--amp", action="store_true", default=False, help="use floating point 16 bit training")
     argparser.add_argument("--cond_dropout", type=float, default=0.04, help="Conditional drop out as decimal 0.0-1.0, see docs for more info (def: 0.04)")
     argparser.add_argument("--logdir", type=str, default="logs", help="folder to save logs to (def: logs)")
     argparser.add_argument("--save_ckpt_dir", type=str, default=None, help="folder to save checkpoints to (def: root training folder)")
