@@ -76,12 +76,11 @@ def setup_local_logger(args):
     """
     configures logger with file and console logging, logs args, and returns the datestamp
     """
-    log_path = "logs"
+    log_path = args.logdir
     if not os.path.exists(log_path):
         os.makedirs(log_path)
 
     json_config = json.dumps(vars(args), indent=2)
-    # write current time and date stamp to string
     datetimestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
     logfilename = os.path.join(log_path, f"{args.project_name}-train{datetimestamp}.log")
@@ -151,6 +150,9 @@ def main(args):
     seed = 555
     set_seed(seed)
     gpu = GPU()
+    
+    if args.ckpt_every_n_minutes is None and args.save_every_n_epochs is None:
+        args.ckpt_every_n_minutes = 20
 
     if args.ckpt_every_n_minutes is None or args.ckpt_every_n_minutes < 1:
         args.ckpt_every_n_minutes = _VERY_LARGE_NUMBER
@@ -237,7 +239,7 @@ def main(args):
             ).images[0]
 
             draw = ImageDraw.Draw(image)
-            font = ImageFont.truetype(font="arial.ttf", size=24)
+            font = ImageFont.truetype(size=24)
             print_msg = f"cfg:{cfg:.1f}"
 
             l, t, r, b = draw.textbbox(xy=(0,0), text=print_msg, font=font)
@@ -284,7 +286,7 @@ def main(args):
                 result.paste(image, (x_offset, 0))
                 x_offset += image.width
 
-            result.save(f"{log_folder}/samples/gs{gs:05}-{prompt[:150]}.png")
+            result.save(f"{log_folder}/samples/gs{gs:05}-{prompt[:100]}.png")
 
             tfimage = transforms.ToTensor()(result)
             if random_captions:
@@ -610,26 +612,26 @@ def main(args):
                     sum_img = sum(images_per_sec_epoch)
                     avg = sum_img / len(images_per_sec_epoch)
                     images_per_sec_epoch = []
-                    log_writer.add_scalar(tag="hyperparamater/grad scale", scalar_value=scaler.get_scale(), global_step=global_step)
+                    #log_writer.add_scalar(tag="hyperparamater/grad scale", scalar_value=scaler.get_scale(), global_step=global_step)
                     log_writer.add_scalar(tag="performance/images per second", scalar_value=avg, global_step=global_step)
                     append_epoch_log(global_step=global_step, epoch_pbar=epoch_pbar, gpu=gpu, log_writer=log_writer, **logs)
 
-                    if (global_step + 1) % args.sample_steps == 0:
-                        #(unet, text_encoder, tokenizer, scheduler):
-                        pipe = __create_inference_pipe(unet=unet, text_encoder=text_encoder, tokenizer=tokenizer, scheduler=scheduler, vae=vae)
-                        pipe = pipe.to(torch.device("cuda"))
+                if (global_step + 1) % args.sample_steps == 0:
+                    #(unet, text_encoder, tokenizer, scheduler):
+                    pipe = __create_inference_pipe(unet=unet, text_encoder=text_encoder, tokenizer=tokenizer, scheduler=scheduler, vae=vae)
+                    pipe = pipe.to(torch.device("cuda"))
 
-                        with torch.no_grad():
-                            if sample_prompts is not None and len(sample_prompts) > 0 and len(sample_prompts[0]) > 1:
-                                #(pipe, prompts, gs, log_writer, log_folder, random_captions=False):
-                                __generate_test_samples(pipe=pipe, prompts=sample_prompts, log_writer=log_writer, log_folder=log_folder, gs=global_step, resolution=args.resolution)
-                            else:
-                                max_prompts = min(4,len(batch["captions"]))
-                                prompts=batch["captions"][:max_prompts]
-                                __generate_test_samples(pipe=pipe, prompts=prompts, log_writer=log_writer, log_folder=log_folder, gs=global_step, random_captions=True)
+                    with torch.no_grad():
+                        if sample_prompts is not None and len(sample_prompts) > 0 and len(sample_prompts[0]) > 1:
+                            #(pipe, prompts, gs, log_writer, log_folder, random_captions=False):
+                            __generate_test_samples(pipe=pipe, prompts=sample_prompts, log_writer=log_writer, log_folder=log_folder, gs=global_step, resolution=args.resolution)
+                        else:
+                            max_prompts = min(4,len(batch["captions"]))
+                            prompts=batch["captions"][:max_prompts]
+                            __generate_test_samples(pipe=pipe, prompts=prompts, log_writer=log_writer, log_folder=log_folder, gs=global_step, random_captions=True)
 
-                        del pipe
-                        torch.cuda.empty_cache()
+                    del pipe
+                    torch.cuda.empty_cache()
 
                 min_since_last_ckpt =  (time.time() - last_epoch_saved_time) /  60
 
@@ -677,8 +679,8 @@ if __name__ == "__main__":
     argparser.add_argument("--lr_decay_steps", type=int, default=0, help="Steps to reach minimum LR, default: automatically set")
     argparser.add_argument("--log_step", type=int, default=25, help="How often to log training stats, def: 25, recommend default")
     argparser.add_argument("--max_epochs", type=int, default=300, help="Maximum number of epochs to train for")
-    argparser.add_argument("--ckpt_every_n_minutes", type=int, default=20, help="Save checkpoint every n minutes, def: 20")
-    argparser.add_argument("--save_every_n_epochs", type=int, default=0, help="Save checkpoint every n epochs, def: 0 (disabled)")
+    argparser.add_argument("--ckpt_every_n_minutes", type=int, default=None, help="Save checkpoint every n minutes, def: 20")
+    argparser.add_argument("--save_every_n_epochs", type=int, default=None, help="Save checkpoint every n epochs, def: 0 (disabled)")
     argparser.add_argument("--lr", type=float, default=None, help="Learning rate, if using scheduler is maximum LR at top of curve")
     argparser.add_argument("--useadam8bit", action="store_true", default=False, help="Use AdamW 8-Bit optimizer")
     argparser.add_argument("--project_name", type=str, default="myproj", help="Project name for logs and checkpoints, ex. 'tedbennett', 'superduperV1'")
@@ -696,6 +698,8 @@ if __name__ == "__main__":
     argparser.add_argument("--resolution", type=int, default=512, help="resolution to train", choices=supported_resolutions)
     argparser.add_argument("--sd1", action="store_true", default=False, help="set if training SD1.x, else SD2 is assumed")
     argparser.add_argument("--cond_dropout", type=float, default=0.04, help="Conditional drop out as decimal 0.0-1.0, see docs for more info (def: 0.04)")
+    argparser.add_argument("--logdir", type=str, default="logs", help="folder to save logs to (def: logs)")
+    argparser.add_argument("--save_ckpt_dir", type=str, default=None, help="folder to save checkpoints to (def: root training folder)")
     args = argparser.parse_args()
 
     main(args)
