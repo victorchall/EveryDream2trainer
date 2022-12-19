@@ -53,7 +53,7 @@ Cosine also has a decay period to define how long it takes to get to zero LR as 
 
 ## Gradient accumulation
 
-Gradient accumulation is sort of like a virtual batch size increase, averaging the learning over more than one step (batch) before applying it to the model update.
+Gradient accumulation is sort of like a virtual batch size increase, averaging the learning over more than one step (batch) before applying it to the model as an update to weights.
 
 Example:
 
