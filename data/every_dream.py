@@ -149,10 +149,6 @@ class EveryDreamBatch(Dataset):
         image_train_tmp = image_train_item.hydrate(crop=False, save=save, crop_jitter=self.crop_jitter)
 
         example["image"] = image_train_tmp.image
-        
-        # if random.random() > self.conditional_dropout:
         example["caption"] = image_train_tmp.caption
-        # else:
-        #     example["caption"] = " "
-        #print(f"      {image_train_tmp.pathname}: {image_train_tmp.caption}")
+        
         return example

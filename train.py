@@ -170,7 +170,7 @@ def main(args):
 
 
     @torch.no_grad()
-    def __save_model(save_path, unet, text_encoder, tokenizer, scheduler, vae):
+    def __save_model(save_path, unet, text_encoder, tokenizer, scheduler, vae, save_ckpt_dir):
         """
         Save the model to disk
         """
@@ -191,7 +191,10 @@ def main(args):
         )
         pipeline.save_pretrained(save_path)
         sd_ckpt_path = f"{os.path.basename(save_path)}.ckpt"
-        sd_ckpt_full = os.path.join(os.curdir, sd_ckpt_path)
+        if save_ckpt_dir is not None:
+            sd_ckpt_full = os.path.join(save_ckpt_dir, sd_ckpt_path)
+        else:
+            sd_ckpt_full = os.path.join(os.curdir, sd_ckpt_path)
 
         logging.info(f" * Saving SD model to {sd_ckpt_full}")
         converter(model_path=save_path, checkpoint_path=sd_ckpt_full, half=True)
@@ -240,7 +243,7 @@ def main(args):
             ).images[0]
 
             draw = ImageDraw.Draw(image)
-            font = ImageFont.truetype(size=24)
+            font = ImageFont.truetype(font="arial.ttf",size=24)
             print_msg = f"cfg:{cfg:.1f}"
 
             l, t, r, b = draw.textbbox(xy=(0,0), text=print_msg, font=font)
@@ -442,7 +445,7 @@ def main(args):
             logging.error(f"{Fore.LIGHTRED_EX} ************************************************************************{Style.RESET_ALL}")
             logging.error(f"{Fore.LIGHTRED_EX} CTRL-C received, attempting to save model to {interrupted_checkpoint_path}{Style.RESET_ALL}")
             logging.error(f"{Fore.LIGHTRED_EX} ************************************************************************{Style.RESET_ALL}")
-            __save_model(interrupted_checkpoint_path, unet, text_encoder, tokenizer, scheduler, vae)
+            __save_model(interrupted_checkpoint_path, unet, text_encoder, tokenizer, scheduler, vae, args.save_ckpt_dir)
         exit(_SIGTERM_EXIT_CODE)
 
     signal.signal(signal.SIGINT, sigterm_handler)
@@ -531,8 +534,8 @@ def main(args):
         for epoch in range(args.max_epochs):
             if epoch > 0 and epoch % args.save_every_n_epochs == 0:
                 logging.info(f" Saving model")
-                save_path = os.path.join(f"logs/ckpts/{args.project_name}-ep{epoch:02}-gs{global_step:05}")
-                __save_model(save_path, unet, text_encoder, tokenizer, scheduler, vae)
+                save_path = os.path.join(f"{log_folder}/ckpts/{args.project_name}-ep{epoch:02}-gs{global_step:05}")
+                __save_model(save_path, unet, text_encoder, tokenizer, scheduler, vae, args.save_ckpt_dir)
 
             epoch_start_time = time.time()
             steps_pbar.reset()
@@ -608,7 +611,7 @@ def main(args):
                 #with torch.no_grad():
                 if (global_step + 1) % args.log_step == 0:
                     lr = lr_scheduler.get_last_lr()[0]
-                    logs = {"loss/step": loss.detach().item(), "lr": lr, "img/s": images_per_sec, "scale": scaler.get_scale()}
+                    logs = {"loss/step": loss.detach().item(), "lr": lr, "img/s": images_per_sec}
                     log_writer.add_scalar(tag="loss/step", scalar_value=loss, global_step=global_step)
                     log_writer.add_scalar(tag="hyperparamater/lr", scalar_value=lr, global_step=global_step)
                     sum_img = sum(images_per_sec_epoch)
@@ -642,7 +645,7 @@ def main(args):
                     logging.info(f"Saving model at {args.ckpt_every_n_minutes} mins at step {global_step}")
                     save_path = os.path.join(f"{log_folder}/ckpts/{args.project_name}-ep{epoch:02}-gs{global_step:05}")
 
-                    __save_model(save_path, unet, text_encoder, tokenizer, scheduler, vae)
+                    __save_model(save_path, unet, text_encoder, tokenizer, scheduler, vae, args.save_ckpt_dir)
 
                 # end of step
 
@@ -656,20 +659,22 @@ def main(args):
         # end of training
 
         save_path = os.path.join(f"{log_folder}/ckpts/last-{args.project_name}-ep{epoch:02}-gs{global_step:05}")
-        __save_model(save_path, unet, text_encoder, tokenizer, scheduler, vae)
+        __save_model(save_path, unet, text_encoder, tokenizer, scheduler, vae, args.save_ckpt_dir)
 
         total_elapsed_time = time.time() - training_start_time
         logging.info(f"{Fore.CYAN}Training complete{Style.RESET_ALL}")
         logging.info(f"Total training time took {total_elapsed_time:.2f} seconds, total steps: {global_step}")
-        logging.info(f"Average epoch time: {np.mean([t['time'] for t in epoch_times]) / 60:.2f} minutes")
+        #logging.info(f"Average epoch time: {np.mean([t['time'] for t in epoch_times]) / 60:.2f} minutes")
 
     except Exception as ex:
         logging.error(f"{Fore.LIGHTYELLOW_EX}Something went wrong, attempting to save model{Style.RESET_ALL}")
         save_path = os.path.join(f"{log_folder}/ckpts/errored-{args.project_name}-ep{epoch:02}-gs{global_step:05}")
-        __save_model(save_path, unet, text_encoder, tokenizer, scheduler, vae)
+        __save_model(save_path, unet, text_encoder, tokenizer, scheduler, vae, args.save_ckpt_dir)
         raise ex
 
-    logging.info(f"{Fore.LIGHTWHITE_EX} *Finished training *{Style.RESET_ALL}")
+    logging.info(f"{Fore.LIGHTWHITE_EX} ***************************{Style.RESET_ALL}")
+    logging.info(f"{Fore.LIGHTWHITE_EX} **** Finished training ****{Style.RESET_ALL}")
+    logging.info(f"{Fore.LIGHTWHITE_EX} ***************************{Style.RESET_ALL}")
 
 
 if __name__ == "__main__":

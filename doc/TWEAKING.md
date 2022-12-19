@@ -75,3 +75,15 @@ You can set your own sample prompts by adding them, one line at a time, to sampl
 Keep in mind a lot of prompts will take longer to generate.  You may also want to adjust sample_steps to a different value to get samples left often.  This is probably a good idea when training a larger dataset that you know will take longer to train, where more frequent samples will not help you.
 
     --sample_steps 500 ^
+
+## Log and ckpt save folders
+
+If you want to use a nondefault location for saving logs or ckpt files, these:
+
+Logdir defaults to the "logs" folder in the trainer directory.  If you wan to save all logs (including diffuser copies of ckpts, samples, and tensbooard events) use this:
+
+    --logdir "/workspace/mylogs"
+
+By default the CKPT format copies of ckpts that are peroidically saved are saved in the trainer root folder.  If you want to save them elsewhere, use this:
+
+    --ckpt_dir "r:\webui\models\stable-diffusion"

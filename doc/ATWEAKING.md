@@ -10,6 +10,20 @@ For instance, if training from the base 1.5 model, you can try trying at 576, 64
 
 If you are training on a base model that is 768, such as SD 2.1 768-v, you should also probably use 768 as a base number and adjust from there.
 
+## Log and ckpt save folders
+
+If you want to use a nondefault location for saving logs or ckpt files, these:
+
+Logdir defaults to the "logs" folder in the trainer directory.  If you wan to save all logs (including diffuser copies of ckpts, sample images, and tensbooard events) use this:
+
+    --logdir "/workspace/mylogs"
+
+Remember to use the same folder when you launch tensorboard (```tensorboard --logdir "/worksapce/mylogs"```) or it won't find your logs.
+
+By default the CKPT format copies of ckpts that are peroidically saved are saved in the trainer root folder.  If you want to save them elsewhere, use this:
+
+    --ckpt_dir "r:\webui\models\stable-diffusion"
+
 ## Conditional dropout
 
 Conditional dropout means the prompt or caption on the training image is dropped, and the caption is "blank".  The theory is this can help with unconditional guidance, per the original paper and authors of Latent Diffusion and Stable Diffusion.
