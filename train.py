@@ -667,7 +667,7 @@ def main(args):
                         else:
                             max_prompts = min(4,len(batch["captions"]))
                             prompts=batch["captions"][:max_prompts]
-                            __generate_test_samples(pipe=pipe, prompts=prompts, log_writer=log_writer, log_folder=log_folder, gs=global_step, random_captions=True)
+                            __generate_test_samples(pipe=pipe, prompts=prompts, log_writer=log_writer, log_folder=log_folder, gs=global_step, random_captions=True, resolution=args.resolution)
 
                     del pipe
                     torch.cuda.empty_cache()
