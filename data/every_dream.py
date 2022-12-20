@@ -87,51 +87,30 @@ class EveryDreamBatch(Dataset):
         return self._length
 
     def __getitem__(self, i):
-        #print(" * Getting item", i)
-        # batch = dict()
-        # batch["images"] = list()
-        # batch["captions"] = list()
-        # first = True
-        # for j in range(i, i + self.batch_size - 1):
-        #     if j < self.num_images:
-        #         example = self.__get_image_for_trainer(self.image_train_items[j], self.debug_level)
-        #         if first:
-        #             print(f"first example {j}", example)
-        #             batch["images"] = [torch.from_numpy(example["image"])]
-        #             batch["captions"] = [example["caption"]]
-        #             first = False
-        #         else: 
-        #             print(f"subsiquent example {j}", example)
-        #             batch["images"].extend(torch.from_numpy(example["image"]))
-        #             batch["captions"].extend(example["caption"])
         example = {}
 
         train_item = self.__get_image_for_trainer(self.image_train_items[i], self.debug_level)
-        #example["image"] = torch.from_numpy(train_item["image"])
         example["image"] = self.image_transforms(train_item["image"])
-        # if train_item["caption"] == " ":
-        #     example["tokens"] = [0 for i in range(self.max_token_length-2)]
+
+        #if random.random() > 9999:
+        example["tokens"] = self.tokenizer(train_item["caption"],
+                                            truncation=True,
+                                            padding="max_length",
+                                            max_length=self.tokenizer.model_max_length,
+        ).input_ids
+        #print(example["tokens"])
+        example["tokens"] = torch.tensor(example["tokens"])
         # else:
-        if random.random() > self.conditional_dropout:
-            example["tokens"] = self.tokenizer(train_item["caption"],
-                                                #padding="max_length",
-                                                truncation=True,
-                                                padding=False,
-                                                add_special_tokens=False,
-                                                max_length=self.max_token_length-2,
-            ).input_ids
-            example["tokens"] = torch.tensor(example["tokens"])
-        else:
-            example["tokens"] = torch.zeros(75, dtype=torch.int)
+        #     example["tokens"] = torch.zeros(75, dtype=torch.int)
         #print(f"bos: {self.tokenizer.bos_token_id}{self.tokenizer.eos_token_id}")
 
         #print(f"example['tokens']: {example['tokens']}")
-        pad_amt = self.max_token_length-2 - len(example["tokens"])
-        example['tokens']= F.pad(example['tokens'],pad=(0,pad_amt),mode='constant',value=0)
-        example['tokens']= F.pad(example['tokens'],pad=(1,0),mode='constant',value=int(self.tokenizer.bos_token_id))
-        eos_int = int(self.tokenizer.eos_token_id)
+        #pad_amt = self.max_token_length-2 - len(example["tokens"])
+        #example['tokens']= F.pad(example['tokens'],pad=(0,pad_amt),mode='constant',value=0)
+        #example['tokens']= F.pad(example['tokens'],pad=(1,0),mode='constant',value=int(self.tokenizer.bos_token_id))
+        #eos_int = int(self.tokenizer.eos_token_id)
         #eos_int = int(0)
-        example['tokens']= F.pad(example['tokens'],pad=(0,1),mode='constant',value=eos_int)
+        #example['tokens']= F.pad(example['tokens'],pad=(0,1),mode='constant',value=eos_int)
         #print(f"__getitem__ train_item['caption']: {train_item['caption']}")
         #print(f"__getitem__ train_item['pathname']: {train_item['pathname']}")
         #print(f"__getitem__ example['tokens'] pad: {example['tokens']}")
@@ -149,6 +128,9 @@ class EveryDreamBatch(Dataset):
         image_train_tmp = image_train_item.hydrate(crop=False, save=save, crop_jitter=self.crop_jitter)
 
         example["image"] = image_train_tmp.image
-        example["caption"] = image_train_tmp.caption
+        if random.random() > self.conditional_dropout:
+            example["caption"] = image_train_tmp.caption
+        else:
+            example["caption"] = " "
         
         return example

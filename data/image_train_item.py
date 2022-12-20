@@ -19,6 +19,7 @@ from torchvision import transforms, utils
 import random
 import math
 import os
+import logging
 
 _RANDOM_TRIM = 0.04
 
@@ -48,7 +49,9 @@ class ImageTrainItem():
         save: save the cropped image to disk, for manual inspection of resize/crop
         crop_jitter: randomly shift cropp by N pixels when using multiple aspect ratios to improve training quality
         """
-        if not hasattr(self, 'image') or len(self.image) == 0:
+        #print(self.pathname, self.image)
+        try:
+            #if not hasattr(self, 'image'):
             self.image = PIL.Image.open(self.pathname).convert('RGB')
 
             width, height = self.image.size
@@ -96,6 +99,10 @@ class ImageTrainItem():
                 self.image = self.image.resize(self.target_wh, resample=PIL.Image.BICUBIC)
 
             self.image = self.flip(self.image)
+        except Exception as e:
+            logging.error(f"Error loading image: {self.pathname}")
+            print(e)
+            exit()
 
         if type(self.image) is not np.ndarray:
             if save: 
@@ -106,7 +113,7 @@ class ImageTrainItem():
             
             self.image = np.array(self.image).astype(np.uint8)
 
-            self.image = (self.image / 127.5 - 1.0).astype(np.float32)
+            #self.image = (self.image / 127.5 - 1.0).astype(np.float32)
         
         #print(self.image.shape)
 
