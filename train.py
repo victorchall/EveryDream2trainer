@@ -50,7 +50,6 @@ from data.every_dream import EveryDreamBatch
 from utils.convert_diffusers_to_stable_diffusion import convert as converter
 from utils.gpu import GPU
 
-import debug
 
 _GRAD_ACCUM_STEPS = 1 # future use...
 _SIGTERM_EXIT_CODE = 130
@@ -566,9 +565,7 @@ def main(args):
             steps_pbar.reset()
             images_per_sec_epoch = []
 
-            for step, batch in enumerate(train_dataloader):
-                if args.debug:
-                    debug.debug_batch(batch)
+            for step, batch in enumerate(train_dataloader):                
                 step_start_time = time.time()
 
                 with torch.no_grad():
@@ -746,7 +743,6 @@ if __name__ == "__main__":
     argparser.add_argument("--logdir", type=str, default="logs", help="folder to save logs to (def: logs)")
     argparser.add_argument("--save_ckpt_dir", type=str, default=None, help="folder to save checkpoints to (def: root training folder)")
     argparser.add_argument("--text_encoder_epochs", type=int, default=0, help="disable text encoder training after N steps (def: disabled)")
-    argparser.add_argument("--debug", action="store_true", default=False)
     args = argparser.parse_args()
 
     main(args)
