@@ -42,7 +42,7 @@ Training from SD2 512 base model, 18 epochs, 4 batch size, 1.2e-6 learning rate,
     --ckpt_every_n_minutes 30 ^
     --useadam8bit
 
-Training from the "SD21" model on the "jets" dataset on another drive, for 50 epochs, 6 batch size, 1.5e-6 learning rate, cosine scheduler that will decay in 1500 steps, generate samples evern 100 steps, 30 minute checkpoint interval, adam8bit:
+Training from the "SD21" model on the "jets" dataset on another drive, for 50 epochs, 6 batch size, 1.5e-6 learning rate, cosine scheduler that will decay in 1500 steps, generate samples evern 100 steps, save a checkpoint every 20 epochs, and use AdamW 8bit optimizer:
 
     python train.py --resume_ckpt "SD21" ^
     --data_root "R:\everydream-trainer\training_samples\mega\gt\objects\jets" ^
@@ -54,25 +54,20 @@ Training from the "SD21" model on the "jets" dataset on another drive, for 50 ep
     --batch_size 6 ^
     --sample_steps 100 ^
     --lr 1.5e-6 ^
-    --ckpt_every_n_minutes 30 ^
+    --save_every_n_epochs 20 ^
     --useadam8bit 
 
-
 Copy paste the above to your command line and press enter.
-Make sure the last line does not have ^ but all other lines do
-
-
-Scheduler example, note warmup and decay dont work with constant (default), warmup is set automatically to 5% of decay if not set
---lr_scheduler cosine
---lr_warmup_steps 100
---lr_decay_steps 2500
-
-Warmup and decay only count for some schedulers! Constant is not one of them. 
-
-Currently "constant" and "cosine" are recommended.  I'll add support to others upon request.
+Make sure the last line does not have ^ but all other lines do.  If you want you can put the command all on one line and not use the ^ carats instead.
 
 ## How to resume
 
 Point your resume_ckpt to the path in logs like so:
 
 ```--resume_ckpt "R:\everydream2trainer\logs\myproj20221213-161620\ckpts\myproj-ep22-gs01099" ^```
+
+Or use relative pathing:
+
+```--resume_ckpt "logs\myproj20221213-161620\ckpts\myproj-ep22-gs01099" ^```
+
+You should point to the folder in the logs per above if you want to resume rather than running a conversion back on a 2.0GB or 2.5GB pruned file if possible. 

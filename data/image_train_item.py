@@ -100,8 +100,8 @@ class ImageTrainItem():
 
             self.image = self.flip(self.image)
         except Exception as e:
-            logging.error(f"Error loading image: {self.pathname}")
-            print(e)
+            logging.error(f"Fatal Error loading image: {self.pathname}:")
+            logging.error(e)
             exit()
 
         if type(self.image) is not np.ndarray:

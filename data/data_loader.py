@@ -15,10 +15,12 @@ limitations under the License.
 """
 
 import os
+import logging
 from PIL import Image
 import random
 from data.image_train_item import ImageTrainItem
 import data.aspects as aspects
+from colorama import Fore, Style
 
 class DataLoaderMultiAspect():
     """
@@ -28,14 +30,15 @@ class DataLoaderMultiAspect():
     batch_size: number of images per batch
     flip_p: probability of flipping image horizontally (i.e. 0-0.5)
     """
-    def __init__(self, data_root, seed=555, debug_level=0, batch_size=1, flip_p=0.0, resolution=512):
+    def __init__(self, data_root, seed=555, debug_level=0, batch_size=1, flip_p=0.0, resolution=512, log_folder=None):
         self.image_paths = []
         self.debug_level = debug_level
         self.flip_p = flip_p
+        self.log_folder = log_folder
 
         self.aspects = aspects.get_aspect_buckets(resolution=resolution, square_only=False)
-        print(f"* DLMA resolution {resolution}, buckets: {self.aspects}")
-        print(" Preloading images...")
+        logging.info(f"* DLMA resolution {resolution}, buckets: {self.aspects}")
+        logging.info(" Preloading images...")
 
         self.__recurse_data_root(self=self, recurse_root=data_root)
         random.Random(seed).shuffle(self.image_paths)
@@ -54,7 +57,7 @@ class DataLoaderMultiAspect():
             with open(file_path, encoding='utf-8', mode='r') as caption_file:
                 caption = caption_file.read()
         except:
-            print(f" *** Error reading {file_path} to get caption, falling back to filename")
+            logging.error(f" *** Error reading {file_path} to get caption, falling back to filename")
             caption = fallback_caption
             pass
         return caption
@@ -78,20 +81,24 @@ class DataLoaderMultiAspect():
             else:
                 caption = caption_from_filename
 
-            image = Image.open(pathname)
-            width, height = image.size
-            image_aspect = width / height
+            try:
+                image = Image.open(pathname)
+                width, height = image.size
+                image_aspect = width / height
 
-            target_wh = min(self.aspects, key=lambda aspects:abs(aspects[0]/aspects[1] - image_aspect))
+                target_wh = min(self.aspects, key=lambda aspects:abs(aspects[0]/aspects[1] - image_aspect))
 
-            image_train_item = ImageTrainItem(image=None, caption=caption, target_wh=target_wh, pathname=pathname, flip_p=flip_p)
+                image_train_item = ImageTrainItem(image=None, caption=caption, target_wh=target_wh, pathname=pathname, flip_p=flip_p)
 
-            decorated_image_train_items.append(image_train_item)
+                decorated_image_train_items.append(image_train_item)
+            except Exception as e:
+                logging.error(f"{Fore.LIGHTRED_EX} *** Error opening {Fore.LIGHTYELLOW_EX}{pathname}{Fore.LIGHTRED_EX} to get metadata. File may be corrupt and will be skipped.{Style.RESET_ALL}")
+                logging.error(f" *** exception: {e}")
+                pass
 
         return decorated_image_train_items
 
-    @staticmethod
-    def __bucketize_images(prepared_train_data: list, batch_size=1, debug_level=0):
+    def __bucketize_images(self, prepared_train_data: list, batch_size=1, debug_level=0):
         """
         Put images into buckets based on aspect ratio with batch_size*n images per bucket, discards remainder
         """
@@ -105,16 +112,21 @@ class DataLoaderMultiAspect():
                 buckets[(target_wh[0],target_wh[1])] = []
             buckets[(target_wh[0],target_wh[1])].append(image_caption_pair) 
 
-        print(f" ** Number of buckets used: {len(buckets)}")
+        logging.info(f" ** Number of buckets used: {len(buckets)}")
 
         if len(buckets) > 1:
             for bucket in buckets:
                 truncate_count = len(buckets[bucket]) % batch_size
+                if truncate_count > 0:
+                    with open(os.path.join(self.log_folder, "bucket_drops.txt"), "a") as f:                
+                        f.write(f"{bucket} {truncate_count} dropped files:\n")
+                        for item in buckets[bucket][-truncate_count:]:
+                            f.write(f"- {item.pathname}\n")
                 current_bucket_size = len(buckets[bucket])
                 buckets[bucket] = buckets[bucket][:current_bucket_size - truncate_count]
 
                 if debug_level > 0:
-                    print(f"  ** Bucket {bucket} with {current_bucket_size} will drop {truncate_count} images due to batch size {batch_size}")
+                    logging.warning(f"  ** Bucket {bucket} with {current_bucket_size} will drop {truncate_count} images due to batch size {batch_size}")
 
         # flatten the buckets
         image_caption_pairs = []
@@ -131,9 +143,9 @@ class DataLoaderMultiAspect():
             try: 
                 with open(multiply_path, encoding='utf-8', mode='r') as f:
                     multiply = int(float(f.read().strip()))
-                    print(f" * DLMA multiply.txt in {recurse_root} set to {multiply}")
+                    logging.info(f" * DLMA multiply.txt in {recurse_root} set to {multiply}")
             except:
-                print(f" *** Error reading multiply.txt in {recurse_root}, defaulting to 1")
+                logging.error(f" *** Error reading multiply.txt in {recurse_root}, defaulting to 1")
                 pass
 
         for f in os.listdir(recurse_root):

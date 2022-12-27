@@ -13,6 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 """
+import logging
 import torch
 from torch.utils.data import Dataset
 from data.data_loader import DataLoaderMultiAspect as dlma
@@ -45,6 +46,7 @@ class EveryDreamBatch(Dataset):
                  crop_jitter=20,
                  seed=555,
                  tokenizer=None,
+                 log_folder=None,
                  ):
         self.data_root = data_root
         self.batch_size = batch_size
@@ -53,6 +55,7 @@ class EveryDreamBatch(Dataset):
         self.crop_jitter = crop_jitter
         self.unloaded_to_idx = 0
         self.tokenizer = tokenizer
+        self.log_folder = log_folder
         #print(f"tokenizer: {tokenizer}")
         self.max_token_length = self.tokenizer.model_max_length
 
@@ -60,14 +63,18 @@ class EveryDreamBatch(Dataset):
             seed = random.randint(0, 99999)
         
         if not dls.shared_dataloader:
-            print(" * Creating new dataloader singleton")
-            dls.shared_dataloader = dlma(data_root=data_root, seed=seed, debug_level=debug_level, batch_size=self.batch_size, flip_p=flip_p, resolution=resolution)
+            logging.info(" * Creating new dataloader singleton")
+            dls.shared_dataloader = dlma(data_root=data_root,
+                                         seed=seed,
+                                         debug_level=debug_level,
+                                         batch_size=self.batch_size,
+                                         flip_p=flip_p,
+                                         resolution=resolution,
+                                         log_folder=self.log_folder,
+                                        )
         
         self.image_train_items = dls.shared_dataloader.get_all_images()
 
-        # for iti in self.image_train_items:
-        #     print(f"iti caption:{iti.caption}")
-        # exit()
         self.num_images = len(self.image_train_items)
 
         self._length = self.num_images
@@ -79,9 +86,7 @@ class EveryDreamBatch(Dataset):
             ]
         )
 
-        print()
-        print(f" ** Trainer Set: {self._length / batch_size:.0f}, num_images: {self.num_images}, batch_size: {self.batch_size}, length w/repeats: {self._length}")
-        print()
+        logging.info(f" ** Trainer Set: {self._length / batch_size:.0f}, num_images: {self.num_images}, batch_size: {self.batch_size}")
 
     def __len__(self):
         return self._length
@@ -98,25 +103,8 @@ class EveryDreamBatch(Dataset):
                                             padding="max_length",
                                             max_length=self.tokenizer.model_max_length,
         ).input_ids
-        #print(example["tokens"])
         example["tokens"] = torch.tensor(example["tokens"])
-        # else:
-        #     example["tokens"] = torch.zeros(75, dtype=torch.int)
-        #print(f"bos: {self.tokenizer.bos_token_id}{self.tokenizer.eos_token_id}")
-
-        #print(f"example['tokens']: {example['tokens']}")
-        #pad_amt = self.max_token_length-2 - len(example["tokens"])
-        #example['tokens']= F.pad(example['tokens'],pad=(0,pad_amt),mode='constant',value=0)
-        #example['tokens']= F.pad(example['tokens'],pad=(1,0),mode='constant',value=int(self.tokenizer.bos_token_id))
-        #eos_int = int(self.tokenizer.eos_token_id)
-        #eos_int = int(0)
-        #example['tokens']= F.pad(example['tokens'],pad=(0,1),mode='constant',value=eos_int)
-        #print(f"__getitem__ train_item['caption']: {train_item['caption']}")
-        #print(f"__getitem__ train_item['pathname']: {train_item['pathname']}")
-        #print(f"__getitem__ example['tokens'] pad: {example['tokens']}")
-
         example["caption"] = train_item["caption"] # for sampling if needed
-        #print(f"len tokens: {len(example['tokens'])} cap: {example['caption']}")
 
         return example
 

@@ -37,7 +37,7 @@ If you wish instead to save every certain number of epochs, you can set the minu
 
 ## Learning Rate
 
-The learning rate affects how much "training" is done on the model.  It is a very careful balance to select a value that will learn your data, but not overfit it.  If you set the LR too high, the model will "fry" or could "overtrain" and become too rigid, only learning to exactly mimick your training data images and will not be able to generalize to new data or be "stylable".  If you set the LR too low, you may take longer to train, or it may have difficulty learning the concepts at all.  Usually sane values are 1e-6 to 3e-6
+The learning rate affects how much "training" is done on the model.  It is a very careful balance to select a value that will learn your data, but not overfit it.  If you set the LR too high, the model will "fry" or could "overtrain" and become too rigid, only learning to exactly mimick your training data images and will not be able to generalize to new data or be "stylable".  If you set the LR too low, you may take longer to train, or it may have difficulty learning the concepts at all.  Usually sane values are 1e-6 to 3e-6.
 
 
 ## Batch Size
@@ -62,16 +62,16 @@ The constant scheduler is the default and keeps your LR set to the value you set
 
 The AdamW optimizer is the default and what was used by EveryDream 1.0.  It's a good optimizer for stable diffusion and appears to be what was used to train SD itself.
 
-AdamW 8bit is quite a bit faster and uses less VRAM.  I currently **recommend** using it for most cases as it seems worth a potential reduction in quality.
+AdamW 8bit is quite a bit faster and uses less VRAM.  I currently **recommend** using it for most cases as it seems worth a potential reduction in quality for a significant speed boost and lower VRAM cost.
 
     --useadam8bit ^
 
 ## Sampling
 
-You can set your own sample prompts by adding them, one line at a time, to sample_prompts.txt.  Or you can point to another file with --sample_prompts_file.
+You can set your own sample prompts by adding them, one line at a time, to sample_prompts.txt.  Or you can point to another file with --sample_prompts.
 
     --sample_prompts "project_XYZ_test_prompts.txt" ^
 
-Keep in mind a lot of prompts will take longer to generate.  You may also want to adjust sample_steps to a different value to get samples left often.  This is probably a good idea when training a larger dataset that you know will take longer to train, where more frequent samples will not help you.
+Keep in mind a longer list of prompts will take longer to generate.  You may also want to adjust sample_steps to a different value to get samples left often.  This is probably a good idea when training a larger dataset that you know will take longer to train, where more frequent samples will not help you.
 
     --sample_steps 500 ^
