@@ -40,7 +40,7 @@ Conditional dropout means the prompt or caption on the training image is dropped
 
 The value is defaulted at 0.04, which means 4% conditional dropout.  You can set it to 0.0 to disable it, or increase it.  Many users of EveryDream 1.0 have had great success tweaking this, especially for larger models.  You may wish to try 0.10.  This may also be useful to really "force" a style.  Setting it very high may lead to bleeding or overfitting.
 
-    --conditional_dropout 0.1 ^
+    --cond_dropout 0.1 ^
 
 ## LR tweaking
 
