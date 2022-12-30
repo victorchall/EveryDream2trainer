@@ -21,6 +21,7 @@ import random
 from data.image_train_item import ImageTrainItem
 import data.aspects as aspects
 from colorama import Fore, Style
+import zipfile
 
 class DataLoaderMultiAspect():
     """
@@ -40,12 +41,24 @@ class DataLoaderMultiAspect():
         logging.info(f"* DLMA resolution {resolution}, buckets: {self.aspects}")
         logging.info(" Preloading images...")
 
+        self.unzip_all(data_root)
+
         self.__recurse_data_root(self=self, recurse_root=data_root)
         random.Random(seed).shuffle(self.image_paths)
         prepared_train_data = self.__prescan_images(self.image_paths, flip_p) # ImageTrainItem[]
         self.image_caption_pairs = self.__bucketize_images(prepared_train_data, batch_size=batch_size, debug_level=debug_level)
 
-        #if debug_level > 0: print(f" * DLMA Example: {self.image_caption_pairs[0]} images")
+    def unzip_all(self, path):
+        #recursively unzip all files in path
+        try:
+            for root, dirs, files in os.walk(path):
+                for file in files:
+                    if file.endswith('.zip'):
+                        logging.info(f"Unzipping {file}")
+                        with zipfile.ZipFile(path, 'r') as zip_ref:
+                            zip_ref.extractall(path)
+        except Exception as e:
+            logging.error(f"Error unzipping files {e}")
 
     def get_all_images(self):
         return self.image_caption_pairs

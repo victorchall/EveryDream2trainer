@@ -3,7 +3,7 @@ call "venv\Scripts\activate.bat"
 echo should be in venv here
 cd .
 python -m pip install --upgrade pip
-pip install torch==1.12.1+cu116 torchvision==0.13.1+cu116 --extra-index-url https://download.pytorch.org/whl/cu116
+pip install torch==1.12.1+cu116 torchvision==0.13.1+cu116 --extra-index-url "https://download.pytorch.org/whl/cu116"
 pip install transformers==4.25.1
 pip install diffusers[torch]==0.10.2
 pip install pynvml==11.4.1
