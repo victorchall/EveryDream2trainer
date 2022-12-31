@@ -860,7 +860,13 @@ if __name__ == "__main__":
     else:
         print("global_step key not found in model")
         global_step = None
-    checkpoint = checkpoint["state_dict"]
+
+    if "state_dict" in checkpoint:
+        print("load_state_dict from state_dict")
+        checkpoint = checkpoint["state_dict"]
+    else:
+        print("load_state_dict from directly")
+        checkpoint = checkpoint
 
     upcast_attention = False
     if args.original_config_file is None:
