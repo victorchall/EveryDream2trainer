@@ -158,4 +158,4 @@ def get_aspect_buckets(resolution, square_only=False, reduced_buckets=False):
         raise e
 
 def __get_all_aspects():
-    return [ASPECTS, ASPECTS2, ASPECTS3, ASPECTS4, ASPECTS5, ASPECTS6, ASPECTS7, ASPECTS8, ASPECTS9]
+    return [ASPECTS, ASPECTS2, ASPECTS3, ASPECTS4, ASPECTS5, ASPECTS6, ASPECTS7, ASPECTS8, ASPECTS9, ASPECTS10, ASPECTS11]
