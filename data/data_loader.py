@@ -22,6 +22,10 @@ from data.image_train_item import ImageTrainItem
 import data.aspects as aspects
 from colorama import Fore, Style
 import zipfile
+import tqdm
+import PIL
+
+PIL.Image.MAX_IMAGE_PIXELS = 715827880*4 # increase decompression bomb error limit to 4x default
 
 class DataLoaderMultiAspect():
     """
@@ -36,6 +40,9 @@ class DataLoaderMultiAspect():
         self.debug_level = debug_level
         self.flip_p = flip_p
         self.log_folder = log_folder
+        self.seed = seed
+        self.batch_size = batch_size
+        self.runts = []
 
         self.aspects = aspects.get_aspect_buckets(resolution=resolution, square_only=False)
         logging.info(f"* DLMA resolution {resolution}, buckets: {self.aspects}")
@@ -45,11 +52,16 @@ class DataLoaderMultiAspect():
 
         self.__recurse_data_root(self=self, recurse_root=data_root)
         random.Random(seed).shuffle(self.image_paths)
-        prepared_train_data = self.__prescan_images(self.image_paths, flip_p) # ImageTrainItem[]
-        self.image_caption_pairs = self.__bucketize_images(prepared_train_data, batch_size=batch_size, debug_level=debug_level)
+        self.prepared_train_data = self.__prescan_images(self.image_paths, flip_p) # ImageTrainItem[]
+        self.image_caption_pairs = self.__bucketize_images(self.prepared_train_data, batch_size=batch_size, debug_level=debug_level)
+        
+    def shuffle(self):
+        self.runts = []
+        self.seed = self.seed + 1
+        random.Random(self.seed).shuffle(self.prepared_train_data)
+        self.image_caption_pairs = self.__bucketize_images(self.prepared_train_data, batch_size=self.batch_size, debug_level=0)
 
     def unzip_all(self, path):
-        #recursively unzip all files in path
         try:
             for root, dirs, files in os.walk(path):
                 for file in files:
@@ -81,7 +93,7 @@ class DataLoaderMultiAspect():
         """
         decorated_image_train_items = []
 
-        for pathname in image_paths:
+        for pathname in tqdm.tqdm(image_paths):
             caption_from_filename = os.path.splitext(os.path.basename(pathname))[0].split("_")[0]
 
             txt_file_path = os.path.splitext(pathname)[0] + ".txt"
@@ -119,27 +131,27 @@ class DataLoaderMultiAspect():
         buckets = {}
 
         for image_caption_pair in prepared_train_data:
+            image_caption_pair.runt_size = 0
             target_wh = image_caption_pair.target_wh
 
             if (target_wh[0],target_wh[1]) not in buckets:
                 buckets[(target_wh[0],target_wh[1])] = []
-            buckets[(target_wh[0],target_wh[1])].append(image_caption_pair) 
-
-        logging.info(f" ** Number of buckets used: {len(buckets)}")
+            buckets[(target_wh[0],target_wh[1])].append(image_caption_pair)
 
         if len(buckets) > 1:
             for bucket in buckets:
                 truncate_count = len(buckets[bucket]) % batch_size
                 if truncate_count > 0:
-                    with open(os.path.join(self.log_folder, "bucket_drops.txt"), "a") as f:                
-                        f.write(f"{bucket} {truncate_count} dropped files:\n")
-                        for item in buckets[bucket][-truncate_count:]:
-                            f.write(f"- {item.pathname}\n")
-                current_bucket_size = len(buckets[bucket])
-                buckets[bucket] = buckets[bucket][:current_bucket_size - truncate_count]
+                    runt_bucket = buckets[bucket][-truncate_count:]
+                    for item in runt_bucket:
+                        item.runt_size = truncate_count
+                    while len(runt_bucket) < batch_size:
+                        runt_bucket.append(random.choice(runt_bucket))
 
-                if debug_level > 0:
-                    logging.warning(f"  ** Bucket {bucket} with {current_bucket_size} will drop {truncate_count} images due to batch size {batch_size}")
+                    current_bucket_size = len(buckets[bucket])
+
+                    buckets[bucket] = buckets[bucket][:current_bucket_size - truncate_count]
+                    buckets[bucket].extend(runt_bucket)
 
         # flatten the buckets
         image_caption_pairs = []

@@ -1,5 +1,9 @@
 # Tweaking settings
 
+This document should be read by all users who are trying to get the best results out of EveryDream 2.0.  These are the key settings you'll need to understand to get started.
+
+## Logging
+
 Make sure you pay attention to your logs and sample images.  Launch tensorboard in a second command line. See (logging)[doc/LOGGING.md] for more info.
 
     tensorboard --logdir logs
@@ -14,13 +18,19 @@ You may wish to consider adding "sd1" or "sd2v" or similar to remember what the 
 
 ## Epochs
 
-EveryDream 2.0 has done away with repeats and instead you should set your max_epochs.  Changing epochs has the same effect as changing repeats.  For example, if you had 50 repeats and 5 epochs, you would now set max_epochs to 250.  This is a bit more intuitive as there is no more double meaning for epochs and repeats.
+EveryDream 2.0 has done away with repeats and instead you should set your max_epochs.  Changing epochs has the same effect as changing repeats in DreamBooth or EveryDream1.  For example, if you had 50 repeats and 5 epochs, you would now set max_epochs to 250 (50x5=250).  This is a bit more intuitive as there is no more double meaning for epochs and repeats.
 
     --max_epochs 250 ^
 
-## Save interval
+This is like your "amount" of training.  
 
-While EveryDream 1.0 saved a checkpoint every epoch, this is no longer the case as it would produce too many files when repeats are removed.  To balance both people training large and small datasets, you can now set the interval at which checkpoints are saved.  The default is 30 minutes, but you can change it to whatever you want. 
+With more training data for your subjects and concepts, you can slowly scale this value down.  More example images mean an epoch is longer, and more training is done simply by the fact there is more training data.
+
+With less training data, this value should be higher, because more repetition on the images is needed to learn.
+
+## Save interval for checkpoints
+
+While EveryDream 1.0 saved a checkpoint every epoch, this is no longer the case as it would produce too many files as "repeats" are removed in favor of just using epochs instead.  To balance the fact EveryDream users are sometimes training small datasets and sometimes huge datasets, you can now set the interval at which checkpoints are saved.  The default is 30 minutes, but you can change it to whatever you want. 
 
 For isntance, if you are working on a very large dataset of thousands of images and lots of different concepts and know it will run for a few hours you may want to save every hour instead, so you would set it to 60.
 
@@ -30,25 +40,33 @@ Every save interval, a full ckpt in Diffusers format is saved from which you can
 
 Additionally, these are saved at the end of training. 
 
-If you wish instead to save every certain number of epochs, you can set the minutes interval 0 and use save_every_n_epochs instead.  This is not recommended for large datasets as it will produce a lot of files.
+If you wish instead to save every certain number of epochs, save_every_n_epochs instead.  
 
-    --ckpt_every_n_minutes 0 ^
     --save_every_n_epochs 25 ^
+
+If you are training a huge dataset (20k+) then saving every 1 epoch may not be very often, so consider using ckpt_every_n_minutes as mentioned above instead.
+
+*A "last" checkpoint is always saved at the end of training.*
+
+Diffusers copies of checkpoints are saved in your /logs/[project_name]/ckpts folder, and can be used to continue training if you want to pick up where you left off.  CKPT files are saved in the root training folder by default.  These folders can be changed. See [Advanced Tweaking](doc/ATWEAKING.md) for more info.
+
+## Resuming training from previous runs
+
+If you want to resume training from a previous run, you can do so by pointing to the diffusers copy in the logs folder from which you want to resume.  This is the same --resume_ckpt argument you would use to start training, just pointing to a different location.
+
+    --resume_ckpt "logs\city_gradckptng2_20221231-234604\ckpts\last-city_gradckptng2-ep59-gs00600" ^
 
 ## Learning Rate
 
-The learning rate affects how much "training" is done on the model.  It is a very careful balance to select a value that will learn your data, but not overfit it.  If you set the LR too high, the model will "fry" or could "overtrain" and become too rigid, only learning to exactly mimick your training data images and will not be able to generalize to new data or be "stylable".  If you set the LR too low, you may take longer to train, or it may have difficulty learning the concepts at all.  Usually sane values are 1e-6 to 3e-6.
-
+The learning rate affects how much "training" is done on the model per training step.  It is a very careful balance to select a value that will learn your data.  See [Advanced Tweaking](doc/ATWEAKING.md) for more info.  Once you have started, the learning rate is a good first knob to turn as you move into more advanced tweaking.
 
 ## Batch Size
 
-Batch size is also another "hyperparamter" of itself and there are tradeoffs. It may not always be best to use the highest batch size possible.  
-
-While very small batch sizes can impact performance negative, at some point larger sizes have little impact on overall speed.
-
-Larger batch size may also impact what learning rate you use. Often a suggestion is to multiply your LR by the sqrt of batch size.  For example, if you change from batch size 2 to 6, you may consider increasing your LR by sqrt(6/2) or about 1.5x.  This is not a hard rule, but it may help you find a good LR.
+Batch size is also another "hyperparamter" of itself and there are tradeoffs. It may not always be best to use the highest batch size possible.  Once of the primary reasons to change it is if you get "CUDA out of memory" errors where lowering the value may help.
 
     --batch_size 4 ^
+
+While very small batch sizes can impact performance negatively, at some point larger sizes have little impact on overall speed as well, so shooting for the moon is not always advisable.  Changing batch size may also impact what learning rate you use, with typically larger batch_size requiring a slightly higher learning rate.  More info is provided in the [Advanced Tweaking](doc/ATWEAKING.md) document.
 
 ## LR Scheduler
 
@@ -60,11 +78,13 @@ The constant scheduler is the default and keeps your LR set to the value you set
 
 ## AdamW vs AdamW 8bit
 
-The AdamW optimizer is the default and what was used by EveryDream 1.0.  It's a good optimizer for stable diffusion and appears to be what was used to train SD itself.
+The AdamW optimizer is the default and what was used by EveryDream 1.0.  It's a good optimizer for Stable Diffusion and appears to be what was used to train SD itself.
 
-AdamW 8bit is quite a bit faster and uses less VRAM.  I currently **recommend** using it for most cases as it seems worth a potential reduction in quality for a significant speed boost and lower VRAM cost.
+AdamW 8bit is quite a bit faster and uses less VRAM while still having the same basic behavior.  I currently **recommend** using it for most cases as it seems worth a potential slight reduction in quality for a *significant speed boost and lower VRAM cost*.
 
     --useadam8bit ^
+
+This may become a default in the future, and replaced with an option to use standard AdamW instead.  For now, it's an option, *but I recommend always using it.*
 
 ## Sampling
 
@@ -74,4 +94,8 @@ You can set your own sample prompts by adding them, one line at a time, to sampl
 
 Keep in mind a longer list of prompts will take longer to generate.  You may also want to adjust sample_steps to a different value to get samples left often.  This is probably a good idea when training a larger dataset that you know will take longer to train, where more frequent samples will not help you.
 
-    --sample_steps 500 ^
+Sample steps declares how often samples are generated and put into the logs and Tensorboard.
+
+    --sample_steps 300 ^
+
+Keep in mind if you drastically change your batch_size, the frequency (in time between samples) of samples will change.  Going from batch size 2 to batch size 10 may reduce how fast steps process, so you may want to reduce sample_steps to compensate.

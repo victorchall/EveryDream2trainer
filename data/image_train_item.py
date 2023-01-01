@@ -37,6 +37,7 @@ class ImageTrainItem():
         self.pathname = pathname
         self.flip = transforms.RandomHorizontalFlip(p=flip_p)
         self.cropped_img = None
+        self.runt_size = 0
 
         if image is None:
             self.image = []

@@ -52,7 +52,6 @@ from utils.convert_diffusers_to_stable_diffusion import convert as converter
 from utils.gpu import GPU
 
 
-_GRAD_ACCUM_STEPS = 1 # future use...
 _SIGTERM_EXIT_CODE = 130
 _VERY_LARGE_NUMBER = 1e9
 
@@ -171,19 +170,40 @@ def append_epoch_log(global_step: int, epoch_pbar, gpu, log_writer, **logs):
     if logs is not None:
         epoch_pbar.set_postfix(**logs, vram=f"{epoch_mem_color}{gpu_used_mem}/{gpu_total_mem} MB{Style.RESET_ALL} gs:{global_step}")
 
+
+def set_args_12gb(args):
+    logging.info(" Setting args to 12GB mode")
+    if not args.gradient_checkpointing:   
+        logging.info("   Overrding gradient checkpointing")
+        args.gradient_checkpointing = True
+    if args.batch_size != 1:
+        logging.info("   Overrding batch size to 1")
+        args.batch_size = 1
+    if args.grad_accum != 1:
+        logging.info("   Overrding grad accum to 1")
+        args.grad_accum = 1
+    if args.resolution != 512:
+        logging.info("   Overrding resolution to 512")
+        args.resolution = 512
+    if not args.useadam8bit:
+        logging.info("   Overrding adam8bit to True")
+        args.useadam8bit = True
+
 def main(args):
     """
     Main entry point
     """
     log_time = setup_local_logger(args)
-    #notebook = is_notebook()
+    
+    if args.lowvram:
+        set_args_12gb(args)
 
     seed = args.seed if args.seed != -1 else random.randint(0, 2**30)
     set_seed(seed)
     gpu = GPU()
     device = torch.device(f"cuda:{args.gpuid}")
     torch.backends.cudnn.benchmark = False
-    args.clip_skip = max(min(3, args.clip_skip), 0)
+    args.clip_skip = max(min(4, args.clip_skip), 0)
     
     if args.ckpt_every_n_minutes is None and args.save_every_n_epochs is None:
         logging.info(f"{Fore.LIGHTCYAN_EX} No checkpoint saving specified, defaulting to every 20 minutes.{Style.RESET_ALL}")
@@ -209,7 +229,7 @@ def main(args):
 
     if args.scale_lr is not None and args.scale_lr:
         tmp_lr = args.lr
-        args.lr = args.lr * (total_batch_size**0.5)
+        args.lr = args.lr * (total_batch_size**0.55)
         logging.info(f"{Fore.CYAN} * Scaling learning rate {tmp_lr} by {total_batch_size**0.5}, new value: {args.lr}{Style.RESET_ALL}")
 
     log_folder = os.path.join(args.logdir, f"{args.project_name}_{log_time}")
@@ -368,19 +388,21 @@ def main(args):
     except:
         logging.ERROR(" * Failed to load checkpoint *")
 
+    if args.gradient_checkpointing:
+        unet.enable_gradient_checkpointing()
+        text_encoder.gradient_checkpointing_enable()
+
     if is_xformers_available():
         try:
-            #pass
             unet.enable_xformers_memory_efficient_attention()
-            #unet.set_attention_slice(4)
-            #logging.info(" Enabled memory efficient attention")
+            print(" Enabled xformers")
         except Exception as e:
             logging.warning(
                 "Could not enable memory efficient attention. Make sure xformers is installed"
                 f" correctly and a GPU is available: {e}"
             )
 
-    default_lr = 2e-6
+    default_lr = 3e-6
     curr_lr = args.lr if args.lr is not None else default_lr
 
     vae = vae.to(device, dtype=torch.float32 if not args.amp else torch.float16)
@@ -419,8 +441,6 @@ def main(args):
             amsgrad=False,
         )
 
-    #log_optimizer(optimizer, betas, epsilon)
-
     train_batch = EveryDreamBatch(
         data_root=args.data_root,
         flip_p=args.flip_p,
@@ -431,6 +451,7 @@ def main(args):
         tokenizer=tokenizer,
         seed = seed,
         log_folder=log_folder,
+        write_schedule=args.write_schedule,
     )
 
     torch.cuda.benchmark = False
@@ -445,8 +466,8 @@ def main(args):
     lr_scheduler = get_scheduler(
         args.lr_scheduler,
         optimizer=optimizer,
-        num_warmup_steps=lr_warmup_steps * _GRAD_ACCUM_STEPS,
-        num_training_steps=args.lr_decay_steps * _GRAD_ACCUM_STEPS,
+        num_warmup_steps=lr_warmup_steps,
+        num_training_steps=args.lr_decay_steps,
     )
 
     sample_prompts = []
@@ -532,16 +553,19 @@ def main(args):
         images = [example["image"] for example in batch]
         captions = [example["caption"] for example in batch]
         tokens = [example["tokens"] for example in batch]
+        runt_size = batch[0]["runt_size"]
 
         images = torch.stack(images)
         images = images.to(memory_format=torch.contiguous_format).float()
 
-        batch = {
+        ret = {
             "tokens": torch.stack(tuple(tokens)),
             "image": images,
             "captions": captions,
+            "runt_size": runt_size,
         }
-        return batch
+        del batch
+        return ret
 
     train_dataloader = torch.utils.data.DataLoader(
         train_batch,
@@ -581,16 +605,10 @@ def main(args):
     append_epoch_log(global_step=global_step, epoch_pbar=epoch_pbar, gpu=gpu, log_writer=log_writer)
 
     torch.cuda.empty_cache()
-    loss = torch.tensor(0.0, device=device, dtype=torch.float32)
+    #loss = torch.tensor(0.0, device=device, dtype=torch.float32)
 
     try:            
         for epoch in range(args.max_epochs):
-            if epoch > 0 and epoch % args.save_every_n_epochs == 0:
-                logging.info(f" Saving model")
-                save_path = os.path.join(f"{log_folder}/ckpts/{args.project_name}-ep{epoch:02}-gs{global_step:05}")
-                __save_model(save_path, unet, text_encoder, tokenizer, scheduler, vae, args.save_ckpt_dir)
-                torch.cuda.empty_cache()
-
             epoch_start_time = time.time()
             steps_pbar.reset()
             images_per_sec_epoch = []
@@ -603,18 +621,16 @@ def main(args):
                     pixel_values = batch["image"].to(memory_format=torch.contiguous_format).to(unet.device)
                     with autocast(enabled=args.amp):                
                         latents = vae.encode(pixel_values, return_dict=False)
+                    del pixel_values
+                    latents = latents[0].sample() * 0.18215
 
-                    latent = latents[0]
-                    latents = latent.sample()
-                    latents = latents * 0.18215
+                    noise = torch.randn_like(latents)
+                    bsz = latents.shape[0]
 
-                noise = torch.randn_like(latents)
-                bsz = latents.shape[0]
+                    timesteps = torch.randint(0, scheduler.config.num_train_timesteps, (bsz,), device=latents.device)
+                    timesteps = timesteps.long()
 
-                timesteps = torch.randint(0, scheduler.config.num_train_timesteps, (bsz,), device=latents.device)
-                timesteps = timesteps.long()
-
-                cuda_caption = batch["tokens"].to(text_encoder.device)
+                    cuda_caption = batch["tokens"].to(text_encoder.device)
 
                 #with autocast(enabled=args.amp):
                 encoder_hidden_states = text_encoder(cuda_caption, output_hidden_states=True)
@@ -632,7 +648,7 @@ def main(args):
                     target = scheduler.get_velocity(latents, noise, timesteps)
                 else:
                     raise ValueError(f"Unknown prediction type {scheduler.config.prediction_type}")
-                del noise, latents
+                del noise, latents, cuda_caption
 
                 with autocast(enabled=args.amp):
                     model_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
@@ -640,6 +656,10 @@ def main(args):
                 del timesteps, encoder_hidden_states, noisy_latents
                 #with autocast(enabled=args.amp):
                 loss = torch_functional.mse_loss(model_pred.float(), target.float(), reduction="mean")
+                if batch["runt_size"]> 0:
+                    loss = loss / (batch["runt_size"] / args.batch_size)
+                del target, model_pred
+
 
                 if args.clip_grad_norm is not None:
                     torch.nn.utils.clip_grad_norm_(parameters=unet.parameters(), max_norm=args.clip_grad_norm)
@@ -661,8 +681,9 @@ def main(args):
 
                 if (global_step + 1) % args.log_step == 0:
                     curr_lr = lr_scheduler.get_last_lr()[0]
-                    logs = {"loss/step": loss.detach().item(), "lr": curr_lr, "img/s": images_per_sec}
-                    log_writer.add_scalar(tag="loss/step", scalar_value=loss, global_step=global_step)
+                    loss_local = loss.detach().item()
+                    logs = {"loss/step": loss_local, "lr": curr_lr, "img/s": images_per_sec}
+                    log_writer.add_scalar(tag="loss/step", scalar_value=loss_local, global_step=global_step)
                     log_writer.add_scalar(tag="hyperparamater/lr", scalar_value=curr_lr, global_step=global_step)
                     sum_img = sum(images_per_sec_epoch)
                     avg = sum_img / len(images_per_sec_epoch)
@@ -672,7 +693,6 @@ def main(args):
                     append_epoch_log(global_step=global_step, epoch_pbar=epoch_pbar, gpu=gpu, log_writer=log_writer, **logs)
 
                 if (global_step + 1) % args.sample_steps == 0:
-                    #(unet, text_encoder, tokenizer, scheduler):
                     pipe = __create_inference_pipe(unet=unet, text_encoder=text_encoder, tokenizer=tokenizer, scheduler=scheduler, vae=vae)
                     pipe = pipe.to(device)
 
@@ -692,18 +712,24 @@ def main(args):
 
                 if args.ckpt_every_n_minutes is not None and (min_since_last_ckpt > args.ckpt_every_n_minutes):
                     last_epoch_saved_time = time.time()
-                    logging.info(f"Saving model at {args.ckpt_every_n_minutes} mins at step {global_step}")
+                    logging.info(f"Saving model, {args.ckpt_every_n_minutes} mins at step {global_step}")
                     save_path = os.path.join(f"{log_folder}/ckpts/{args.project_name}-ep{epoch:02}-gs{global_step:05}")
+                    __save_model(save_path, unet, text_encoder, tokenizer, scheduler, vae, args.save_ckpt_dir)
 
+                if epoch > 0 and epoch % args.save_every_n_epochs == 0 and step == 1 and epoch < args.max_epochs - 1:
+                    logging.info(f" Saving model, {args.save_every_n_epochs} epochs at step {global_step}")
+                    save_path = os.path.join(f"{log_folder}/ckpts/{args.project_name}-ep{epoch:02}-gs{global_step:05}")
                     __save_model(save_path, unet, text_encoder, tokenizer, scheduler, vae, args.save_ckpt_dir)
 
                 # end of step
 
-            elapsed_epoch_time = (time.time() - epoch_start_time) / 60         
+            elapsed_epoch_time = (time.time() - epoch_start_time) / 60
             epoch_times.append(dict(epoch=epoch, time=elapsed_epoch_time))
             log_writer.add_scalar("performance/minutes per epoch", elapsed_epoch_time, global_step)
 
             epoch_pbar.update(1)
+            if epoch < args.max_epochs - 1:
+                train_batch.shuffle(epoch_n=epoch+1)
             # end of epoch
 
         # end of training
@@ -729,7 +755,7 @@ def main(args):
 
 if __name__ == "__main__":
     supported_resolutions = [512, 576, 640, 704, 768, 832, 896, 960, 1024]
-    argparser = argparse.ArgumentParser(description="EveryDream Training options")
+    argparser = argparse.ArgumentParser(description="EveryDream2 Training options")
     argparser.add_argument("--resume_ckpt", type=str, required=True, default="sd_v1-5_vae.ckpt")
     argparser.add_argument("--lr_scheduler", type=str, default="constant", help="LR scheduler, (default: constant)", choices=["constant", "linear", "cosine", "polynomial"])
     argparser.add_argument("--lr_warmup_steps", type=int, default=None, help="Steps to reach max LR during warmup (def: 0.02 of lr_decay_steps), non-functional for constant")
@@ -752,14 +778,19 @@ if __name__ == "__main__":
     argparser.add_argument("--wandb", action="store_true", default=False, help="enable wandb logging instead of tensorboard, requires env var WANDB_API_KEY")
     argparser.add_argument("--save_optimizer", action="store_true", default=False, help="saves optimizer state with ckpt, useful for resuming training later")
     argparser.add_argument("--resolution", type=int, default=512, help="resolution to train", choices=supported_resolutions)
-    argparser.add_argument("--amp", action="store_true", default=False, help="use floating point 16 bit training")
+    argparser.add_argument("--amp", action="store_true", default=False, help="use floating point 16 bit training, experimental, reduces quality")
     argparser.add_argument("--cond_dropout", type=float, default=0.04, help="Conditional drop out as decimal 0.0-1.0, see docs for more info (def: 0.04)")
     argparser.add_argument("--logdir", type=str, default="logs", help="folder to save logs to (def: logs)")
     argparser.add_argument("--save_ckpt_dir", type=str, default=None, help="folder to save checkpoints to (def: root training folder)")
     argparser.add_argument("--scale_lr", action="store_true", default=False, help="automatically scale up learning rate based on batch size and grad accumulation (def: False)")
     argparser.add_argument("--seed", type=int, default=555, help="seed used for samples and shuffling, use -1 for random")
-    argparser.add_argument("--flip_p", type=float, default=0.0, help="probability of flipping image horizontally (def: 0.0) use 0.0 to 1.0, ex 0.5")
+    argparser.add_argument("--flip_p", type=float, default=0.0, help="probability of flipping image horizontally (def: 0.0) use 0.0 to 1.0, ex 0.5, not good for specific faces!")
     argparser.add_argument("--gpuid", type=int, default=0, help="id of gpu to use for training, (def: 0) (ex: 1 to use GPU_ID 1)")
+    argparser.add_argument("--write_schedule", action="store_true", default=False, help="write schedule of images and their batches to file (def: False)")
+    argparser.add_argument("--gradient_checkpointing", action="store_true", default=False, help="enable gradient checkpointing to reduce VRAM use, may reduce performance (def: False)")
+    
+    argparser.add_argument("--lowvram", action="store_true", default=False, help="automatically overrides various args to support 12GB gpu")
+
     args = argparser.parse_args()
 
     main(args)
