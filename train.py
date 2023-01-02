@@ -392,11 +392,11 @@ def main(args):
     if not args.disable_xformers and is_xformers_available():
         try:
             unet.enable_xformers_memory_efficient_attention()
+            logging.info("Enabled xformers")
         except Exception as ex:
             logging.warning("failed to load xformers, continuing without it")
             pass
     else:
-        unet.disable_xformers_memory_efficient_attention()
         logging.info("xformers not available or disabled")
 
     default_lr = 3e-6
