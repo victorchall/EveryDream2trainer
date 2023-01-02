@@ -174,19 +174,19 @@ def append_epoch_log(global_step: int, epoch_pbar, gpu, log_writer, **logs):
 def set_args_12gb(args):
     logging.info(" Setting args to 12GB mode")
     if not args.gradient_checkpointing:   
-        logging.info("   Overrding gradient checkpointing")
+        logging.info("   Overiding gradient checkpointing to True")
         args.gradient_checkpointing = True
     if args.batch_size != 1:
-        logging.info("   Overrding batch size to 1")
+        logging.info("   Overiding batch size to 1")
         args.batch_size = 1
     if args.grad_accum != 1:
-        logging.info("   Overrding grad accum to 1")
+        logging.info("   Overiding grad accum to 1")
         args.grad_accum = 1
     if args.resolution != 512:
-        logging.info("   Overrding resolution to 512")
+        logging.info("   Overiding resolution to 512")
         args.resolution = 512
     if not args.useadam8bit:
-        logging.info("   Overrding adam8bit to True")
+        logging.info("   Overiding adam8bit to True")
         args.useadam8bit = True
 
 def main(args):
@@ -754,7 +754,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    supported_resolutions = [512, 576, 640, 704, 768, 832, 896, 960, 1024]
+    supported_resolutions = [448, 512, 576, 640, 704, 768, 832, 896, 960, 1024, 1088, 1152]
     argparser = argparse.ArgumentParser(description="EveryDream2 Training options")
     argparser.add_argument("--resume_ckpt", type=str, required=True, default="sd_v1-5_vae.ckpt")
     argparser.add_argument("--lr_scheduler", type=str, default="constant", help="LR scheduler, (default: constant)", choices=["constant", "linear", "cosine", "polynomial"])
