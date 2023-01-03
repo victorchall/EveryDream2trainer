@@ -606,7 +606,7 @@ def main(args):
         for epoch in range(args.max_epochs):
             epoch_start_time = time.time()
             steps_pbar.reset()
-            images_per_sec_epoch = []
+            images_per_sec_log_step = []
 
             for step, batch in enumerate(train_dataloader):
                 step_start_time = time.time()
@@ -681,7 +681,7 @@ def main(args):
                 global_step += 1
 
                 images_per_sec = args.batch_size / (time.time() - step_start_time)
-                images_per_sec_epoch.append(images_per_sec)
+                images_per_sec_log_step.append(images_per_sec)
 
                 if (global_step + 1) % args.log_step == 0:
                     curr_lr = lr_scheduler.get_last_lr()[0]
@@ -689,9 +689,9 @@ def main(args):
                     logs = {"loss/step": loss_local, "lr": curr_lr, "img/s": images_per_sec}
                     log_writer.add_scalar(tag="loss/step", scalar_value=loss_local, global_step=global_step)
                     log_writer.add_scalar(tag="hyperparamater/lr", scalar_value=curr_lr, global_step=global_step)
-                    sum_img = sum(images_per_sec_epoch)
-                    avg = sum_img / len(images_per_sec_epoch)
-                    images_per_sec_epoch = []
+                    sum_img = sum(images_per_sec_log_step)
+                    avg = sum_img / len(images_per_sec_log_step)
+                    images_per_sec_log_step = []
                     #log_writer.add_scalar(tag="hyperparamater/grad scale", scalar_value=scaler.get_scale(), global_step=global_step)
                     log_writer.add_scalar(tag="performance/images per second", scalar_value=avg, global_step=global_step)
                     append_epoch_log(global_step=global_step, epoch_pbar=epoch_pbar, gpu=gpu, log_writer=log_writer, **logs)
