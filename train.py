@@ -110,7 +110,7 @@ def setup_local_logger(args):
     json_config = json.dumps(vars(args), indent=2)
     datetimestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
-    with open(os.path.join(log_path, f"{args.project_name}-{datetimestamp}.json"), "w") as f:
+    with open(os.path.join(log_path, f"{args.project_name}-{datetimestamp}_cfg.json"), "w") as f:
         f.write(f"{json_config}")
 
     logfilename = os.path.join(log_path, f"{args.project_name}-{datetimestamp}.log")
