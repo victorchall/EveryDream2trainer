@@ -92,7 +92,7 @@ class EveryDreamBatch(Dataset):
         with open(f"{self.log_folder}/ep{epoch_n}_batch_schedule.txt", "w", encoding='utf-8') as f:
             for i in range(len(self.image_train_items)):
                 try:
-                    f.write(f"step:{int(i / self.batch_size)}, wh:{self.image_train_items[i].target_wh}, r:{self.image_train_items[i].runt_size}, path:{self.image_train_items[i].pathname}\n")
+                    f.write(f"step:{int(i / self.batch_size):05}, wh:{self.image_train_items[i].target_wh}, r:{self.image_train_items[i].runt_size}, path:{self.image_train_items[i].pathname}\n")
                 except Exception as e:
                     logging.error(f" * Error writing to batch schedule for file path: {self.image_train_items[i].pathname}")
 

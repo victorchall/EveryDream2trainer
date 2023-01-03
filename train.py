@@ -110,10 +110,10 @@ def setup_local_logger(args):
     json_config = json.dumps(vars(args), indent=2)
     datetimestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
-    logfilename = os.path.join(log_path, f"{args.project_name}-train{datetimestamp}.log")
-    with open(logfilename, "w") as f:
-        f.write(f"Training config:\n{json_config}\n")
+    with open(os.path.join(log_path, f"{args.project_name}-{datetimestamp}.json"), "w") as f:
+        f.write(f"{json_config}")
 
+    logfilename = os.path.join(log_path, f"{args.project_name}-{datetimestamp}.log")
     logging.basicConfig(filename=logfilename,
                         level=logging.INFO,
                         format="%(asctime)s %(message)s",
@@ -600,7 +600,6 @@ def main(args):
 
     append_epoch_log(global_step=global_step, epoch_pbar=epoch_pbar, gpu=gpu, log_writer=log_writer)
 
-    torch.cuda.empty_cache()
     #loss = torch.tensor(0.0, device=device, dtype=torch.float32)
 
     try:            
@@ -652,10 +651,17 @@ def main(args):
                 del timesteps, encoder_hidden_states, noisy_latents
                 #with autocast(enabled=args.amp):
                 loss = torch_functional.mse_loss(model_pred.float(), target.float(), reduction="mean")
-                if batch["runt_size"]> 0:
-                    loss = loss / (batch["runt_size"] / args.batch_size)
+                if batch["runt_size"] > 0:
+                    grad_scale = batch["runt_size"] / args.batch_size
+                    with torch.no_grad(): # not required? just in case for now, needs more testing
+                        for param in unet.parameters():
+                            if param.grad is not None:
+                                param.grad *= grad_scale
+                        if text_encoder.training:
+                            for param in text_encoder.parameters():
+                                if param.grad is not None:
+                                    param.grad *= grad_scale
                 del target, model_pred
-
 
                 if args.clip_grad_norm is not None:
                     torch.nn.utils.clip_grad_norm_(parameters=unet.parameters(), max_norm=args.clip_grad_norm)
@@ -687,6 +693,7 @@ def main(args):
                     #log_writer.add_scalar(tag="hyperparamater/grad scale", scalar_value=scaler.get_scale(), global_step=global_step)
                     log_writer.add_scalar(tag="performance/images per second", scalar_value=avg, global_step=global_step)
                     append_epoch_log(global_step=global_step, epoch_pbar=epoch_pbar, gpu=gpu, log_writer=log_writer, **logs)
+                    torch.cuda.empty_cache()
 
                 if (global_step + 1) % args.sample_steps == 0:
                     pipe = __create_inference_pipe(unet=unet, text_encoder=text_encoder, tokenizer=tokenizer, scheduler=scheduler, vae=vae)
@@ -702,7 +709,7 @@ def main(args):
 
                     del pipe
                     gc.collect()
-                    torch.cuda.empty_cache()                    
+                    torch.cuda.empty_cache()
 
                 min_since_last_ckpt =  (time.time() - last_epoch_saved_time) / 60
 
@@ -717,6 +724,7 @@ def main(args):
                     save_path = os.path.join(f"{log_folder}/ckpts/{args.project_name}-ep{epoch:02}-gs{global_step:05}")
                     __save_model(save_path, unet, text_encoder, tokenizer, scheduler, vae, args.save_ckpt_dir)
 
+                del loss, batch
                 # end of step
 
             elapsed_epoch_time = (time.time() - epoch_start_time) / 60
@@ -735,7 +743,7 @@ def main(args):
 
         total_elapsed_time = time.time() - training_start_time
         logging.info(f"{Fore.CYAN}Training complete{Style.RESET_ALL}")
-        logging.info(f"Total training time took {total_elapsed_time:.2f} seconds, total steps: {global_step}")
+        logging.info(f"Total training time took {total_elapsed_time/60:.2f} minutes, total steps: {global_step}")
         logging.info(f"Average epoch time: {np.mean([t['time'] for t in epoch_times]):.2f} minutes")
 
     except Exception as ex:
@@ -752,41 +760,53 @@ def main(args):
 if __name__ == "__main__":
     supported_resolutions = [448, 512, 576, 640, 704, 768, 832, 896, 960, 1024, 1088, 1152]
     argparser = argparse.ArgumentParser(description="EveryDream2 Training options")
-    argparser.add_argument("--resume_ckpt", type=str, required=True, default="sd_v1-5_vae.ckpt")
-    argparser.add_argument("--lr_scheduler", type=str, default="constant", help="LR scheduler, (default: constant)", choices=["constant", "linear", "cosine", "polynomial"])
-    argparser.add_argument("--lr_warmup_steps", type=int, default=None, help="Steps to reach max LR during warmup (def: 0.02 of lr_decay_steps), non-functional for constant")
-    argparser.add_argument("--lr_decay_steps", type=int, default=0, help="Steps to reach minimum LR, default: automatically set")
-    argparser.add_argument("--log_step", type=int, default=25, help="How often to log training stats, def: 25, recommend default!")
-    argparser.add_argument("--max_epochs", type=int, default=300, help="Maximum number of epochs to train for")
-    argparser.add_argument("--ckpt_every_n_minutes", type=int, default=None, help="Save checkpoint every n minutes, def: 20")
-    argparser.add_argument("--save_every_n_epochs", type=int, default=None, help="Save checkpoint every n epochs, def: 0 (disabled)")
-    argparser.add_argument("--lr", type=float, default=None, help="Learning rate, if using scheduler is maximum LR at top of curve")
-    argparser.add_argument("--useadam8bit", action="store_true", default=False, help="Use AdamW 8-Bit optimizer, recommended!")
-    argparser.add_argument("--project_name", type=str, default="myproj", help="Project name for logs and checkpoints, ex. 'tedbennett', 'superduperV1'")
-    argparser.add_argument("--sample_prompts", type=str, default="sample_prompts.txt", help="File with prompts to generate test samples from (def: sample_prompts.txt)")
-    argparser.add_argument("--sample_steps", type=int, default=250, help="Number of steps between samples (def: 250)")
-    argparser.add_argument("--disable_textenc_training", action="store_true", default=False, help="disables training of text encoder (def: False) NOT RECOMMENDED")
-    argparser.add_argument("--batch_size", type=int, default=2, help="Batch size (def: 2)")
-    argparser.add_argument("--clip_grad_norm", type=float, default=None, help="Clip gradient norm (def: disabled) (ex: 1.5), useful if loss=nan?")
-    argparser.add_argument("--grad_accum", type=int, default=1, help="Gradient accumulation factor (def: 1), (ex, 2)")
-    argparser.add_argument("--clip_skip", type=int, default=0, help="Train using penultimate layer (def: 0) (2 is 'penultimate')", choices=[0, 1, 2, 3, 4])
-    argparser.add_argument("--data_root", type=str, default="input", help="folder where your training images are")
-    argparser.add_argument("--wandb", action="store_true", default=False, help="enable wandb logging instead of tensorboard, requires env var WANDB_API_KEY")
-    argparser.add_argument("--save_optimizer", action="store_true", default=False, help="saves optimizer state with ckpt, useful for resuming training later")
-    argparser.add_argument("--resolution", type=int, default=512, help="resolution to train", choices=supported_resolutions)
-    argparser.add_argument("--amp", action="store_true", default=False, help="use floating point 16 bit training, experimental, reduces quality")
-    argparser.add_argument("--cond_dropout", type=float, default=0.04, help="Conditional drop out as decimal 0.0-1.0, see docs for more info (def: 0.04)")
-    argparser.add_argument("--logdir", type=str, default="logs", help="folder to save logs to (def: logs)")
-    argparser.add_argument("--save_ckpt_dir", type=str, default=None, help="folder to save checkpoints to (def: root training folder)")
-    argparser.add_argument("--scale_lr", action="store_true", default=False, help="automatically scale up learning rate based on batch size and grad accumulation (def: False)")
-    argparser.add_argument("--seed", type=int, default=555, help="seed used for samples and shuffling, use -1 for random")
-    argparser.add_argument("--flip_p", type=float, default=0.0, help="probability of flipping image horizontally (def: 0.0) use 0.0 to 1.0, ex 0.5, not good for specific faces!")
-    argparser.add_argument("--gpuid", type=int, default=0, help="id of gpu to use for training, (def: 0) (ex: 1 to use GPU_ID 1)")
-    argparser.add_argument("--write_schedule", action="store_true", default=False, help="write schedule of images and their batches to file (def: False)")
-    argparser.add_argument("--gradient_checkpointing", action="store_true", default=False, help="enable gradient checkpointing to reduce VRAM use, may reduce performance (def: False)")
-    argparser.add_argument("--disable_xformers", action="store_true", default=False, help="disable xformers, may reduce performance (def: False)")
-    argparser.add_argument("--lowvram", action="store_true", default=False, help="automatically overrides various args to support 12GB gpu")
+    argparser.add_argument("--config", type=str, required=False, default=None, help="JSON config file to load options from")
+    args, _ = argparser.parse_known_args()
 
-    args = argparser.parse_args()
+    if args.config is not None:
+        print(f"Loading training config from {args.config}, all other command options will be ignored!")
+        with open(args.config, 'rt') as f:
+            t_args = argparse.Namespace()
+            t_args.__dict__.update(json.load(f))
+            args = argparser.parse_args(namespace=t_args)
+    else:
+        print("No config file specified, using command line args")
+        argparser = argparse.ArgumentParser(description="EveryDream2 Training options")
+        argparser.add_argument("--amp", action="store_true", default=False, help="use floating point 16 bit training, experimental, reduces quality")
+        argparser.add_argument("--batch_size", type=int, default=2, help="Batch size (def: 2)")
+        argparser.add_argument("--ckpt_every_n_minutes", type=int, default=None, help="Save checkpoint every n minutes, def: 20")
+        argparser.add_argument("--clip_grad_norm", type=float, default=None, help="Clip gradient norm (def: disabled) (ex: 1.5), useful if loss=nan?")
+        argparser.add_argument("--clip_skip", type=int, default=0, help="Train using penultimate layer (def: 0) (2 is 'penultimate')", choices=[0, 1, 2, 3, 4])
+        argparser.add_argument("--cond_dropout", type=float, default=0.04, help="Conditional drop out as decimal 0.0-1.0, see docs for more info (def: 0.04)")
+        argparser.add_argument("--data_root", type=str, default="input", help="folder where your training images are")
+        argparser.add_argument("--disable_textenc_training", action="store_true", default=False, help="disables training of text encoder (def: False) NOT RECOMMENDED")
+        argparser.add_argument("--disable_xformers", action="store_true", default=False, help="disable xformers, may reduce performance (def: False)")
+        argparser.add_argument("--flip_p", type=float, default=0.0, help="probability of flipping image horizontally (def: 0.0) use 0.0 to 1.0, ex 0.5, not good for specific faces!")
+        argparser.add_argument("--gpuid", type=int, default=0, help="id of gpu to use for training, (def: 0) (ex: 1 to use GPU_ID 1)")
+        argparser.add_argument("--gradient_checkpointing", action="store_true", default=False, help="enable gradient checkpointing to reduce VRAM use, may reduce performance (def: False)")
+        argparser.add_argument("--grad_accum", type=int, default=1, help="Gradient accumulation factor (def: 1), (ex, 2)")
+        argparser.add_argument("--logdir", type=str, default="logs", help="folder to save logs to (def: logs)")
+        argparser.add_argument("--log_step", type=int, default=25, help="How often to log training stats, def: 25, recommend default!")
+        argparser.add_argument("--lowvram", action="store_true", default=False, help="automatically overrides various args to support 12GB gpu")
+        argparser.add_argument("--lr", type=float, default=None, help="Learning rate, if using scheduler is maximum LR at top of curve")
+        argparser.add_argument("--lr_decay_steps", type=int, default=0, help="Steps to reach minimum LR, default: automatically set")
+        argparser.add_argument("--lr_scheduler", type=str, default="constant", help="LR scheduler, (default: constant)", choices=["constant", "linear", "cosine", "polynomial"])
+        argparser.add_argument("--lr_warmup_steps", type=int, default=None, help="Steps to reach max LR during warmup (def: 0.02 of lr_decay_steps), non-functional for constant")
+        argparser.add_argument("--max_epochs", type=int, default=300, help="Maximum number of epochs to train for")
+        argparser.add_argument("--project_name", type=str, default="myproj", help="Project name for logs and checkpoints, ex. 'tedbennett', 'superduperV1'")
+        argparser.add_argument("--resolution", type=int, default=512, help="resolution to train", choices=supported_resolutions)
+        argparser.add_argument("--resume_ckpt", type=str, required=True, default="sd_v1-5_vae.ckpt")
+        argparser.add_argument("--sample_prompts", type=str, default="sample_prompts.txt", help="File with prompts to generate test samples from (def: sample_prompts.txt)")
+        argparser.add_argument("--sample_steps", type=int, default=250, help="Number of steps between samples (def: 250)")
+        argparser.add_argument("--save_ckpt_dir", type=str, default=None, help="folder to save checkpoints to (def: root training folder)")
+        argparser.add_argument("--save_every_n_epochs", type=int, default=None, help="Save checkpoint every n epochs, def: 0 (disabled)")
+        argparser.add_argument("--save_optimizer", action="store_true", default=False, help="saves optimizer state with ckpt, useful for resuming training later")
+        argparser.add_argument("--scale_lr", action="store_true", default=False, help="automatically scale up learning rate based on batch size and grad accumulation (def: False)")
+        argparser.add_argument("--seed", type=int, default=555, help="seed used for samples and shuffling, use -1 for random")
+        argparser.add_argument("--useadam8bit", action="store_true", default=False, help="Use AdamW 8-Bit optimizer, recommended!")
+        argparser.add_argument("--wandb", action="store_true", default=False, help="enable wandb logging instead of tensorboard, requires env var WANDB_API_KEY")
+        argparser.add_argument("--write_schedule", action="store_true", default=False, help="write schedule of images and their batches to file (def: False)")
+
+        args = argparser.parse_args()
 
     main(args)
