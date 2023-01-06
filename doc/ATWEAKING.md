@@ -50,6 +50,18 @@ Learning rate adjustment is a very important part of training.  You can use the 
 
 By default, the learning rate is constant for the entire training session.  However, if you want it to change by itself during training, you can use cosine.
 
+## Every Dream 1.0 mode
+
+If you want to train in a mode that simulates closer to EveryDream 1.0 behavior when training SD 1.x models, you can use this:
+
+    --ed1_mode ^
+
+This forces disabling of Xformers.  You may need to adjust batch_size.
+
+I recommended to use lower LR more similar to EveryDream 1.0 as well with this option, such as 1e-6.
+
+*This is not recommended for SD2.x models, but actively researching this.*
+
 ### Cosine LR scheduler
 Cosine LR scheduler will "taper off" your learning rate over time. It will reach a peak value of your ```--lr``` value then taper off following a cosine curve.  In other words, it allows you to set a high initial learning rate which lowers as training progresses.  This *may* help speed up training without overfitting.  If you wish to use this, I would set a slightly higher initial [learning rate](#lr-tweaking), maybe by 25-50% than you might use with a normal constant LR schedule.
 

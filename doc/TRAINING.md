@@ -10,6 +10,16 @@ Make sure the last line does not have ^ but all other lines do.
 
 You should see your command line show ```(venv)``` at the beginning of the line.  If you don't, something went wrong with setup.
 
+## Running from a json config file
+
+You can edit the example `train.json` file to your liking, then run the following command:
+
+    python train.py --config train.json
+
+Be careful with editing the json file, as any syntax errors will cause the program to crash.  You might want to use a json validator to check your file before running it.  You can use an online validator such as https://jsonlint.com/ or look at it in VS Code.
+
+## Running from the command line with arguments
+
 I recommend you copy one of the examples below and keep it in a text file for future reference.  Your settings are logged in the logs folder, but you'll need to make a command to start training.  
 
 Training examples:

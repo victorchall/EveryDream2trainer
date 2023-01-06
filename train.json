@@ -8,6 +8,7 @@
   "data_root": "X:\\my_project_data\\project_abc",
   "disable_textenc_training": false,
   "disable_xformers": false,
+  "ed1_mode": true,
   "flip_p": 0.0,
   "gpuid": 0,
   "gradient_checkpointing": true,
