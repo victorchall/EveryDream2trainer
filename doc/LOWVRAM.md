@@ -10,9 +10,9 @@ A few key arguments will enable training with lower amounts of VRAM.
 
 The first is the most impactful.
 
-    --gradient_checkpointing_unet
+    --gradient_checkpointing
 
-This enables gradient checkpoint on the largest part of the model, the U-Net.  This will reduce the VRAM usage MANY gigabytes.  By itself, and with batch_size 1 VRAM use can be as low as 11.9GB (out of an actual 12.2GB).  This is very tight on a 12GB card such as a 3060 12GB so you will need to take care on what other applications are open. 
+This enables gradient checkpoint This will reduce the VRAM usage MANY gigabytes.  By itself, and with batch_size 1 VRAM use can be as low as 11.9GB (out of an actual 12.2GB).  This is very tight on a 12GB card such as a 3060 12GB so you will need to take care on what other applications are open. 
 
 The second is batch_size in general.
 
@@ -26,14 +26,9 @@ The third is gradient accumulation.
 
 This will combine the loss from multiple batches before applying updates.  This is like a "virtual batch size multiplier" so if you are limited to just a batch size of 1 or 2 you can increase this to gain some benefits of generalization across multiple images, similar to increasing the batch size.  There is some small VRAM overhead to this, but only when incrementing it from 1 to 2.  If you can run grad_accum 2, you can run 4 or 6.  Your goal here should be to get batch_size times grad_accum to around 8-10.  If you want to try really high values of grad_accum you can, but so far it seems massive batch sizes are not as helpful as you might think.
 
-The fourth is checkpointing the text_encoder as well
+These are the forced parameters for --lowvram:
 
-    --gradient_checkpointing_text
-
-This enables checkpointing on the text_encoder.  It is not as impactful as checkpointing on the U-Net, but it will help. 
-
-Current recommendations for 12GB users:
-
-    --gradient_checkpointing_unet
+    --gradient_checkpointing
     --batch_size 1
     --grad_accum 1
+    --resolution 512
