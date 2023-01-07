@@ -115,6 +115,14 @@ If you wish for your training images to be randomly flipped horizontally, use th
 
 This is useful for styles or other training that is not asymmetrical.  It is not suggested for training specific human faces as it may wash out facial features as real people typically have at least some asymmetric facial features.  It may also cause problems if you are training fictional characters with asymmetrical outfits, such as washing out the asymmetries in the outfit.  It is also not suggested if any of your captions included directions like "left" or "right".  Default is 0.0 (no flipping)
 
+# Shuffle tags
+
+For those training booru tagged models, you can use this arg to randomly (but deterministicly unless you use `--seed -1`) all the CSV tags in your captions
+
+    --shuffle_tags ^
+
+This simple chops the captions in to parts based on the commas and shuffles the order.
+
 # Stuff you probably don't need to mess with, but well here it is:
 
 ## Clip skip

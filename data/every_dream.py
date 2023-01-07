@@ -50,6 +50,7 @@ class EveryDreamBatch(Dataset):
                  log_folder=None,
                  retain_contrast=False,
                  write_schedule=False,
+                 shuffle_tags=False,
                  ):
         self.data_root = data_root
         self.batch_size = batch_size
@@ -63,6 +64,8 @@ class EveryDreamBatch(Dataset):
         self.max_token_length = self.tokenizer.model_max_length
         self.retain_contrast = retain_contrast
         self.write_schedule = write_schedule
+        self.shuffle_tags = shuffle_tags
+        self.seed = seed
 
         if seed == -1:
             seed = random.randint(0, 99999)
@@ -131,6 +134,12 @@ class EveryDreamBatch(Dataset):
             ]
         )
 
+        if self.shuffle_tags and "," in train_item['caption']:
+            tags = train_item["caption"].split(",")
+            random.Random(self.seed).shuffle(tags)
+            self.seed += 1
+            train_item["caption"] = ", ".join(tags)
+
         example["image"] = image_transforms(train_item["image"])
 
         if random.random() > self.conditional_dropout:
@@ -145,6 +154,7 @@ class EveryDreamBatch(Dataset):
                                                 padding="max_length",
                                                 max_length=self.tokenizer.model_max_length,
                                               ).input_ids
+
         example["tokens"] = torch.tensor(example["tokens"])
         example["caption"] = train_item["caption"] # for sampling if needed
         example["runt_size"] = train_item["runt_size"]

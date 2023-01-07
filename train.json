@@ -31,6 +31,7 @@
   "save_optimizer": false,
   "scale_lr": false,
   "seed": 555,
+  "shuffle_tags": false,
   "useadam8bit": true,
   "wandb": false,
   "write_schedule": false

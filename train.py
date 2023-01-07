@@ -208,6 +208,9 @@ def main(args):
 
     if args.ed1_mode:
         args.disable_xformers = True
+    
+    if not args.shuffle_tags:
+        args.shuffle_tags = False
 
     args.clip_skip = max(min(4, args.clip_skip), 0)
     
@@ -448,6 +451,7 @@ def main(args):
         seed = seed,
         log_folder=log_folder,
         write_schedule=args.write_schedule,
+        shuffle_tags=args.shuffle_tags,
     )
 
     torch.cuda.benchmark = False
@@ -655,6 +659,12 @@ def main(args):
 
                 del target, model_pred
 
+                if args.clip_grad_norm is not None:
+                    torch.nn.utils.clip_grad_norm_(parameters=unet.parameters(), max_norm=args.clip_grad_norm)
+                    torch.nn.utils.clip_grad_norm_(parameters=text_encoder.parameters(), max_norm=args.clip_grad_norm)
+
+                loss.backward()
+
                 if batch["runt_size"] > 0:
                     grad_scale = batch["runt_size"] / args.batch_size
                     with torch.no_grad(): # not required? just in case for now, needs more testing
@@ -665,12 +675,6 @@ def main(args):
                             for param in text_encoder.parameters():
                                 if param.grad is not None:
                                     param.grad *= grad_scale
-
-                if args.clip_grad_norm is not None:
-                    torch.nn.utils.clip_grad_norm_(parameters=unet.parameters(), max_norm=args.clip_grad_norm)
-                    torch.nn.utils.clip_grad_norm_(parameters=text_encoder.parameters(), max_norm=args.clip_grad_norm)
-
-                loss.backward()
 
                 if ((global_step + 1) % args.grad_accum == 0) or (step == epoch_len - 1):
                     optimizer.step()
@@ -808,6 +812,7 @@ if __name__ == "__main__":
         argparser.add_argument("--save_optimizer", action="store_true", default=False, help="saves optimizer state with ckpt, useful for resuming training later")
         argparser.add_argument("--scale_lr", action="store_true", default=False, help="automatically scale up learning rate based on batch size and grad accumulation (def: False)")
         argparser.add_argument("--seed", type=int, default=555, help="seed used for samples and shuffling, use -1 for random")
+        argparser.add_argument("--shuffle_tags", action="store_true", default=False, help="randomly shuffles CSV tags in captions, for booru datasets")
         argparser.add_argument("--useadam8bit", action="store_true", default=False, help="Use AdamW 8-Bit optimizer, recommended!")
         argparser.add_argument("--wandb", action="store_true", default=False, help="enable wandb logging instead of tensorboard, requires env var WANDB_API_KEY")
         argparser.add_argument("--write_schedule", action="store_true", default=False, help="write schedule of images and their batches to file (def: False)")
