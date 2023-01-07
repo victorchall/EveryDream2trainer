@@ -31,42 +31,51 @@ class ImageCaption:
     Represents the various parts of an image caption
     """
 
-    def __init__(self, main_prompt: str, tags: list[str], tag_weights: list[float]):
+    def __init__(self, main_prompt: str, tags: list[str], tag_weights: list[float], max_target_length: int, use_weights: bool):
         """
         :param main_prompt: The part of the caption which should always be included
         :param tags: list of tags to pick from to fill the caption
         :param tag_weights: weights to indicate which tags are more desired and should be picked preferably
+        :param max_target_length: The desired maximum length of a generated caption
+        :param use_weights: if ture, weights are considered when shuffling tags
         """
         self.__main_prompt = main_prompt
         self.__tags = tags
         self.__tag_weights = tag_weights
-        if len(tags) > len(tag_weights):
+        self.__max_target_length = max_target_length
+        self.__use_weights = use_weights
+        if use_weights and len(tags) > len(tag_weights):
             self.__tag_weights.extend([1.0] * (len(tags) - len(tag_weights)))
 
-    def get_shuffled_caption(self, seed: int, target_length=150) -> str:
+        if use_weights and len(tag_weights) > len(tags):
+            self.__tag_weights = tag_weights[:len(tags)]
+
+    def get_shuffled_caption(self, seed: int) -> str:
         """
         returns the caption a string with a random selection of the tags in random order
         :param seed used to initialize the randomizer
-        :param target_length: maximum desired length of the caption
         :return: generated caption string
         """
-        target_tag_length = target_length - len(self.__main_prompt)
-        tags_caption = self.__get_tags_caption(seed, self.__tags, self.__tag_weights, target_tag_length)
+        max_target_tag_length = self.__max_target_length - len(self.__main_prompt)
 
-        return self.__main_prompt + tags_caption
+        if self.__use_weights:
+            tags_caption = self.__get_weighted_shuffled_tags(seed, self.__tags, self.__tag_weights, max_target_tag_length)
+        else:
+            tags_caption = self.__get_shuffled_tags(seed, self.__tags)
+
+        return self.__main_prompt + ", " + tags_caption
 
     def get_caption(self) -> str:
-        return self.__main_prompt + ", ".join(self.__tags)
+        return self.__main_prompt + ", " + ", ".join(self.__tags)
 
     @staticmethod
-    def __get_tags_caption(seed: int, tags: list[str], weights: list[float], target_length: int) -> str:
-        caption = ""
-
+    def __get_weighted_shuffled_tags(seed: int, tags: list[str], weights: list[float], max_target_tag_length: int) -> str:
         picker = random.Random(seed)
         tags_copy = tags.copy()
         weights_copy = weights.copy()
 
-        while len(tags_copy) != 0 and len(caption) < target_length:
+        caption = ""
+        while len(tags_copy) != 0 and len(caption) < max_target_tag_length:
             cum_weights = []
             weight_sum = 0.0
             for weight in weights_copy:
@@ -81,6 +90,11 @@ class ImageCaption:
             caption += ", " + tag
 
         return caption
+
+    @staticmethod
+    def __get_shuffled_tags(seed: int, tags: list[str]) -> str:
+        random.Random(seed).shuffle(tags)
+        return ", ".join(tags)
 
 
 class ImageTrainItem():

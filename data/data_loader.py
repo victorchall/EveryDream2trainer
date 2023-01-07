@@ -29,6 +29,8 @@ import PIL
 
 PIL.Image.MAX_IMAGE_PIXELS = 715827880*4 # increase decompression bomb error limit to 4x default
 
+DEFAULT_MAX_CAPTION_LENGTH = 2048
+
 class DataLoaderMultiAspect():
     """
     Data loader for multi-aspect-ratio training and bucketing
@@ -97,17 +99,27 @@ class DataLoaderMultiAspect():
                 main_prompt = file_content.get("main_prompt", "")
                 unparsed_tags = file_content.get("tags", [])
 
+                max_caption_length = file_content.get("max_caption_length", DEFAULT_MAX_CAPTION_LENGTH)
+
                 tags = []
                 tag_weights = []
+                last_weight = None
+                weights_differ = False
                 for unparsed_tag in unparsed_tags:
                     tag = unparsed_tag.get("tag", "").strip()
                     if len(tag) == 0:
                         continue
 
                     tags.append(tag)
-                    tag_weights.append(unparsed_tag.get("weight", 1.0))
+                    tag_weight = unparsed_tag.get("weight", 1.0)
+                    tag_weights.append(tag_weight)
 
-                return ImageCaption(main_prompt, tags, tag_weights)
+                    if last_weight is not None and weights_differ is False:
+                        weights_differ = last_weight != tag_weight
+
+                    last_weight = tag_weight
+
+                return ImageCaption(main_prompt, tags, tag_weights, max_caption_length, weights_differ)
 
             except:
                 logging.error(f" *** Error reading {file_path} to get caption, falling back to filename")
@@ -124,7 +136,7 @@ class DataLoaderMultiAspect():
         for tag in split_caption:
             tags.append(tag.strip())
 
-        return ImageCaption(main_prompt, tags, [1.0] * len(tags))
+        return ImageCaption(main_prompt, tags, [1.0] * len(tags), DEFAULT_MAX_CAPTION_LENGTH, False)
 
     def __prescan_images(self, image_paths: list, flip_p=0.0):
         """

@@ -34,3 +34,5 @@ Behind the scenes look at how the trainer handles multiaspect and crop jitter
 [Advanced Tweaking](doc/ATWEAKING.md)
 
 [Chaining training sessions](doc/CHAINING.md)
+
+[Shuffling Tags](doc/SHUFFLING_TAGS.md)
