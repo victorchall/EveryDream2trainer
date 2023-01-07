@@ -18,7 +18,7 @@ import os
 import logging
 from PIL import Image
 import random
-from data.image_train_item import ImageTrainItem
+from data.image_train_item import ImageTrainItem, ImageCaption
 import data.aspects as aspects
 from colorama import Fore, Style
 import zipfile
@@ -76,16 +76,29 @@ class DataLoaderMultiAspect():
         return self.image_caption_pairs
 
     @staticmethod
-    def __read_caption_from_file(file_path, fallback_caption):
-        caption = fallback_caption
+    def __read_caption_from_file(file_path, fallback_caption: ImageCaption) -> ImageCaption:
         try:
             with open(file_path, encoding='utf-8', mode='r') as caption_file:
-                caption = caption_file.read()
+                caption_text = caption_file.read()
+                caption = DataLoaderMultiAspect.__split_caption_into_tags(caption_text)
         except:
             logging.error(f" *** Error reading {file_path} to get caption, falling back to filename")
             caption = fallback_caption
             pass
         return caption
+
+    @staticmethod
+    def __split_caption_into_tags(caption_string: str) -> ImageCaption:
+        """
+        Splits a string by "," into the main prompt and additional tags with equal weights
+        """
+        split_caption = caption_string.split(",")
+        main_prompt = split_caption.pop(0).strip()
+        tags = []
+        for tag in split_caption:
+            tags.append(tag.strip())
+
+        return ImageCaption(main_prompt, tags, [1.0] * len(tags))
 
     def __prescan_images(self, image_paths: list, flip_p=0.0):
         """
@@ -95,16 +108,15 @@ class DataLoaderMultiAspect():
 
         for pathname in tqdm.tqdm(image_paths):
             caption_from_filename = os.path.splitext(os.path.basename(pathname))[0].split("_")[0]
+            caption = DataLoaderMultiAspect.__split_caption_into_tags(caption_from_filename)
 
             txt_file_path = os.path.splitext(pathname)[0] + ".txt"
             caption_file_path = os.path.splitext(pathname)[0] + ".caption"
 
             if os.path.exists(txt_file_path):
-                caption = self.__read_caption_from_file(txt_file_path, caption_from_filename)                
+                caption = self.__read_caption_from_file(txt_file_path, caption)
             elif os.path.exists(caption_file_path):
-                caption = self.__read_caption_from_file(caption_file_path, caption_from_filename)                
-            else:
-                caption = caption_from_filename
+                caption = self.__read_caption_from_file(caption_file_path, caption)
 
             try:
                 image = Image.open(pathname)

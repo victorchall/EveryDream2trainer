@@ -134,16 +134,15 @@ class EveryDreamBatch(Dataset):
             ]
         )
 
-        if self.shuffle_tags and "," in train_item['caption']:
-            tags = train_item["caption"].split(",")
-            random.Random(self.seed).shuffle(tags)
-            self.seed += 1
-            train_item["caption"] = ", ".join(tags)
+        if self.shuffle_tags:
+            example["caption"] = train_item["caption"].get_shuffled_caption(self.seed)
+        else:
+            example["caption"] = train_item["caption"].get_caption()
 
         example["image"] = image_transforms(train_item["image"])
 
         if random.random() > self.conditional_dropout:
-            example["tokens"] = self.tokenizer(train_item["caption"],
+            example["tokens"] = self.tokenizer(example["caption"],
                                                 truncation=True,
                                                 padding="max_length",
                                                 max_length=self.tokenizer.model_max_length,
@@ -156,7 +155,7 @@ class EveryDreamBatch(Dataset):
                                               ).input_ids
 
         example["tokens"] = torch.tensor(example["tokens"])
-        example["caption"] = train_item["caption"] # for sampling if needed
+
         example["runt_size"] = train_item["runt_size"]
 
         return example
