@@ -636,7 +636,7 @@ def main(args):
                 encoder_hidden_states = text_encoder(cuda_caption, output_hidden_states=True)
 
                 if args.clip_skip > 0:
-                    encoder_hidden_states = encoder_hidden_states.hidden_states[-args.clip_skip]
+                    encoder_hidden_states = text_encoder.text_model.final_layer_norm(encoder_hidden_states.hidden_states[-args.clip_skip])
                 else:
                     encoder_hidden_states = encoder_hidden_states.last_hidden_state
 
