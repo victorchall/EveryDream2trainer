@@ -103,6 +103,7 @@ class EveryDreamBatch(Dataset):
         return dls.shared_dataloader.runts
 
     def shuffle(self, epoch_n):
+        self.seed += 1
         if dls.shared_dataloader:
             dls.shared_dataloader.shuffle()
             self.image_train_items = dls.shared_dataloader.get_all_images()
