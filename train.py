@@ -105,6 +105,7 @@ def setup_local_logger(args):
     configures logger with file and console logging, logs args, and returns the datestamp
     """
     log_path = args.logdir
+
     if not os.path.exists(log_path):
         os.makedirs(log_path)
 
@@ -115,6 +116,7 @@ def setup_local_logger(args):
         f.write(f"{json_config}")
 
     logfilename = os.path.join(log_path, f"{args.project_name}-{datetimestamp}.log")
+    print(f" logging to {logfilename}")
     logging.basicConfig(filename=logfilename,
                         level=logging.INFO,
                         format="%(asctime)s %(message)s",
@@ -122,6 +124,7 @@ def setup_local_logger(args):
                        )
 
     logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
+
     return datetimestamp
 
 def log_optimizer(optimizer: torch.optim.Optimizer, betas, epsilon):
@@ -190,30 +193,51 @@ def set_args_12gb(args):
         logging.info("   Overiding adam8bit to True")
         args.useadam8bit = True
 
-def main(args):
+def find_last_checkpoint(logdir):
     """
-    Main entry point
+    Finds the last checkpoint in the logdir, recursively
     """
-    log_time = setup_local_logger(args)
-    
+    last_ckpt = None
+    last_date = None
+
+    for root, dirs, files in os.walk(logdir):
+        for file in files:
+            if os.path.basename(file) == "model_index.json":
+                curr_date = os.path.getmtime(os.path.join(root,file))
+
+                if last_date is None or curr_date > last_date:
+                    last_date = curr_date
+                    last_ckpt = root
+
+    assert last_ckpt, f"Could not find last checkpoint in logdir: {logdir}"
+    assert "errored" not in last_ckpt, f"Found last checkpoint: {last_ckpt}, but it was errored, cancelling"
+
+    print(f"    {Fore.LIGHTCYAN_EX}Found last checkpoint: {last_ckpt}, resuming{Style.RESET_ALL}")
+
+    return last_ckpt
+
+def setup_args(args):
+    """
+    Sets defaults for missing args (possible if missing from json config)
+    Forces some args to be set based on others for compatibility reasons
+    """
+    if args.resume_ckpt == "findlast":
+        logging.info(f"{Fore.LIGHTCYAN_EX} Finding last checkpoint in logdir: {args.logdir}{Style.RESET_ALL}")
+        # find the last checkpoint in the logdir
+        args.resume_ckpt = find_last_checkpoint(args.logdir)
+
+    if args.ed1_mode and not args.disable_xformers:
+        args.disable_xformers = True
+        logging.info("   ED1 mode: Overiding disable_xformers to True")
+
     if args.lowvram:
         set_args_12gb(args)
 
-    seed = args.seed if args.seed != -1 else random.randint(0, 2**30)
-    set_seed(seed)
-    gpu = GPU()
-    device = torch.device(f"cuda:{args.gpuid}")
-
-    torch.backends.cudnn.benchmark = False
-
-    if args.ed1_mode:
-        args.disable_xformers = True
-    
     if not args.shuffle_tags:
         args.shuffle_tags = False
 
     args.clip_skip = max(min(4, args.clip_skip), 0)
-    
+        
     if args.ckpt_every_n_minutes is None and args.save_every_n_epochs is None:
         logging.info(f"{Fore.LIGHTCYAN_EX} No checkpoint saving specified, defaulting to every 20 minutes.{Style.RESET_ALL}")
         args.ckpt_every_n_minutes = 20
@@ -231,15 +255,31 @@ def main(args):
     if args.cond_dropout > 0.26:
         logging.warning(f"{Fore.LIGHTYELLOW_EX}** cond_dropout is set fairly high: {args.cond_dropout}, make sure this was intended{Style.RESET_ALL}")
 
-    total_batch_size = args.batch_size * args.grad_accum
-
     if args.grad_accum > 1:
         logging.info(f"{Fore.CYAN} Batch size: {args.batch_size}, grad accum: {args.grad_accum}, 'effective' batch size: {args.batch_size * args.grad_accum}{Style.RESET_ALL}")
+
+    total_batch_size = args.batch_size * args.grad_accum
 
     if args.scale_lr is not None and args.scale_lr:
         tmp_lr = args.lr
         args.lr = args.lr * (total_batch_size**0.55)
         logging.info(f"{Fore.CYAN} * Scaling learning rate {tmp_lr} by {total_batch_size**0.5}, new value: {args.lr}{Style.RESET_ALL}")
+
+    return args
+
+def main(args):
+    """
+    Main entry point
+    """
+    log_time = setup_local_logger(args)
+    args = setup_args(args)
+    
+    seed = args.seed if args.seed != -1 else random.randint(0, 2**30)
+    set_seed(seed)
+    gpu = GPU()
+    device = torch.device(f"cuda:{args.gpuid}")
+
+    torch.backends.cudnn.benchmark = True
 
     log_folder = os.path.join(args.logdir, f"{args.project_name}_{log_time}")
     logging.info(f"Logging to {log_folder}")
@@ -409,9 +449,12 @@ def main(args):
     default_lr = 3e-6
     curr_lr = args.lr if args.lr is not None else default_lr
 
+    # vae = vae.to(device, dtype=torch.float32 if not args.amp else torch.float16)
+    # unet = unet.to(device, dtype=torch.float32 if not args.amp else torch.float16)
+    # text_encoder = text_encoder.to(device, dtype=torch.float32 if not args.amp else torch.float16)
     vae = vae.to(device, dtype=torch.float32 if not args.amp else torch.float16)
-    unet = unet.to(device, dtype=torch.float32 if not args.amp else torch.float16)
-    text_encoder = text_encoder.to(device, dtype=torch.float32 if not args.amp else torch.float16)
+    unet = unet.to(device, dtype=torch.float32)
+    text_encoder = text_encoder.to(device, dtype=torch.float32)
 
     if args.disable_textenc_training:
         logging.info(f"{Fore.CYAN} * NOT Training Text Encoder, quality reduced *{Style.RESET_ALL}")
@@ -537,15 +580,7 @@ def main(args):
     logging.info(f" saving ckpts every {args.ckpt_every_n_minutes} minutes")
     logging.info(f" saving ckpts every {args.save_every_n_epochs } epochs")
 
-    # scaler = torch.cuda.amp.GradScaler(
-    #     #enabled=False,
-    #     enabled=True if args.amp else False,
-    #     init_scale=2**1,
-    #     growth_factor=1.000001,
-    #     backoff_factor=0.9999999,
-    #     growth_interval=50,
-    # )
-    #logging.info(f" Grad scaler enabled: {scaler.is_enabled()}")
+
 
     def collate_fn(batch):
         """
@@ -607,8 +642,22 @@ def main(args):
 
     #loss = torch.tensor(0.0, device=device, dtype=torch.float32)
 
-    try:            
+    if args.amp:
+        #scaler = torch.cuda.amp.GradScaler()
+        scaler = torch.cuda.amp.GradScaler(
+            #enabled=False,
+            enabled=True,
+            init_scale=1024.0,
+            growth_factor=2.0,
+            backoff_factor=0.5,
+            growth_interval=50,
+        )
+        logging.info(f" Grad scaler enabled: {scaler.is_enabled()}")
+
+    loss_log_step = []
+    try:
         for epoch in range(args.max_epochs):
+            loss_epoch = []
             epoch_start_time = time.time()
             steps_pbar.reset()
             images_per_sec_log_step = []
@@ -619,8 +668,8 @@ def main(args):
                 with torch.no_grad():
                     #with autocast():
                     pixel_values = batch["image"].to(memory_format=torch.contiguous_format).to(unet.device)
-                    with autocast(enabled=args.amp):                
-                        latents = vae.encode(pixel_values, return_dict=False)
+                    #with autocast(enabled=args.amp):                
+                    latents = vae.encode(pixel_values, return_dict=False)
                     del pixel_values
                     latents = latents[0].sample() * 0.18215
 
@@ -650,8 +699,8 @@ def main(args):
                     raise ValueError(f"Unknown prediction type {noise_scheduler.config.prediction_type}")
                 del noise, latents, cuda_caption
 
-                with autocast(enabled=args.amp):
-                    model_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
+                #with autocast(enabled=args.amp):
+                model_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
 
                 del timesteps, encoder_hidden_states, noisy_latents
                 #with autocast(enabled=args.amp):
@@ -663,7 +712,10 @@ def main(args):
                     torch.nn.utils.clip_grad_norm_(parameters=unet.parameters(), max_norm=args.clip_grad_norm)
                     torch.nn.utils.clip_grad_norm_(parameters=text_encoder.parameters(), max_norm=args.clip_grad_norm)
 
-                loss.backward()
+                if args.amp:
+                    scaler.scale(loss).backward()
+                else:
+                    loss.backward()
 
                 if batch["runt_size"] > 0:
                     grad_scale = batch["runt_size"] / args.batch_size
@@ -677,28 +729,37 @@ def main(args):
                                     param.grad *= grad_scale
 
                 if ((global_step + 1) % args.grad_accum == 0) or (step == epoch_len - 1):
-                    optimizer.step()
+                    if args.amp:
+                        scaler.step(optimizer)
+                        scaler.update()
+                    else:
+                        optimizer.step()
                     optimizer.zero_grad(set_to_none=True)
 
                 lr_scheduler.step()
 
-                steps_pbar.set_postfix({"gs": global_step})
+                loss_step = loss.detach().item()
+
+                steps_pbar.set_postfix({"loss/step": loss_step},{"gs": global_step})
                 steps_pbar.update(1)
-                global_step += 1
 
                 images_per_sec = args.batch_size / (time.time() - step_start_time)
                 images_per_sec_log_step.append(images_per_sec)
 
+                loss_log_step.append(loss_step)
+                loss_epoch.append(loss_step)
+
                 if (global_step + 1) % args.log_step == 0:
                     curr_lr = lr_scheduler.get_last_lr()[0]
-                    loss_local = loss.detach().item()
-                    logs = {"loss/step": loss_local, "lr": curr_lr, "img/s": images_per_sec}
-                    log_writer.add_scalar(tag="loss/step", scalar_value=loss_local, global_step=global_step)
+                    loss_local = sum(loss_log_step) / len(loss_log_step)
+                    loss_log_step = []
+                    logs = {"loss/log_step": loss_local, "lr": curr_lr, "img/s": images_per_sec}                    
                     log_writer.add_scalar(tag="hyperparamater/lr", scalar_value=curr_lr, global_step=global_step)
                     sum_img = sum(images_per_sec_log_step)
                     avg = sum_img / len(images_per_sec_log_step)
                     images_per_sec_log_step = []
-                    #log_writer.add_scalar(tag="hyperparamater/grad scale", scalar_value=scaler.get_scale(), global_step=global_step)
+                    if args.amp:
+                        log_writer.add_scalar(tag="hyperparamater/grad scale", scalar_value=scaler.get_scale(), global_step=global_step)
                     log_writer.add_scalar(tag="performance/images per second", scalar_value=avg, global_step=global_step)
                     append_epoch_log(global_step=global_step, epoch_pbar=epoch_pbar, gpu=gpu, log_writer=log_writer, **logs)
                     torch.cuda.empty_cache()
@@ -732,7 +793,8 @@ def main(args):
                     save_path = os.path.join(f"{log_folder}/ckpts/{args.project_name}-ep{epoch:02}-gs{global_step:05}")
                     __save_model(save_path, unet, text_encoder, tokenizer, noise_scheduler, vae, args.save_ckpt_dir)
 
-                del loss, batch
+                del batch
+                global_step += 1
                 # end of step
 
             elapsed_epoch_time = (time.time() - epoch_start_time) / 60
@@ -742,6 +804,9 @@ def main(args):
             epoch_pbar.update(1)
             if epoch < args.max_epochs - 1:
                 train_batch.shuffle(epoch_n=epoch+1)
+            
+            loss_local = sum(loss_epoch) / len(loss_epoch)
+            log_writer.add_scalar(tag="loss/epoch", scalar_value=loss_local, global_step=global_step)
             # end of epoch
 
         # end of training
@@ -765,6 +830,14 @@ def main(args):
     logging.info(f"{Fore.LIGHTWHITE_EX} ***************************{Style.RESET_ALL}")
 
 
+def update_old_args(t_args):
+    """
+    Update old args to new args to deal with json config loading and missing args for compatibility
+    """
+    if not hasattr(t_args, "shuffle_tags"):
+        print(f" Config json is missing 'shuffle_tags'")
+        t_args.__dict__["shuffle_tags"] = False
+
 if __name__ == "__main__":
     supported_resolutions = [448, 512, 576, 640, 704, 768, 832, 896, 960, 1024, 1088, 1152]
     argparser = argparse.ArgumentParser(description="EveryDream2 Training options")
@@ -776,6 +849,8 @@ if __name__ == "__main__":
         with open(args.config, 'rt') as f:
             t_args = argparse.Namespace()
             t_args.__dict__.update(json.load(f))
+            update_old_args(t_args) # update args to support older configs
+            print(t_args.__dict__)
             args = argparser.parse_args(namespace=t_args)
     else:
         print("No config file specified, using command line args")

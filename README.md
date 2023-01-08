@@ -6,7 +6,7 @@ Welcome to v2.0 of EveryDream trainer! Now with more diffusers and even more fea
 
 Please join us on Discord! https://discord.gg/uheqxU6sXN
 
-If you find this tool useful, please consider subscribing to the project on Patreon or buy me a Ko-fi.
+If you find this tool useful, please consider subscribing to the project on [Patreon](https://www.patreon.com/everydream) or a one-time donation at [Ko-fi](https://ko-fi.com/everydream).
 
 ## Video tutorials
 
@@ -32,3 +32,5 @@ Behind the scenes look at how the trainer handles multiaspect and crop jitter
 [Logging](doc/LOGGING.md)
 
 [Advanced Tweaking](doc/ATWEAKING.md)
+
+[Chaining training sessions](doc/CHAINING.md)
