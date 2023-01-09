@@ -406,7 +406,7 @@ def main(args):
             clean_prompt = clean_filename(prompt)
 
             result.save(f"{log_folder}/samples/gs{gs:05}-{clean_prompt[:100]}.jpg", format="JPEG", quality=95, optimize=True, progressive=False)
-            with open(f"{log_folder}/samples/gs{gs:05}-{clean_prompt[:100]}.txt", "w") as f:
+            with open(f"{log_folder}/samples/gs{gs:05}-{clean_prompt[:100]}.txt", "w", encoding='utf-8') as f:
                 f.write(prompt)
                 f.write(f"\n seed: {seed}")
 
