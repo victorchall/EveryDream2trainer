@@ -16,9 +16,11 @@ limitations under the License.
 
 import os
 import logging
+
+import yaml
 from PIL import Image
 import random
-from data.image_train_item import ImageTrainItem
+from data.image_train_item import ImageTrainItem, ImageCaption
 import data.aspects as aspects
 from colorama import Fore, Style
 import zipfile
@@ -26,6 +28,8 @@ import tqdm
 import PIL
 
 PIL.Image.MAX_IMAGE_PIXELS = 715827880*4 # increase decompression bomb error limit to 4x default
+
+DEFAULT_MAX_CAPTION_LENGTH = 2048
 
 class DataLoaderMultiAspect():
     """
@@ -54,7 +58,7 @@ class DataLoaderMultiAspect():
         random.Random(seed).shuffle(self.image_paths)
         self.prepared_train_data = self.__prescan_images(self.image_paths, flip_p) # ImageTrainItem[]
         self.image_caption_pairs = self.__bucketize_images(self.prepared_train_data, batch_size=batch_size, debug_level=debug_level)
-        
+
     def shuffle(self):
         self.runts = []
         self.seed = self.seed + 1
@@ -76,16 +80,63 @@ class DataLoaderMultiAspect():
         return self.image_caption_pairs
 
     @staticmethod
-    def __read_caption_from_file(file_path, fallback_caption):
-        caption = fallback_caption
+    def __read_caption_from_file(file_path, fallback_caption: ImageCaption) -> ImageCaption:
         try:
             with open(file_path, encoding='utf-8', mode='r') as caption_file:
-                caption = caption_file.read()
+                caption_text = caption_file.read()
+                caption = DataLoaderMultiAspect.__split_caption_into_tags(caption_text)
         except:
             logging.error(f" *** Error reading {file_path} to get caption, falling back to filename")
             caption = fallback_caption
             pass
         return caption
+
+    @staticmethod
+    def __read_caption_from_yaml(file_path: str, fallback_caption: ImageCaption) -> ImageCaption:
+        with open(file_path, "r") as stream:
+            try:
+                file_content = yaml.safe_load(stream)
+                main_prompt = file_content.get("main_prompt", "")
+                unparsed_tags = file_content.get("tags", [])
+
+                max_caption_length = file_content.get("max_caption_length", DEFAULT_MAX_CAPTION_LENGTH)
+
+                tags = []
+                tag_weights = []
+                last_weight = None
+                weights_differ = False
+                for unparsed_tag in unparsed_tags:
+                    tag = unparsed_tag.get("tag", "").strip()
+                    if len(tag) == 0:
+                        continue
+
+                    tags.append(tag)
+                    tag_weight = unparsed_tag.get("weight", 1.0)
+                    tag_weights.append(tag_weight)
+
+                    if last_weight is not None and weights_differ is False:
+                        weights_differ = last_weight != tag_weight
+
+                    last_weight = tag_weight
+
+                return ImageCaption(main_prompt, tags, tag_weights, max_caption_length, weights_differ)
+
+            except:
+                logging.error(f" *** Error reading {file_path} to get caption, falling back to filename")
+                return fallback_caption
+
+    @staticmethod
+    def __split_caption_into_tags(caption_string: str) -> ImageCaption:
+        """
+        Splits a string by "," into the main prompt and additional tags with equal weights
+        """
+        split_caption = caption_string.split(",")
+        main_prompt = split_caption.pop(0).strip()
+        tags = []
+        for tag in split_caption:
+            tags.append(tag.strip())
+
+        return ImageCaption(main_prompt, tags, [1.0] * len(tags), DEFAULT_MAX_CAPTION_LENGTH, False)
 
     def __prescan_images(self, image_paths: list, flip_p=0.0):
         """
@@ -95,16 +146,19 @@ class DataLoaderMultiAspect():
 
         for pathname in tqdm.tqdm(image_paths):
             caption_from_filename = os.path.splitext(os.path.basename(pathname))[0].split("_")[0]
+            caption = DataLoaderMultiAspect.__split_caption_into_tags(caption_from_filename)
 
-            txt_file_path = os.path.splitext(pathname)[0] + ".txt"
-            caption_file_path = os.path.splitext(pathname)[0] + ".caption"
+            file_path_without_ext = os.path.splitext(pathname)[0]
+            yaml_file_path = file_path_without_ext + ".yaml"
+            txt_file_path = file_path_without_ext + ".txt"
+            caption_file_path = file_path_without_ext + ".caption"
 
-            if os.path.exists(txt_file_path):
-                caption = self.__read_caption_from_file(txt_file_path, caption_from_filename)                
+            if os.path.exists(yaml_file_path):
+                caption = self.__read_caption_from_yaml(yaml_file_path, caption)
+            elif os.path.exists(txt_file_path):
+                caption = self.__read_caption_from_file(txt_file_path, caption)
             elif os.path.exists(caption_file_path):
-                caption = self.__read_caption_from_file(caption_file_path, caption_from_filename)                
-            else:
-                caption = caption_from_filename
+                caption = self.__read_caption_from_file(caption_file_path, caption)
 
             try:
                 image = Image.open(pathname)
@@ -165,7 +219,7 @@ class DataLoaderMultiAspect():
         multiply = 1
         multiply_path = os.path.join(recurse_root, "multiply.txt")
         if os.path.exists(multiply_path):
-            try: 
+            try:
                 with open(multiply_path, encoding='utf-8', mode='r') as f:
                     multiply = int(float(f.read().strip()))
                     logging.info(f" * DLMA multiply.txt in {recurse_root} set to {multiply}")
