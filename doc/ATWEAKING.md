@@ -121,7 +121,7 @@ For those training booru tagged models, you can use this arg to randomly (but de
 
     --shuffle_tags ^
 
-This simple chops the captions in to parts based on the commas and shuffles the order.
+This simply chops the captions in to parts based on the commas and shuffles the order.
 
 # Stuff you probably don't need to mess with, but well here it is:
 
@@ -131,7 +131,7 @@ Aka "penultimate layer", this takes the output from the text encoder not from it
 
     --clip_skip 2 ^
 
-A value of "2" is the canonical form of "penultimate layer" useed by various webuis, but 2 to 4 are accepted as well if you wish to experiment.  Default is "0" which takes the "last hidden layer" or standard output of the text encoder as Stable Diffusion 1.X was originally designed.  Training with this setting may necessititate or work better when also using the same setting in your webui/inference program. 
+A value of "2" is the canonical form of "penultimate layer" useed by various webuis, but 1 to 4 are accepted as well if you wish to experiment.  Default is "0" which takes the "last hidden layer" or standard output of the text encoder as Stable Diffusion 1.X was originally designed.  Training with this setting may necessititate or work better when also using the same setting in your webui/inference program. 
 
 I would consider this a very "experimental" setting. 
 
