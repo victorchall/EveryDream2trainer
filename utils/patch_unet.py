@@ -27,7 +27,7 @@ def patch_unet(ckpt_path, force_sd1attn: bool = False):
 
 
     if force_sd1attn:
-        unet_cfg["attention_head_dim"] = [5, 8, 8, 8]
+        unet_cfg["attention_head_dim"] = [8, 8, 8, 8]
     else:     
         unet_cfg["attention_head_dim"] = [5, 10, 20, 20]
 

@@ -436,6 +436,9 @@ def main(args):
         unet.enable_gradient_checkpointing()
         text_encoder.gradient_checkpointing_enable()
 
+    if args.ed1_mode:
+        unet.set_attention_slice(4)
+    
     if not args.disable_xformers and is_xformers_available():
         try:
             unet.enable_xformers_memory_efficient_attention()
