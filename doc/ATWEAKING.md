@@ -30,7 +30,7 @@ Remember to use the same folder when you launch tensorboard (```tensorboard --lo
 
 By default the CKPT format copies of ckpts that are peroidically saved are saved in the trainer root folder.  If you want to save them elsewhere, use this:
 
-    --ckpt_dir "r:\webui\models\stable-diffusion"
+    --save_ckpt_dir "r:\webui\models\stable-diffusion"
 
 This is useful if you want to dump the CKPT files directly to your webui/inference program model folder so you don't have to manually cut and paste it over.
 
