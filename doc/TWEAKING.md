@@ -4,7 +4,7 @@ This document should be read by all users who are trying to get the best results
 
 ## Logging
 
-Make sure you pay attention to your logs and sample images.  Launch tensorboard in a second command line. See (logging)[doc/LOGGING.md] for more info.
+Make sure you pay attention to your logs and sample images.  Launch tensorboard in a second command line. See [logging](LOGGING.md) for more info.
 
     tensorboard --logdir logs
 
