@@ -17,7 +17,7 @@ import os
 import json
 import logging
 
-def patch_unet(ckpt_path, force_sd1attn: bool = False):
+def patch_unet(ckpt_path, force_sd1attn: bool = False, low_vram: bool = False):
     """
     Patch the UNet to use updated attention heads for xformers support in FP32
     """
@@ -27,7 +27,10 @@ def patch_unet(ckpt_path, force_sd1attn: bool = False):
 
 
     if force_sd1attn:
-        unet_cfg["attention_head_dim"] = [8, 8, 8, 8]
+        if low_vram:
+            unet_cfg["attention_head_dim"] = [5, 8, 8, 8]
+        else:
+            unet_cfg["attention_head_dim"] = [8, 8, 8, 8]
     else:     
         unet_cfg["attention_head_dim"] = [5, 10, 20, 20]
 
