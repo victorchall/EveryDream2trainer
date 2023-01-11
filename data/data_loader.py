@@ -231,7 +231,7 @@ class DataLoaderMultiAspect():
             current = os.path.join(recurse_root, f)
 
             if os.path.isfile(current):
-                ext = os.path.splitext(f)[1]
+                ext = os.path.splitext(f)[1].lower()
                 if ext in ['.jpg', '.jpeg', '.png', '.bmp', '.webp', '.jfif']:
                     # add image multiplyrepeats number of times
                     for _ in range(multiply):

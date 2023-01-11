@@ -4,7 +4,7 @@ This document should be read by all users who are trying to get the best results
 
 ## Logging
 
-Make sure you pay attention to your logs and sample images.  Launch tensorboard in a second command line. See (logging)[doc/LOGGING.md] for more info.
+Make sure you pay attention to your logs and sample images.  Launch tensorboard in a second command line. See [logging](LOGGING.md) for more info.
 
     tensorboard --logdir logs
 
@@ -48,7 +48,7 @@ If you are training a huge dataset (20k+) then saving every 1 epoch may not be v
 
 *A "last" checkpoint is always saved at the end of training.*
 
-Diffusers copies of checkpoints are saved in your /logs/[project_name]/ckpts folder, and can be used to continue training if you want to pick up where you left off.  CKPT files are saved in the root training folder by default.  These folders can be changed. See [Advanced Tweaking](doc/ATWEAKING.md) for more info.
+Diffusers copies of checkpoints are saved in your /logs/[project_name]/ckpts folder, and can be used to continue training if you want to pick up where you left off.  CKPT files are saved in the root training folder by default.  These folders can be changed. See [Advanced Tweaking](ATWEAKING.md) for more info.
 
 ## Resuming training from previous runs
 
@@ -58,7 +58,7 @@ If you want to resume training from a previous run, you can do so by pointing to
 
 ## Learning Rate
 
-The learning rate affects how much "training" is done on the model per training step.  It is a very careful balance to select a value that will learn your data.  See [Advanced Tweaking](doc/ATWEAKING.md) for more info.  Once you have started, the learning rate is a good first knob to turn as you move into more advanced tweaking.
+The learning rate affects how much "training" is done on the model per training step.  It is a very careful balance to select a value that will learn your data.  See [Advanced Tweaking](ATWEAKING.md) for more info.  Once you have started, the learning rate is a good first knob to turn as you move into more advanced tweaking.
 
 ## Batch Size
 
@@ -66,7 +66,7 @@ Batch size is also another "hyperparamter" of itself and there are tradeoffs. It
 
     --batch_size 4 ^
 
-While very small batch sizes can impact performance negatively, at some point larger sizes have little impact on overall speed as well, so shooting for the moon is not always advisable.  Changing batch size may also impact what learning rate you use, with typically larger batch_size requiring a slightly higher learning rate.  More info is provided in the [Advanced Tweaking](doc/ATWEAKING.md) document.
+While very small batch sizes can impact performance negatively, at some point larger sizes have little impact on overall speed as well, so shooting for the moon is not always advisable.  Changing batch size may also impact what learning rate you use, with typically larger batch_size requiring a slightly higher learning rate.  More info is provided in the [Advanced Tweaking](ATWEAKING.md) document.
 
 ## LR Scheduler
 
@@ -74,7 +74,7 @@ A learning rate scheduler can change your learning rate as training progresses.
 
 At this time, ED2.0 supports constant or cosine scheduler. 
 
-The constant scheduler is the default and keeps your LR set to the value you set in the command line.  That's really it for constant!  I recommend sticking with it until you are comfortable with general training.  More info in the [Advanced Tweaking](doc/ATWEAKING.md) document.
+The constant scheduler is the default and keeps your LR set to the value you set in the command line.  That's really it for constant!  I recommend sticking with it until you are comfortable with general training.  More info in the [Advanced Tweaking](ATWEAKING.md) document.
 
 ## AdamW vs AdamW 8bit
 

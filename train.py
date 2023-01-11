@@ -841,7 +841,7 @@ def update_old_args(t_args):
         t_args.__dict__["shuffle_tags"] = False
 
 if __name__ == "__main__":
-    supported_resolutions = [448, 512, 576, 640, 704, 768, 832, 896, 960, 1024, 1088, 1152]
+    supported_resolutions = [256, 384, 448, 512, 576, 640, 704, 768, 832, 896, 960, 1024, 1088, 1152]
     argparser = argparse.ArgumentParser(description="EveryDream2 Training options")
     argparser.add_argument("--config", type=str, required=False, default=None, help="JSON config file to load options from")
     args, _ = argparser.parse_known_args()
