@@ -18,6 +18,8 @@ You can edit the example `train.json` file to your liking, then run the followin
 
 Be careful with editing the json file, as any syntax errors will cause the program to crash.  You might want to use a json validator to check your file before running it.  You can use an online validator such as https://jsonlint.com/ or look at it in VS Code.
 
+One particular note is if your path to data_root or resume_ckpt has backslashes they need to use double \\ or single /.  There is an example train.json in the repo root.
+
 ## Running from the command line with arguments
 
 I recommend you copy one of the examples below and keep it in a text file for future reference.  Your settings are logged in the logs folder, but you'll need to make a command to start training.  
