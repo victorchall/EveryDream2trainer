@@ -60,7 +60,18 @@ This forces disabling of Xformers.  You may need to adjust batch_size.
 
 I recommended to use lower LR more similar to EveryDream 1.0 as well with this option, such as 1e-6.
 
-*This is not recommended for SD2.x models, but actively researching this.*
+**This is strongly recommended for SD1.x models, and strongly against for SD2.x models.**
+
+
+## Clip skip
+
+Aka "penultimate layer", this takes the output from the text encoder not from its last output layer, but layers before.  
+
+    --clip_skip 2 ^
+
+A value of "2" is the canonical form of "penultimate layer" useed by various webuis, but 1 to 4 are accepted as well if you wish to experiment.  Default is "0" which takes the "last hidden layer" or standard output of the text encoder as Stable Diffusion 1.X was originally designed.  Training with this setting may necessititate or work better when also using the same setting in your webui/inference program. 
+
+Values of 0 to 3 are valid and working.  The number indicates how many extra layers to go "back" into the CLIP embedding output.  0 is the last layer and the default behavior. 1 is the layer before that, etc.
 
 ### Cosine LR scheduler
 Cosine LR scheduler will "taper off" your learning rate over time. It will reach a peak value of your ```--lr``` value then taper off following a cosine curve.  In other words, it allows you to set a high initial learning rate which lowers as training progresses.  This *may* help speed up training without overfitting.  If you wish to use this, I would set a slightly higher initial [learning rate](#lr-tweaking), maybe by 25-50% than you might use with a normal constant LR schedule.
@@ -75,11 +86,11 @@ There is also warmup with cosine secheuler, which will default to 2% of the deca
 
     --lr_warmup_steps 100 ^
 
-Cosine scheduler also has a "decay period" to define how long it takes to get to zero LR as it tapers.  By default, the trainer sets this to slightly longer than it will take to get to your ```--max_epochs``` number of steps, so LR doesn't go all the way to zero and waste compute time near the end of training.   However, if you want to tweak, you have to set the number of steps yourself and estimate what that will be based on your max_epochs, batch_size, and number of training images.  If you set this, be sure to watch your LR log in tensorboard to make sure it does what you expect.
+Cosine scheduler also has a "decay period" to define how long it takes to get to zero LR as it tapers.  By default, the trainer sets this to slightly longer than it will take to get to your ```--max_epochs``` number of steps, so LR doesn't go all the way to zero and waste compute time near the end of training.   However, if you want to tweak, you have to set the number of steps yourself and estimate what that will be based on your max_epochs, batch_size, and number of training images.  **If you set this, be sure to watch your LR log in tensorboard to make sure it does what you expect.**
 
     --lr_decay_steps 2500 ^
 
-If decay steps is too low, your LR will bottom out to zero, then start rising again, following a cosine waveform, which is probably a dumb idea.  If it is way too high, it will just never taper off and you might as well use constant LR scheduler instead.
+If decay steps is too low, your LR will bottom out to zero, then start rising again, following a cosine waveform, which is probably a dumb idea.  If it is way too high, it will never taper off and you might as well use constant LR scheduler instead. 
 
 ## Gradient accumulation
 
@@ -115,25 +126,26 @@ If you wish for your training images to be randomly flipped horizontally, use th
 
 This is useful for styles or other training that is not asymmetrical.  It is not suggested for training specific human faces as it may wash out facial features as real people typically have at least some asymmetric facial features.  It may also cause problems if you are training fictional characters with asymmetrical outfits, such as washing out the asymmetries in the outfit.  It is also not suggested if any of your captions included directions like "left" or "right".  Default is 0.0 (no flipping)
 
-# Shuffle tags
+## Seed
+
+Seed can be used to make training either more or less deterministic.  The seed value drives both the shuffling of your data set every epoch and also used for your test samples.
+
+To use a random seed, use -1:
+
+    -- seed -1
+
+Default behavior is to use a fixed seed of 555. The seed you set is fixed for all samples if you set a value other than -1.  If you set a seed it is also incrememted for shuffling your training data every epoch (i.e. 555, 556, 557, etc).  This makes training more deterministic.  I suggest a fixed seed when you are trying A/B test tweaks to your general training setup, or when you want all your test samples to use the same seed. 
+
+## Shuffle tags
 
 For those training booru tagged models, you can use this arg to randomly (but deterministicly unless you use `--seed -1`) all the CSV tags in your captions
 
     --shuffle_tags ^
 
-This simply chops the captions in to parts based on the commas and shuffles the order.
+This simply chops the captions in to parts based on the commas and shuffles the order. 
 
 # Stuff you probably don't need to mess with, but well here it is:
 
-## Clip skip
-
-Aka "penultimate layer", this takes the output from the text encoder not from its last output layer, but layers before.  
-
-    --clip_skip 2 ^
-
-A value of "2" is the canonical form of "penultimate layer" useed by various webuis, but 1 to 4 are accepted as well if you wish to experiment.  Default is "0" which takes the "last hidden layer" or standard output of the text encoder as Stable Diffusion 1.X was originally designed.  Training with this setting may necessititate or work better when also using the same setting in your webui/inference program. 
-
-I would consider this a very "experimental" setting. 
 
 ## log_step
 
