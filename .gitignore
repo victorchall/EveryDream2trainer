@@ -7,3 +7,4 @@
 **/.pytest_cache
 /logs/**
 /tmp/**
+.ipynb_checkpoints
