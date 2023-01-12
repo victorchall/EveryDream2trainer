@@ -432,8 +432,7 @@ def main(args):
     try:
         # first try to download from HF
         model_root_folder = try_download_model_from_hf(repo_id=args.resume_ckpt,
-                                                       subfolder=args.hf_repo_subfolder,
-                                                       access_token=args.hf_access_token)
+                                                       subfolder=args.hf_repo_subfolder)
         # if that doesn't work, try a local folder
         if model_root_folder is None:
             model_root_folder = convert_to_hf(args.resume_ckpt)
@@ -887,7 +886,6 @@ if __name__ == "__main__":
         argparser.add_argument("--gpuid", type=int, default=0, help="id of gpu to use for training, (def: 0) (ex: 1 to use GPU_ID 1)")
         argparser.add_argument("--gradient_checkpointing", action="store_true", default=False, help="enable gradient checkpointing to reduce VRAM use, may reduce performance (def: False)")
         argparser.add_argument("--grad_accum", type=int, default=1, help="Gradient accumulation factor (def: 1), (ex, 2)")
-        argparser.add_argument("--hf_access_token", type=str, default=None, help="Huggingface.co access token")
         argparser.add_argument("--hf_repo_subfolder", type=str, default=None, help="Subfolder inside the huggingface repo to download, if the model is not in the root of the repo.")
         argparser.add_argument("--logdir", type=str, default="logs", help="folder to save logs to (def: logs)")
         argparser.add_argument("--log_step", type=int, default=25, help="How often to log training stats, def: 25, recommend default!")
