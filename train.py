@@ -23,7 +23,7 @@ import time
 import gc
 import random
 
-import torch.nn.functional as torch_functional
+import torch.nn.functional as F
 from torch.cuda.amp import autocast
 import torchvision.transforms as transforms
 
@@ -35,7 +35,7 @@ import datetime
 import json
 from PIL import Image, ImageDraw, ImageFont
 
-from diffusers import StableDiffusionPipeline, AutoencoderKL, UNet2DConditionModel, DDIMScheduler, DiffusionPipeline, DDPMScheduler, PNDMScheduler, EulerAncestralDiscreteScheduler
+from diffusers import StableDiffusionPipeline, AutoencoderKL, UNet2DConditionModel, DDIMScheduler, DDPMScheduler, PNDMScheduler, EulerAncestralDiscreteScheduler
 #from diffusers.models import AttentionBlock
 from diffusers.optimization import get_scheduler
 from diffusers.utils.import_utils import is_xformers_available
@@ -46,6 +46,8 @@ from accelerate.utils import set_seed
 import wandb
 from torch.utils.tensorboard import SummaryWriter
 from tqdm.auto import tqdm
+
+import keyboard
 
 from data.every_dream import EveryDreamBatch
 from utils.convert_diffusers_to_stable_diffusion import convert as converter
@@ -178,19 +180,19 @@ def append_epoch_log(global_step: int, epoch_pbar, gpu, log_writer, **logs):
 def set_args_12gb(args):
     logging.info(" Setting args to 12GB mode")
     if not args.gradient_checkpointing:   
-        logging.info("   Overiding gradient checkpointing to True")
+        logging.info("  - Overiding gradient checkpointing to True")
         args.gradient_checkpointing = True
     if args.batch_size != 1:
-        logging.info("   Overiding batch size to 1")
+        logging.info("  - Overiding batch size to 1")
         args.batch_size = 1
-    if args.grad_accum != 1:
-        logging.info("   Overiding grad accum to 1")
+    # if args.grad_accum != 1:
+    #     logging.info("   Overiding grad accum to 1")
         args.grad_accum = 1
-    if args.resolution != 512:
-        logging.info("   Overiding resolution to 512")
+    if args.resolution > 512:
+        logging.info("  - Overiding resolution to 512")
         args.resolution = 512
     if not args.useadam8bit:
-        logging.info("   Overiding adam8bit to True")
+        logging.info("  - Overiding adam8bit to True")
         args.useadam8bit = True
 
 def find_last_checkpoint(logdir):
@@ -706,7 +708,7 @@ def main(args):
 
                 del timesteps, encoder_hidden_states, noisy_latents
                 #with autocast(enabled=args.amp):
-                loss = torch_functional.mse_loss(model_pred.float(), target.float(), reduction="mean")
+                loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
 
                 del target, model_pred
 
@@ -766,7 +768,7 @@ def main(args):
                     append_epoch_log(global_step=global_step, epoch_pbar=epoch_pbar, gpu=gpu, log_writer=log_writer, **logs)
                     torch.cuda.empty_cache()
 
-                if (global_step + 1) % args.sample_steps == 0:
+                if keyboard.is_pressed("ctrl+alt+page up") or ((global_step + 1) % args.sample_steps == 0):
                     pipe = __create_inference_pipe(unet=unet, text_encoder=text_encoder, tokenizer=tokenizer, scheduler=sample_scheduler, vae=vae)
                     pipe = pipe.to(device)
 
