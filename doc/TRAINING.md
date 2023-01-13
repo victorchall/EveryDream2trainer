@@ -41,7 +41,8 @@ Resuming from a checkpoint, 50 epochs, 6 batch size, 3e-6 learning rate, cosine 
     --sample_steps 200 ^
     --lr 3e-6 ^
     --ckpt_every_n_minutes 10 ^
-    --useadam8bit
+    --useadam8bit ^
+    --ed1_mode
 
 Training from SD2 512 base model, 18 epochs, 4 batch size, 1.2e-6 learning rate, constant LR, generate samples evern 100 steps, 30 minute checkpoint interval, adam8bit, using imagesin the x:\mydata folder, training at resolution class of 640:
 
