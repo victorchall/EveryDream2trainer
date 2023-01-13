@@ -19,9 +19,8 @@
 
 # Script for converting a HF Diffusers saved pipeline to a Stable Diffusion checkpoint.
 # *Only* converts the UNet, VAE, and Text Encoder.
-# Does not convert optimizer state or any other thing.															   
-										  
-import argparse
+# Does not convert optimizer state or any other thing.
+
 import os.path as osp
 import re
 
@@ -199,7 +198,7 @@ def convert_vae_state_dict(vae_state_dict):
     for k, v in new_state_dict.items():
         for weight_name in weights_to_convert:
             if f"mid.attn_1.{weight_name}.weight" in k:
-                print(f"Reshaping {k} for SD format")
+                #print(f"Reshaping {k} for SD format")
                 new_state_dict[k] = reshape_weight_for_sd(v)
     return new_state_dict
 
@@ -278,24 +277,15 @@ def convert_text_enc_state_dict(text_enc_dict):
     return text_enc_dict
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
+def convert(model_path: str, checkpoint_path: str, half: bool):
 
-    parser.add_argument("--model_path", default=None, type=str, required=True, help="Path to the model to convert.")
-    parser.add_argument("--checkpoint_path", default=None, type=str, required=True, help="Path to the output model.")
-    parser.add_argument("--half", action="store_true", help="Save weights in half precision.")
+    assert model_path is not None, "Must provide a model path!"
 
-    args = parser.parse_args()
+    assert checkpoint_path is not None, "Must provide a checkpoint path!"
 
-    assert args.model_path is not None, "Must provide a model path!"
-
-    assert args.checkpoint_path is not None, "Must provide a checkpoint path!"
-																		 
-																			 
-
-    unet_path = osp.join(args.model_path, "unet", "diffusion_pytorch_model.bin")
-    vae_path = osp.join(args.model_path, "vae", "diffusion_pytorch_model.bin")
-    text_enc_path = osp.join(args.model_path, "text_encoder", "pytorch_model.bin")
+    unet_path = osp.join(model_path, "unet", "diffusion_pytorch_model.bin")
+    vae_path = osp.join(model_path, "vae", "diffusion_pytorch_model.bin")
+    text_enc_path = osp.join(model_path, "text_encoder", "pytorch_model.bin")
 
     # Convert the UNet model
     unet_state_dict = torch.load(unet_path, map_location="cpu")
@@ -324,7 +314,8 @@ if __name__ == "__main__":
 
     # Put together new checkpoint
     state_dict = {**unet_state_dict, **vae_state_dict, **text_enc_dict}
-    if args.half:
+    if half:
         state_dict = {k: v.half() for k, v in state_dict.items()}
     state_dict = {"state_dict": state_dict}
-    torch.save(state_dict, args.checkpoint_path)
+    torch.save(state_dict, checkpoint_path)
+												
