@@ -1,11 +1,11 @@
+import logging
 import os
 from typing import Optional
 
 import huggingface_hub
 
 def try_download_model_from_hf(repo_id: str,
-                               subfolder: Optional[str]=None,
-                               access_token: Optional[str]=None) -> Optional[str]:
+                               subfolder: Optional[str]=None) -> Optional[str]:
     """
     Attempts to download files from the following subfolders under the given repo id:
     "text_encoder", "vae", "unet", "scheduler", "tokenizer".
@@ -15,9 +15,12 @@ def try_download_model_from_hf(repo_id: str,
     :return: Root folder on disk to the downloaded files, or None if download failed.
     """
 
-    # login, if requested
-    if access_token is not None:
-        huggingface_hub.login(access_token)
+    try:
+        access_token = os.environ['HF_API_TOKEN']
+        if access_token is not None:
+            huggingface_hub.login(access_token)
+    except:
+        logging.info("no HF_API_TOKEN env var found, will attempt to download without authenticating")
 
     # check if the model exists
     model_info = huggingface_hub.model_info(repo_id)
