@@ -49,7 +49,7 @@ from torch.utils.tensorboard import SummaryWriter
 import keyboard
 
 from data.every_dream import EveryDreamBatch
-from utils.convert_diffusers_to_stable_diffusion import convert as converter
+from utils.convert_diff_to_ckpt import convert as converter
 from utils.gpu import GPU
 
 
