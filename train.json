@@ -34,5 +34,7 @@
   "shuffle_tags": false,
   "useadam8bit": true,
   "wandb": false,
-  "write_schedule": false
+  "write_schedule": false,
+  "rated_dataset": false,
+  "rated_dataset_target_dropout_rate": 50
 }
