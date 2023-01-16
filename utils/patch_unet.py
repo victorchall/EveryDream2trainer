@@ -25,13 +25,9 @@ def patch_unet(ckpt_path, force_sd1attn: bool = False, low_vram: bool = False):
     with open(unet_cfg_path, "r") as f:
         unet_cfg = json.load(f)
 
-
     if force_sd1attn:
-        if low_vram:
-            unet_cfg["attention_head_dim"] = [5, 8, 8, 8]
-        else:
-            unet_cfg["attention_head_dim"] = [8, 8, 8, 8]
-    else:     
+        unet_cfg["attention_head_dim"] = [8, 8, 8, 8]
+    else: # SD 2 attn for xformers
         unet_cfg["attention_head_dim"] = [5, 10, 20, 20]
 
     logging.info(f" unet attention_head_dim: {unet_cfg['attention_head_dim']}")
