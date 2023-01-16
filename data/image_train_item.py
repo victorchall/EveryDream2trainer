@@ -31,7 +31,7 @@ class ImageCaption:
     Represents the various parts of an image caption
     """
 
-    def __init__(self, main_prompt: str, tags: list[str], tag_weights: list[float], max_target_length: int, use_weights: bool):
+    def __init__(self, main_prompt: str, rating: float, tags: list[str], tag_weights: list[float], max_target_length: int, use_weights: bool):
         """
         :param main_prompt: The part of the caption which should always be included
         :param tags: list of tags to pick from to fill the caption
@@ -40,6 +40,7 @@ class ImageCaption:
         :param use_weights: if ture, weights are considered when shuffling tags
         """
         self.__main_prompt = main_prompt
+        self.__rating = rating
         self.__tags = tags
         self.__tag_weights = tag_weights
         self.__max_target_length = max_target_length
@@ -49,6 +50,9 @@ class ImageCaption:
 
         if use_weights and len(tag_weights) > len(tags):
             self.__tag_weights = tag_weights[:len(tags)]
+
+    def rating(self) -> float:
+        return self.__rating
 
     def get_shuffled_caption(self, seed: int) -> str:
         """
@@ -97,15 +101,15 @@ class ImageCaption:
         return ", ".join(tags)
 
 
-class ImageTrainItem():
+class ImageTrainItem:
     """
     image: PIL.Image
     identifier: caption,
     target_aspect: (width, height), 
     pathname: path to image file
     flip_p: probability of flipping image (0.0 to 1.0)
+    rating: the relative rating of the images. The rating is measured in comparison to the other images.
     """
-
     def __init__(self, image: PIL.Image, caption: ImageCaption, target_wh: list, pathname: str, flip_p=0.0):
         self.caption = caption
         self.target_wh = target_wh

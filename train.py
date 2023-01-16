@@ -269,6 +269,11 @@ def setup_args(args):
     if args.save_ckpt_dir is not None and not os.path.exists(args.save_ckpt_dir):
         os.makedirs(args.save_ckpt_dir)
 
+    if args.rated_dataset:
+        args.rated_dataset_target_dropout_percent = min(max(args.rated_dataset_target_dropout_percent, 0), 100)
+
+        logging.info(logging.info(f"{Fore.CYAN} * Activating rated images learning with a target rate of {args.rated_dataset_target_dropout_percent}% {Style.RESET_ALL}"))
+
     return args
 
 def main(args):
@@ -509,6 +514,8 @@ def main(args):
         log_folder=log_folder,
         write_schedule=args.write_schedule,
         shuffle_tags=args.shuffle_tags,
+        rated_dataset=args.rated_dataset,
+        rated_dataset_dropout_target=(1.0 - (args.rated_dataset_target_dropout_percent / 100.0))
     )
 
     torch.cuda.benchmark = False
@@ -642,8 +649,8 @@ def main(args):
     epoch_pbar = tqdm(range(args.max_epochs), position=0, leave=True)
     epoch_pbar.set_description(f"{Fore.LIGHTCYAN_EX}Epochs{Style.RESET_ALL}")
 
-    steps_pbar = tqdm(range(epoch_len), position=1, leave=True)
-    steps_pbar.set_description(f"{Fore.LIGHTCYAN_EX}Steps{Style.RESET_ALL}")
+    # steps_pbar = tqdm(range(epoch_len), position=1, leave=True)
+    # steps_pbar.set_description(f"{Fore.LIGHTCYAN_EX}Steps{Style.RESET_ALL}")
 
     epoch_times = []
 
@@ -669,12 +676,16 @@ def main(args):
         logging.info(f" Grad scaler enabled: {scaler.is_enabled()}")
 
     loss_log_step = []
+    
     try:
         for epoch in range(args.max_epochs):
             loss_epoch = []
             epoch_start_time = time.time()
-            steps_pbar.reset()
             images_per_sec_log_step = []
+
+            epoch_len = math.ceil(len(train_batch) / args.batch_size)
+            steps_pbar = tqdm(range(epoch_len), position=1)
+            steps_pbar.set_description(f"{Fore.LIGHTCYAN_EX}Steps{Style.RESET_ALL}")
 
             for step, batch in enumerate(train_dataloader):
                 step_start_time = time.time()
@@ -810,13 +821,15 @@ def main(args):
                 global_step += 1
                 # end of step
 
+            steps_pbar.close()
+            
             elapsed_epoch_time = (time.time() - epoch_start_time) / 60
             epoch_times.append(dict(epoch=epoch, time=elapsed_epoch_time))
             log_writer.add_scalar("performance/minutes per epoch", elapsed_epoch_time, global_step)
 
             epoch_pbar.update(1)
             if epoch < args.max_epochs - 1:
-                train_batch.shuffle(epoch_n=epoch+1)
+                train_batch.shuffle(epoch_n=epoch, max_epochs = args.max_epochs)
             
             loss_local = sum(loss_epoch) / len(loss_epoch)
             log_writer.add_scalar(tag="loss/epoch", scalar_value=loss_local, global_step=global_step)
@@ -912,6 +925,8 @@ if __name__ == "__main__":
         argparser.add_argument("--write_schedule", action="store_true", default=False, help="write schedule of images and their batches to file (def: False)")
         argparser.add_argument("--save_full_precision", action="store_true", default=False, help="save ckpts at full FP32")
         argparser.add_argument("--notebook", action="store_true", default=False, help="disable keypresses and uses tqdm.notebook for jupyter notebook (def: False)")
+        argparser.add_argument("--rated_dataset", action="store_true", default=False, help="enable rated image set training, to less often train on lower rated images through the epochs")
+        argparser.add_argument("--rated_dataset_target_dropout_percent", type=int, default=50, help="how many images (in percent) should be included in the last epoch (Default 50)")
 
         args = argparser.parse_args()
 

@@ -51,6 +51,8 @@ class EveryDreamBatch(Dataset):
                  retain_contrast=False,
                  write_schedule=False,
                  shuffle_tags=False,
+                 rated_dataset=False,
+                 rated_dataset_dropout_target=0.5
                  ):
         self.data_root = data_root
         self.batch_size = batch_size
@@ -66,6 +68,9 @@ class EveryDreamBatch(Dataset):
         self.write_schedule = write_schedule
         self.shuffle_tags = shuffle_tags
         self.seed = seed
+        self.rated_dataset = rated_dataset
+        self.rated_dataset_dropout_target = rated_dataset_dropout_target
+
 
         if seed == -1:
             seed = random.randint(0, 99999)
@@ -81,17 +86,15 @@ class EveryDreamBatch(Dataset):
                                          log_folder=self.log_folder,
                                         )
         
-        self.image_train_items = dls.shared_dataloader.get_all_images()
+        self.image_train_items = dls.shared_dataloader.get_shuffled_image_buckets(1.0) # First epoch always trains on all images
 
-        self.num_images = len(self.image_train_items)
+        num_images = len(self.image_train_items)
 
-        self._length = self.num_images
-
-        logging.info(f" ** Trainer Set: {self._length / batch_size:.0f}, num_images: {self.num_images}, batch_size: {self.batch_size}")
+        logging.info(f" ** Trainer Set: {num_images / batch_size:.0f}, num_images: {num_images}, batch_size: {self.batch_size}")
         if self.write_schedule:
-            self.write_batch_schedule(0)
+            self.__write_batch_schedule(0)
 
-    def write_batch_schedule(self, epoch_n):
+    def __write_batch_schedule(self, epoch_n):
         with open(f"{self.log_folder}/ep{epoch_n}_batch_schedule.txt", "w", encoding='utf-8') as f:
             for i in range(len(self.image_train_items)):
                 try:
@@ -102,19 +105,23 @@ class EveryDreamBatch(Dataset):
     def get_runts():
         return dls.shared_dataloader.runts
 
-    def shuffle(self, epoch_n):
+    def shuffle(self, epoch_n: int, max_epochs: int):
         self.seed += 1
         if dls.shared_dataloader:
-            dls.shared_dataloader.shuffle()
-            self.image_train_items = dls.shared_dataloader.get_all_images()
+            if self.rated_dataset:
+                dropout_fraction = (max_epochs - (epoch_n * self.rated_dataset_dropout_target)) / max_epochs
+            else:
+                dropout_fraction = 1.0
+
+            self.image_train_items = dls.shared_dataloader.get_shuffled_image_buckets(dropout_fraction)
         else:
             raise Exception("No dataloader singleton to shuffle")
 
         if self.write_schedule:
-            self.write_batch_schedule(epoch_n)
+            self.__write_batch_schedule(epoch_n + 1)
 
     def __len__(self):
-        return self._length
+        return len(self.image_train_items)
 
     def __getitem__(self, i):
         example = {}
