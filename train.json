@@ -21,6 +21,7 @@
   "lr_scheduler": "constant",
   "lr_warmup_steps": null,
   "max_epochs": 30,
+  "notebook": false,
   "project_name": "project_abc",
   "resolution": 512,
   "resume_ckpt": "sd_v1-5_vae",
