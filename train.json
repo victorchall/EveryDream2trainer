@@ -1,5 +1,5 @@
 {
-  "amp": false,
+  "amp": true,
   "batch_size": 10,
   "ckpt_every_n_minutes": null,
   "clip_grad_norm": null,
@@ -8,7 +8,6 @@
   "data_root": "X:\\my_project_data\\project_abc",
   "disable_textenc_training": false,
   "disable_xformers": false,
-  "ed1_mode": true,
   "flip_p": 0.0,
   "gpuid": 0,
   "gradient_checkpointing": true,
@@ -16,7 +15,7 @@
   "logdir": "logs",
   "log_step": 25,
   "lowvram": false,
-  "lr": 3.5e-06,
+  "lr": 1.5e-06,
   "lr_decay_steps": 0,
   "lr_scheduler": "constant",
   "lr_warmup_steps": null,
