@@ -25,9 +25,25 @@ def patch_unet(ckpt_path):
     with open(unet_cfg_path, "r") as f:
         unet_cfg = json.load(f)
 
+    scheduler_cfg_path = os.path.join(ckpt_path, "scheduler", "scheduler_config.json")
+    with open(scheduler_cfg_path, "r") as f:
+        scheduler_cfg = json.load(f)
+
     is_sd1attn = unet_cfg["attention_head_dim"] == [8, 8, 8, 8]
     is_sd1attn = unet_cfg["attention_head_dim"] == 8 or is_sd1attn
 
+    prediction_type = scheduler_cfg["prediction_type"]
+
     logging.info(f" unet attention_head_dim: {unet_cfg['attention_head_dim']}")
 
-    return is_sd1attn
+    yaml = ''
+    if prediction_type in ["v_prediction","v-prediction"] and not is_sd1attn:
+        yaml = "v2-inference-v.yaml"
+    elif prediction_type == "epsilon" and not is_sd1attn:
+        yaml = "v2-inference.yaml"
+    elif prediction_type == "epsilon" and is_sd1attn:
+        yaml = "v2-inference.yaml"
+    else:
+        raise ValueError(f"Unknown model format for: {prediction_type} and attention_head_dim {unet_cfg['attention_head_dim']}")
+
+    return is_sd1attn, yaml
