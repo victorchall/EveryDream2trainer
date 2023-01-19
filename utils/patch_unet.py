@@ -42,7 +42,7 @@ def patch_unet(ckpt_path):
     elif prediction_type == "epsilon" and not is_sd1attn:
         yaml = "v2-inference.yaml"
     elif prediction_type == "epsilon" and is_sd1attn:
-        yaml = "v2-inference.yaml"
+        yaml = "v1-inference.yaml"
     else:
         raise ValueError(f"Unknown model format for: {prediction_type} and attention_head_dim {unet_cfg['attention_head_dim']}")
 
