@@ -47,8 +47,6 @@ from accelerate.utils import set_seed
 import wandb
 from torch.utils.tensorboard import SummaryWriter
 
-import keyboard
-
 from data.every_dream import EveryDreamBatch
 from utils.convert_diff_to_ckpt import convert as converter
 from utils.gpu import GPU
@@ -88,7 +86,7 @@ def convert_to_hf(ckpt_path):
                 import utils.convert_original_stable_diffusion_to_diffusers as convert
                 convert.convert(ckpt_path, f"ckpt_cache/{ckpt_path}")
             except:
-                logging.info("Please manually convert the checkpoint to Diffusers format, see readme.")
+                logging.info("Please manually convert the checkpoint to Diffusers format (one time setup), see readme.")
                 exit()
         else:
             logging.info(f"Found cached checkpoint at {hf_cache}")
@@ -350,16 +348,17 @@ def main(args):
             sd_ckpt_full = os.path.join(save_ckpt_dir, sd_ckpt_path)
         else:
             sd_ckpt_full = os.path.join(os.curdir, sd_ckpt_path)
+            save_ckpt_dir = os.curdir
         
         half = not save_full_precision
 
         logging.info(f" * Saving SD model to {sd_ckpt_full}")
         converter(model_path=save_path, checkpoint_path=sd_ckpt_full, half=half)
 
-        if yaml:
-            yaml_save_path = f"{os.path.basename(save_path)}.yaml"
+        if yaml_name:
+            yaml_save_path = f"{os.path.join(save_ckpt_dir, os.path.basename(save_path))}.yaml"
             logging.info(f" * Saving yaml to {yaml_save_path}")
-            shutil.copyfile(yaml, yaml_save_path)
+            shutil.copyfile(yaml_name, yaml_save_path)
 
         # optimizer_path = os.path.join(save_path, "optimizer.pt")
         # if self.save_optimizer_flag:
@@ -474,7 +473,6 @@ def main(args):
         sample_scheduler = DDIMScheduler.from_pretrained(hf_ckpt_path, subfolder="scheduler")
         noise_scheduler = DDPMScheduler.from_pretrained(hf_ckpt_path, subfolder="scheduler")
         tokenizer = CLIPTokenizer.from_pretrained(hf_ckpt_path, subfolder="tokenizer", use_fast=False)
-        logging.info(f" Inferred yaml: {yaml}, attention head type: {'sd1' if is_sd1attn else 'sd2'}")
     except:
         logging.ERROR(" * Failed to load checkpoint *")
 
@@ -482,13 +480,14 @@ def main(args):
         unet.enable_gradient_checkpointing()
         text_encoder.gradient_checkpointing_enable()
     
-    if not args.disable_xformers and (args.amp and is_sd1attn) or (not is_sd1attn):
-        try:
-            unet.enable_xformers_memory_efficient_attention()
-            logging.info("Enabled xformers")
-        except Exception as ex:
-            logging.warning("failed to load xformers, continuing without it")
-            pass
+    if not args.disable_xformers:
+        if (args.amp and is_sd1attn) or (not is_sd1attn):
+            try:
+                unet.enable_xformers_memory_efficient_attention()
+                logging.info("Enabled xformers")
+            except Exception as ex:
+                logging.warning("failed to load xformers, continuing without it")
+                pass
     else:
         logging.info("xformers not available or disabled")
 
@@ -704,6 +703,8 @@ def main(args):
     append_epoch_log(global_step=global_step, epoch_pbar=epoch_pbar, gpu=gpu, log_writer=log_writer)
 
     loss_log_step = []
+
+    assert len(train_batch) > 0, "train_batch is empty, check that your data_root is correct"
     
     try:
         for epoch in range(args.max_epochs):
@@ -754,16 +755,13 @@ def main(args):
                 with autocast(enabled=args.amp):
                     model_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
 
-                del timesteps, encoder_hidden_states, noisy_latents
+                #del timesteps, encoder_hidden_states, noisy_latents
                 #with autocast(enabled=args.amp):
                 loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
 
                 del target, model_pred
 
-                #if args.amp:
                 scaler.scale(loss).backward()
-                #else:
-                #    loss.backward()
 
                 if args.clip_grad_norm is not None:
                     if not args.disable_unet_training:
@@ -819,7 +817,7 @@ def main(args):
                     append_epoch_log(global_step=global_step, epoch_pbar=epoch_pbar, gpu=gpu, log_writer=log_writer, **logs)
                     torch.cuda.empty_cache()
 
-                if (not args.notebook and keyboard.is_pressed("ctrl+alt+page up")) or ((global_step + 1) % args.sample_steps == 0):
+                if (global_step + 1) % args.sample_steps == 0:
                     pipe = __create_inference_pipe(unet=unet, text_encoder=text_encoder, tokenizer=tokenizer, scheduler=sample_scheduler, vae=vae)
                     pipe = pipe.to(device)
 

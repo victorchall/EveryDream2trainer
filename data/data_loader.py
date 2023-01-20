@@ -47,6 +47,7 @@ class DataLoaderMultiAspect():
         self.log_folder = log_folder
         self.seed = seed
         self.batch_size = batch_size
+        self.has_scanned = False
 
         self.aspects = aspects.get_aspect_buckets(resolution=resolution, square_only=False)
         logging.info(f"* DLMA resolution {resolution}, buckets: {self.aspects}")
@@ -203,6 +204,9 @@ class DataLoaderMultiAspect():
         """
         decorated_image_train_items = []
 
+        if not self.has_scanned:
+            undersized_images = []
+
         for pathname in tqdm.tqdm(image_paths):
             caption_from_filename = os.path.splitext(os.path.basename(pathname))[0].split("_")[0]
             caption = DataLoaderMultiAspect.__split_caption_into_tags(caption_from_filename)
@@ -225,15 +229,30 @@ class DataLoaderMultiAspect():
                 image_aspect = width / height
 
                 target_wh = min(self.aspects, key=lambda aspects:abs(aspects[0]/aspects[1] - image_aspect))
+                if not self.has_scanned:
+                    if width * height < target_wh[0] * target_wh[1]:
+                        undersized_images.append(f" *** {pathname} with size: {width},{height} is smaller than target size: {target_wh}, consider using larger images")
 
                 image_train_item = ImageTrainItem(image=None, caption=caption, target_wh=target_wh, pathname=pathname, flip_p=flip_p)
 
                 decorated_image_train_items.append(image_train_item)
+                
             except Exception as e:
                 logging.error(f"{Fore.LIGHTRED_EX} *** Error opening {Fore.LIGHTYELLOW_EX}{pathname}{Fore.LIGHTRED_EX} to get metadata. File may be corrupt and will be skipped.{Style.RESET_ALL}")
                 logging.error(f" *** exception: {e}")
                 pass
 
+        if not self.has_scanned:
+            self.has_scanned = True
+            if len(undersized_images) > 0:
+                underized_log_path = os.path.join(self.log_folder, "undersized_images.txt")
+                logging.warning(f"{Fore.LIGHTRED_EX} ** Some images are smaller than the target size, consider using larger images{Style.RESET_ALL}")
+                logging.warning(f"{Fore.LIGHTRED_EX} ** Check {underized_log_path} for more information.{Style.RESET_ALL}")
+                with open(underized_log_path, "w") as undersized_images_file:
+                    undersized_images_file.write(f" The following images are smaller than the target size, consider removing or sourcing a larger copy:")
+                    for undersized_image in undersized_images:
+                        undersized_images_file.write(undersized_image)
+        
         return decorated_image_train_items
 
     def __pick_random_subset(self, dropout_fraction: float, picker: random.Random) -> list[ImageTrainItem]:

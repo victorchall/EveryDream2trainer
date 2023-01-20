@@ -46,4 +46,6 @@ def patch_unet(ckpt_path):
     else:
         raise ValueError(f"Unknown model format for: {prediction_type} and attention_head_dim {unet_cfg['attention_head_dim']}")
 
+    logging.info(f"Inferred yaml: {yaml}, attn: {'sd1' if is_sd1attn else 'sd2'}, prediction_type: {prediction_type}")
+
     return is_sd1attn, yaml
