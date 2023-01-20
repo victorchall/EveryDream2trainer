@@ -675,8 +675,6 @@ def main(args):
     logging.info(f" {Fore.GREEN}batch_size: {Style.RESET_ALL}{Fore.LIGHTGREEN_EX}{args.batch_size}{Style.RESET_ALL}")
     logging.info(f" {Fore.GREEN}epoch_len: {Fore.LIGHTGREEN_EX}{epoch_len}{Style.RESET_ALL}")
 
-
-    #scaler = torch.cuda.amp.GradScaler()
     scaler = GradScaler(
         enabled=args.amp,
         init_scale=2**17.5,
@@ -686,13 +684,8 @@ def main(args):
     )
     logging.info(f" Grad scaler enabled: {scaler.is_enabled()} (amp mode)")
 
-
     epoch_pbar = tqdm(range(args.max_epochs), position=0, leave=True)
     epoch_pbar.set_description(f"{Fore.LIGHTCYAN_EX}Epochs{Style.RESET_ALL}")
-
-    # steps_pbar = tqdm(range(epoch_len), position=1, leave=True)
-    # steps_pbar.set_description(f"{Fore.LIGHTCYAN_EX}Steps{Style.RESET_ALL}")
-
     epoch_times = []
 
     global global_step
@@ -781,11 +774,8 @@ def main(args):
                                     param.grad *= grad_scale
 
                 if ((global_step + 1) % args.grad_accum == 0) or (step == epoch_len - 1):
-                    # if args.amp:
                     scaler.step(optimizer)
                     scaler.update()
-                    # else:
-                    #     optimizer.step()
                     optimizer.zero_grad(set_to_none=True)
 
                 lr_scheduler.step()

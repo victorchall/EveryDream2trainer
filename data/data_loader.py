@@ -231,7 +231,7 @@ class DataLoaderMultiAspect():
                 target_wh = min(self.aspects, key=lambda aspects:abs(aspects[0]/aspects[1] - image_aspect))
                 if not self.has_scanned:
                     if width * height < target_wh[0] * target_wh[1]:
-                        undersized_images.append(f" *** {pathname} with size: {width},{height} is smaller than target size: {target_wh}, consider using larger images")
+                        undersized_images.append(f" {pathname}, size: {width},{height}, target size: {target_wh}")
 
                 image_train_item = ImageTrainItem(image=None, caption=caption, target_wh=target_wh, pathname=pathname, flip_p=flip_p)
 
@@ -251,7 +251,7 @@ class DataLoaderMultiAspect():
                 with open(underized_log_path, "w") as undersized_images_file:
                     undersized_images_file.write(f" The following images are smaller than the target size, consider removing or sourcing a larger copy:")
                     for undersized_image in undersized_images:
-                        undersized_images_file.write(undersized_image)
+                        undersized_images_file.write(f"{undersized_image}\n")
         
         return decorated_image_train_items
 
