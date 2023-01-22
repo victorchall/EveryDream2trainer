@@ -110,13 +110,14 @@ class ImageTrainItem:
     flip_p: probability of flipping image (0.0 to 1.0)
     rating: the relative rating of the images. The rating is measured in comparison to the other images.
     """
-    def __init__(self, image: PIL.Image, caption: ImageCaption, target_wh: list, pathname: str, flip_p=0.0):
+    def __init__(self, image: PIL.Image, caption: ImageCaption, target_wh: list, pathname: str, flip_p=0.0, multiplier: float=1.0):
         self.caption = caption
         self.target_wh = target_wh
         self.pathname = pathname
         self.flip = transforms.RandomHorizontalFlip(p=flip_p)
         self.cropped_img = None
         self.runt_size = 0
+        self.multiplier = multiplier
 
         if image is None:
             self.image = []

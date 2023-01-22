@@ -13,6 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 """
+
 import os
 import sys
 import math
@@ -23,6 +24,7 @@ import time
 import gc
 import random
 import shutil
+
 
 import torch.nn.functional as F
 from torch.cuda.amp import autocast, GradScaler
@@ -51,22 +53,8 @@ from data.every_dream import EveryDreamBatch
 from utils.convert_diff_to_ckpt import convert as converter
 from utils.gpu import GPU
 
-
 _SIGTERM_EXIT_CODE = 130
 _VERY_LARGE_NUMBER = 1e9
-
-# def is_notebook() -> bool:
-#     try:
-#         from IPython import get_ipython
-#         shell = get_ipython().__class__.__name__
-#         if shell == 'ZMQInteractiveShell':
-#             return True   # Jupyter notebook or qtconsole
-#         elif shell == 'TerminalInteractiveShell':
-#             return False  # Terminal running IPython
-#         else:
-#             return False  # Other type (?)
-#     except NameError:
-#         return False      # Probably standard Python interpreter
 
 def clean_filename(filename):
     """
@@ -275,22 +263,22 @@ def setup_args(args):
     return args
 
 def update_grad_scaler(scaler: GradScaler, global_step, epoch, step):
-    if global_step == 250 or (epoch >= 2 and step == 1):
+    if global_step == 250 or (epoch >= 4 and step == 1):
         factor = 1.8
         scaler.set_growth_factor(factor)
         scaler.set_backoff_factor(1/factor)
         scaler.set_growth_interval(50)
-    if global_step == 500 or (epoch >= 4 and step == 1):
+    if global_step == 500 or (epoch >= 8 and step == 1):
         factor = 1.6
         scaler.set_growth_factor(factor)
         scaler.set_backoff_factor(1/factor)
         scaler.set_growth_interval(50)
-    if global_step == 1000 or (epoch >= 8 and step == 1):
+    if global_step == 1000 or (epoch >= 10 and step == 1):
         factor = 1.3
         scaler.set_growth_factor(factor)
         scaler.set_backoff_factor(1/factor)
         scaler.set_growth_interval(100)
-    if global_step == 3000 or (epoch >= 15 and step == 1):
+    if global_step == 3000 or (epoch >= 20 and step == 1):
         factor = 1.15
         scaler.set_growth_factor(factor)
         scaler.set_backoff_factor(1/factor)
@@ -379,6 +367,7 @@ def main(args):
             safety_checker=None, # save vram
             requires_safety_checker=None, # avoid nag
             feature_extractor=None, # must be none of no safety checker
+            disable_tqdm=True,
         )
 
         return pipe
@@ -486,10 +475,12 @@ def main(args):
                 unet.enable_xformers_memory_efficient_attention()
                 logging.info("Enabled xformers")
             except Exception as ex:
-                logging.warning("failed to load xformers, continuing without it")
+                logging.warning("failed to load xformers, using attention slicing instead")
+                unet.set_attention_slice("auto")
                 pass
     else:
-        logging.info("xformers not available or disabled")
+        logging.info("xformers disabled, using attention slicing instead")
+        unet.set_attention_slice("auto")
 
     default_lr = 2e-6
     curr_lr = args.lr if args.lr is not None else default_lr
@@ -506,10 +497,10 @@ def main(args):
         logging.info(f"{Fore.CYAN} * NOT Training Text Encoder, quality reduced *{Style.RESET_ALL}")
         params_to_train = itertools.chain(unet.parameters())
     elif args.disable_unet_training:
-        logging.info(f"{Fore.CYAN} * Training Text Encoder *{Style.RESET_ALL}")
+        logging.info(f"{Fore.CYAN} * Training Text Encoder Only *{Style.RESET_ALL}")
         params_to_train = itertools.chain(text_encoder.parameters())
     else:
-        logging.info(f"{Fore.CYAN} * Training Text Encoder *{Style.RESET_ALL}")
+        logging.info(f"{Fore.CYAN} * Training Text and Unet *{Style.RESET_ALL}")
         params_to_train = itertools.chain(unet.parameters(), text_encoder.parameters())
 
     betas = (0.9, 0.999)
@@ -810,6 +801,7 @@ def main(args):
                 if (global_step + 1) % args.sample_steps == 0:
                     pipe = __create_inference_pipe(unet=unet, text_encoder=text_encoder, tokenizer=tokenizer, scheduler=sample_scheduler, vae=vae)
                     pipe = pipe.to(device)
+                    #pipe.set_progress_bar_config(progress_bar=False)
 
                     with torch.no_grad():
                         if sample_prompts is not None and len(sample_prompts) > 0 and len(sample_prompts[0]) > 1:
@@ -853,6 +845,7 @@ def main(args):
 
             loss_local = sum(loss_epoch) / len(loss_epoch)
             log_writer.add_scalar(tag="loss/epoch", scalar_value=loss_local, global_step=global_step)
+            gc.collect()
             # end of epoch
 
         # end of training

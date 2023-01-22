@@ -60,18 +60,48 @@ class DataLoaderMultiAspect():
         self.prepared_train_data = self.__prescan_images(self.image_paths, flip_p)
         (self.rating_overall_sum, self.ratings_summed) = self.__sort_and_precalc_image_ratings()
 
+
+    def __pick_multiplied_set(self, randomizer):
+        """
+        Deals with multiply.txt whole and fractional numbers
+        """
+        prepared_train_data_local = self.prepared_train_data.copy()
+        epoch_size = len(self.prepared_train_data)
+        picked_images = []
+
+        # add by whole number part first and decrement multiplier in copy
+        for iti in prepared_train_data_local:
+            while iti.multiplier >= 1.0:
+                picked_images.append(iti)
+                iti.multiplier -= 1
+            if iti.multiplier == 0:
+                prepared_train_data_local.remove(iti)
+
+        remaining = epoch_size - len(picked_images)
+
+        assert remaining >= 0, "Something went wrong with the multiplier calculation"
+
+        # add by renaming fractional numbers by random chance
+        while remaining > 0:
+            for iti in prepared_train_data_local:
+                if randomizer.uniform(0.0, 1) < iti.multiplier:
+                    picked_images.append(iti)
+                    remaining -= 1
+                    prepared_train_data_local.remove(iti)
+                if remaining <= 0:
+                    break
+        
+        return picked_images
+
     def get_shuffled_image_buckets(self, dropout_fraction: float = 1.0):
         """
         returns the current list of images including their captions in a randomized order,
         sorted into buckets with same sized images
         if dropout_fraction < 1.0, only a subset of the images will be returned
+        if dropout_fraction >= 1.0, repicks fractional multipliers based on folder/multiply.txt values swept at prescan
         :param dropout_fraction: must be between 0.0 and 1.0.
         :return: randomized list of (image, caption) pairs, sorted into same sized buckets
         """
-        """
-        Put images into buckets based on aspect ratio with batch_size*n images per bucket, discards remainder
-        """
-        # TODO: this is not terribly efficient but at least linear time
 
         self.seed += 1
         randomizer = random.Random(self.seed)
@@ -79,7 +109,7 @@ class DataLoaderMultiAspect():
         if dropout_fraction < 1.0:
             picked_images = self.__pick_random_subset(dropout_fraction, randomizer)
         else:
-            picked_images = self.prepared_train_data
+            picked_images = self.__pick_multiplied_set(randomizer)
 
         randomizer.shuffle(picked_images)
 
@@ -207,6 +237,9 @@ class DataLoaderMultiAspect():
         if not self.has_scanned:
             undersized_images = []
 
+        multipliers = {}
+        skip_folders = []
+
         for pathname in tqdm.tqdm(image_paths):
             caption_from_filename = os.path.splitext(os.path.basename(pathname))[0].split("_")[0]
             caption = DataLoaderMultiAspect.__split_caption_into_tags(caption_from_filename)
@@ -215,6 +248,25 @@ class DataLoaderMultiAspect():
             yaml_file_path = file_path_without_ext + ".yaml"
             txt_file_path = file_path_without_ext + ".txt"
             caption_file_path = file_path_without_ext + ".caption"
+
+            current_dir = os.path.dirname(pathname)
+
+            try:
+                if current_dir not in multipliers:
+                    multiply_txt_path = os.path.join(current_dir, "multiply.txt")
+                    #print(current_dir, multiply_txt_path)
+                    if os.path.exists(multiply_txt_path):
+                        with open(multiply_txt_path, 'r') as f:
+                            val = float(f.read().strip())
+                            multipliers[current_dir] = val
+                            logging.info(f" * DLMA multiply.txt in {current_dir} set to {val}")
+                    else:
+                        skip_folders.append(current_dir)
+                        multipliers[current_dir] = 1.0
+            except Exception as e:
+                logging.warning(f" * {Fore.LIGHTYELLOW_EX}Error trying to read multiply.txt for {current_dir}: {Style.RESET_ALL}{e}")
+                skip_folders.append(current_dir)
+                multipliers[current_dir] = 1.0
 
             if os.path.exists(yaml_file_path):
                 caption = self.__read_caption_from_yaml(yaml_file_path, caption)
@@ -233,7 +285,13 @@ class DataLoaderMultiAspect():
                     if width * height < target_wh[0] * target_wh[1]:
                         undersized_images.append(f" {pathname}, size: {width},{height}, target size: {target_wh}")
 
-                image_train_item = ImageTrainItem(image=None, caption=caption, target_wh=target_wh, pathname=pathname, flip_p=flip_p)
+                image_train_item = ImageTrainItem(image=None, # image loaded at runtime to apply jitter
+                                                  caption=caption, 
+                                                  target_wh=target_wh, 
+                                                  pathname=pathname, 
+                                                  flip_p=flip_p,
+                                                  multiplier=multipliers[current_dir],
+                                                 )
 
                 decorated_image_train_items.append(image_train_item)
                 
@@ -294,26 +352,13 @@ class DataLoaderMultiAspect():
 
     @staticmethod
     def __recurse_data_root(self, recurse_root):
-        multiply = 1
-        multiply_path = os.path.join(recurse_root, "multiply.txt")
-        if os.path.exists(multiply_path):
-            try:
-                with open(multiply_path, encoding='utf-8', mode='r') as f:
-                    multiply = int(float(f.read().strip()))
-                    logging.info(f" * DLMA multiply.txt in {recurse_root} set to {multiply}")
-            except:
-                logging.error(f" *** Error reading multiply.txt in {recurse_root}, defaulting to 1")
-                pass
-
         for f in os.listdir(recurse_root):
             current = os.path.join(recurse_root, f)
 
             if os.path.isfile(current):
                 ext = os.path.splitext(f)[1].lower()
                 if ext in ['.jpg', '.jpeg', '.png', '.bmp', '.webp', '.jfif']:
-                    # add image multiplyrepeats number of times
-                    for _ in range(multiply):
-                        self.image_paths.append(current)
+                    self.image_paths.append(current)
 
         sub_dirs = []
 
