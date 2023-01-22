@@ -17,6 +17,7 @@ import bisect
 import math
 import os
 import logging
+import copy
 
 import yaml
 from PIL import Image
@@ -58,6 +59,7 @@ class DataLoaderMultiAspect():
         self.__recurse_data_root(self=self, recurse_root=data_root)
         random.Random(seed).shuffle(self.image_paths)
         self.prepared_train_data = self.__prescan_images(self.image_paths, flip_p)
+        print(f"DLMA Loaded {len(self.prepared_train_data)} images")
         (self.rating_overall_sum, self.ratings_summed) = self.__sort_and_precalc_image_ratings()
 
 
@@ -65,32 +67,37 @@ class DataLoaderMultiAspect():
         """
         Deals with multiply.txt whole and fractional numbers
         """
-        prepared_train_data_local = self.prepared_train_data.copy()
+        #print(f"Picking multiplied set from {len(self.prepared_train_data)}")
+        data_copy = copy.deepcopy(self.prepared_train_data) # deep copy to avoid modifying original multiplier property
         epoch_size = len(self.prepared_train_data)
         picked_images = []
 
         # add by whole number part first and decrement multiplier in copy
-        for iti in prepared_train_data_local:
+        for iti in data_copy:
+            #print(f"check for whole number {iti.multiplier}: {iti.pathname}, remaining {iti.multiplier}")
             while iti.multiplier >= 1.0:
                 picked_images.append(iti)
-                iti.multiplier -= 1
-            if iti.multiplier == 0:
-                prepared_train_data_local.remove(iti)
+                #print(f"Adding {iti.multiplier}: {iti.pathname}, remaining {iti.multiplier}, , datalen: {len(picked_images)}")
+                iti.multiplier -= 1.0
 
         remaining = epoch_size - len(picked_images)
 
         assert remaining >= 0, "Something went wrong with the multiplier calculation"
+        #print(f"Remaining to fill epoch after whole number adds: {remaining}")
+        #print(f"Remaining in data copy: {len(data_copy)}")
 
         # add by renaming fractional numbers by random chance
         while remaining > 0:
-            for iti in prepared_train_data_local:
-                if randomizer.uniform(0.0, 1) < iti.multiplier:
+            for iti in data_copy:
+                if randomizer.uniform(0.0, 1.0) < iti.multiplier:
+                    #print(f"Adding {iti.multiplier}: {iti.pathname}, remaining {remaining}, datalen: {len(data_copy)}")
                     picked_images.append(iti)
                     remaining -= 1
-                    prepared_train_data_local.remove(iti)
+                    data_copy.remove(iti)
                 if remaining <= 0:
                     break
         
+        del data_copy
         return picked_images
 
     def get_shuffled_image_buckets(self, dropout_fraction: float = 1.0):
@@ -239,6 +246,7 @@ class DataLoaderMultiAspect():
 
         multipliers = {}
         skip_folders = []
+        randomizer = random.Random(self.seed)
 
         for pathname in tqdm.tqdm(image_paths):
             caption_from_filename = os.path.splitext(os.path.basename(pathname))[0].split("_")[0]
@@ -293,7 +301,15 @@ class DataLoaderMultiAspect():
                                                   multiplier=multipliers[current_dir],
                                                  )
 
-                decorated_image_train_items.append(image_train_item)
+                cur_file_multiplier = multipliers[current_dir]
+
+                while cur_file_multiplier >= 1.0:
+                    decorated_image_train_items.append(image_train_item)
+                    cur_file_multiplier -= 1
+                
+                if cur_file_multiplier > 0:
+                    if randomizer.random() < cur_file_multiplier:
+                        decorated_image_train_items.append(image_train_item)
                 
             except Exception as e:
                 logging.error(f"{Fore.LIGHTRED_EX} *** Error opening {Fore.LIGHTYELLOW_EX}{pathname}{Fore.LIGHTRED_EX} to get metadata. File may be corrupt and will be skipped.{Style.RESET_ALL}")
@@ -311,6 +327,8 @@ class DataLoaderMultiAspect():
                     for undersized_image in undersized_images:
                         undersized_images_file.write(f"{undersized_image}\n")
         
+        print (f" * DLMA: {len(decorated_image_train_items)} images loaded from {len(image_paths)} files")
+
         return decorated_image_train_items
 
     def __pick_random_subset(self, dropout_fraction: float, picker: random.Random) -> list[ImageTrainItem]:
