@@ -11,9 +11,6 @@ from colorama import Fore, Style
 
 from data.image_train_item import ImageCaption, ImageTrainItem
 
-
-OptionalCallable = typing.Optional[typing.Callable]
-
 class Event:
     def __init__(self, name: str):
         self.name = name
