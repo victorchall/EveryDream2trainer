@@ -37,11 +37,17 @@ class DataResolver:
 
 class JSONResolver(DataResolver):
     def image_train_items(self, json_path: str) -> list[ImageTrainItem]:
+        """
+        Create `ImageTrainItem` objects with metadata for hydration later.
+        Extracts images and captions from a JSON file.
+
+        :param json_path: The path to the JSON file.
+        """
         items = []
         with open(json_path, encoding='utf-8', mode='r') as f:
             json_data = json.load(f)
 
-        for data in json_data:
+        for data in tqdm.tqdm(json_data):
             caption = JSONResolver.image_caption(data)
             if caption:
                 image_value = JSONResolver.get_image_value(data)
