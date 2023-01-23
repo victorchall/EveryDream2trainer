@@ -17,7 +17,7 @@ import os
 import json
 import logging
 
-def patch_unet(ckpt_path, force_sd1attn: bool = False, low_vram: bool = False):
+def patch_unet(ckpt_path):
     """
     Patch the UNet to use updated attention heads for xformers support in FP32
     """
@@ -25,15 +25,27 @@ def patch_unet(ckpt_path, force_sd1attn: bool = False, low_vram: bool = False):
     with open(unet_cfg_path, "r") as f:
         unet_cfg = json.load(f)
 
+    scheduler_cfg_path = os.path.join(ckpt_path, "scheduler", "scheduler_config.json")
+    with open(scheduler_cfg_path, "r") as f:
+        scheduler_cfg = json.load(f)
 
-    if force_sd1attn:
-        if low_vram:
-            unet_cfg["attention_head_dim"] = [5, 8, 8, 8]
-        else:
-            unet_cfg["attention_head_dim"] = [8, 8, 8, 8]
-    else:     
-        unet_cfg["attention_head_dim"] = [5, 10, 20, 20]
+    is_sd1attn = unet_cfg["attention_head_dim"] == [8, 8, 8, 8]
+    is_sd1attn = unet_cfg["attention_head_dim"] == 8 or is_sd1attn
+
+    prediction_type = scheduler_cfg["prediction_type"]
 
     logging.info(f" unet attention_head_dim: {unet_cfg['attention_head_dim']}")
-    with open(unet_cfg_path, "w") as f:
-        json.dump(unet_cfg, f, indent=2)
+
+    yaml = ''
+    if prediction_type in ["v_prediction","v-prediction"] and not is_sd1attn:
+        yaml = "v2-inference-v.yaml"
+    elif prediction_type == "epsilon" and not is_sd1attn:
+        yaml = "v2-inference.yaml"
+    elif prediction_type == "epsilon" and is_sd1attn:
+        yaml = "v1-inference.yaml"
+    else:
+        raise ValueError(f"Unknown model format for: {prediction_type} and attention_head_dim {unet_cfg['attention_head_dim']}")
+
+    logging.info(f"Inferred yaml: {yaml}, attn: {'sd1' if is_sd1attn else 'sd2'}, prediction_type: {prediction_type}")
+
+    return is_sd1attn, yaml

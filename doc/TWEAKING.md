@@ -16,6 +16,17 @@ You may wish to consider adding "sd1" or "sd2v" or similar to remember what the 
 
     --project_name "jets_sd21768v" ^
 
+
+## Stuff you probably want on
+
+    --amp
+
+Enables automatic mixed precision.  Greatly improved training speed and can help a bit with VRAM use.  [Torch](https://pytorch.org/docs/stable/amp.html) will automatically use FP16 precision for specific model components where FP16 is sufficient precision, and FP32 otherwise.  This also enables xformers to work with the SD1.x attention head schema.
+
+    --useadam8bit
+
+Uses [Tim Dettmer's reduced precision AdamW 8 Bit optimizer](https://github.com/TimDettmers/bitsandbytes).  This seems to have no noticeable impact on quality but is considerable faster and more VRAM efficient. See more below in AdamW vs AdamW 8bit.
+
 ## Epochs
 
 EveryDream 2.0 has done away with repeats and instead you should set your max_epochs.  Changing epochs has the same effect as changing repeats in DreamBooth or EveryDream1.  For example, if you had 50 repeats and 5 epochs, you would now set max_epochs to 250 (50x5=250).  This is a bit more intuitive as there is no more double meaning for epochs and repeats.
@@ -27,6 +38,16 @@ This is like your "amount" of training.
 With more training data for your subjects and concepts, you can slowly scale this value down.  More example images mean an epoch is longer, and more training is done simply by the fact there is more training data.
 
 With less training data, this value should be higher, because more repetition on the images is needed to learn.
+
+## Resolution
+
+The resolution for training.  All buckets for multiaspect will be based on the total pixel count of your resolution squared. 
+
+    --resolution 768
+
+Current supported resolutions can be printed by running the trainer without any arugments.
+
+    python train.py
 
 ## Save interval for checkpoints
 
@@ -75,16 +96,6 @@ A learning rate scheduler can change your learning rate as training progresses.
 At this time, ED2.0 supports constant or cosine scheduler. 
 
 The constant scheduler is the default and keeps your LR set to the value you set in the command line.  That's really it for constant!  I recommend sticking with it until you are comfortable with general training.  More info in the [Advanced Tweaking](ATWEAKING.md) document.
-
-## AdamW vs AdamW 8bit
-
-The AdamW optimizer is the default and what was used by EveryDream 1.0.  It's a good optimizer for Stable Diffusion and appears to be what was used to train SD itself.
-
-AdamW 8bit is quite a bit faster and uses less VRAM while still having the same basic behavior.  I currently **recommend** using it for most cases as it seems worth a potential slight reduction in quality for a *significant speed boost and lower VRAM cost*.
-
-    --useadam8bit ^
-
-This may become a default in the future, and replaced with an option to use standard AdamW instead.  For now, it's an option, *but I recommend always using it.*
 
 ## Sampling
 

@@ -1,11 +1,13 @@
 import logging
 import os
-from typing import Optional
+from typing import Optional, Tuple
 
 import huggingface_hub
+from utils.patch_unet import patch_unet
+
 
 def try_download_model_from_hf(repo_id: str,
-                               subfolder: Optional[str]=None) -> Optional[str]:
+                               subfolder: Optional[str]=None) -> Tuple[Optional[str], Optional[bool], Optional[str]]:
     """
     Attempts to download files from the following subfolders under the given repo id:
     "text_encoder", "vae", "unet", "scheduler", "tokenizer".
@@ -25,9 +27,11 @@ def try_download_model_from_hf(repo_id: str,
     # check if the model exists
     model_info = huggingface_hub.model_info(repo_id)
     if model_info is None:
-        return None
+        return None, None, None
 
     model_subfolders = ["text_encoder", "vae", "unet", "scheduler", "tokenizer"]
     allow_patterns = [os.path.join(subfolder or '', f, "*") for f in model_subfolders]
     downloaded_folder = huggingface_hub.snapshot_download(repo_id=repo_id, allow_patterns=allow_patterns)
-    return downloaded_folder
+
+    is_sd1_attn, yaml_path = patch_unet(downloaded_folder)
+    return downloaded_folder, is_sd1_attn, yaml_path

@@ -108,15 +108,17 @@ Some experimentation shows if you already have batch size in the 6-8 range than 
 
 ## Gradient checkpointing
 
-While traditionally used to reduce VRAM for smaller GPUs, gradient checkpointing can offer a higher batch size and/or higher resolution within whatever VRAM you have, so it may be useful even on a 24GB+ GPU.
+This is mostly useful to reduce VRAM for smaller GPUs, and together with AdamW 8 bit and AMP mode can enable <12GB GPU training.
+
+Gradient checkpointing can also offer a higher batch size and/or higher resolution within whatever VRAM you have, so it may be useful even on a 24GB+ GPU if you specifically want to run a very large batch size.  The other option is using gradient accumulation instead.
 
     --gradient_checkpointing ^
 
-This drastically reduces VRAM (by many GB) and will allow quite a larger batch size or resolution, for example, 13-14 instead of 7-8 on a 24GB card using 512 training resolution.  
+While gradient checkpointing reduces performance, the ability to run a higher batch size brings performance back fairly close to without it. 
 
-While gradient checkpointing reduces performance, the ability to run a higher batch size brings performance back fairly close to without it.  My personal tests show a 25% performance hit simply turning on gradient checkpointing on a 3090 (batch 7, 512), but almost all of that is made up by the ability to use a larger batch size (up to 14).  You may NOT want to use a batch size as large as 13-14, or you may find you need to tweak learning rate all over again to find the right balance. 
+You may NOT want to use a batch size as large as 13-14, or you may find you need to tweak learning rate all over again to find the right balance.  Generally I would not turn it on for a 24GB GPU training at <640 resolution.
 
-This probably IS a good idea for training at higher resolutions.  Balancing this toggle, resolution, batch_size, and grad_accum will take some experimentation, but you might try using this with 768+ resolutions, grad_accum 3-4, and then as high of a batch size as you can get to work without crashing, while adjusting LR with respect to your (batch_size * grad_accum) value.
+This probably IS a good idea for training at higher resolutions and allows >768 training on 24GB GPUs.  Balancing this toggle, resolution, and batch_size will take a few quick experiments to see what you can run safely.
 
 ## Flip_p
 
