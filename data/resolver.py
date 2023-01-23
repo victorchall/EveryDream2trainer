@@ -25,10 +25,10 @@ class UndersizedImageEvent(Event):
         self.target_size = target_size
 
 class DataResolver:
-    def __init__(self, aspects: list[typing.Tuple[int, int]], flip_p=0.0, on_event: OptionalCallable=None):
+    def __init__(self, aspects: list[typing.Tuple[int, int]], flip_p=0.0):
         self.aspects = aspects
         self.flip_p = flip_p
-        self.on_event = on_event or (lambda data: None)
+        self.events = []
         
     def image_train_items(self, data_root: str) -> list[ImageTrainItem]:
         """
@@ -48,17 +48,25 @@ class DataResolver:
 
             if width * height < target_wh[0] * target_wh[1]:
                 event = UndersizedImageEvent(image_path, (width, height), target_wh)
-                self.on_event(event)
+                self.events.append(event)
             
             return target_wh
     
-    def image_train_item(self, image_path: str, caption: ImageCaption) -> ImageTrainItem:
-        #try:
-        target_wh = self.compute_target_width_height(image_path)
-        return ImageTrainItem(image=None, caption=caption, target_wh=target_wh, pathname=image_path, flip_p=self.flip_p)
-        # except Exception as e:
-        #     logging.error(f"{Fore.LIGHTRED_EX} *** Error opening {Fore.LIGHTYELLOW_EX}{image_path}{Fore.LIGHTRED_EX} to get metadata. File may be corrupt and will be skipped.{Style.RESET_ALL}")
-        #     logging.error(f" *** exception: {e}")
+    def image_train_item(self, image_path: str, caption: ImageCaption, multiplier: float=1) -> ImageTrainItem:
+        try:
+            target_wh = self.compute_target_width_height(image_path)
+            return ImageTrainItem(
+                image=None,
+                caption=caption,
+                target_wh=target_wh,
+                pathname=image_path,
+                flip_p=self.flip_p,
+                multiplier=multiplier
+            )
+        # TODO: This should only handle Image errors.
+        except Exception as e:
+            logging.error(f"{Fore.LIGHTRED_EX} *** Error opening {Fore.LIGHTYELLOW_EX}{image_path}{Fore.LIGHTRED_EX} to get metadata. File may be corrupt and will be skipped.{Style.RESET_ALL}")
+            logging.error(f" *** exception: {e}")
             
 
 class JSONResolver(DataResolver):
@@ -131,10 +139,30 @@ class DirectoryResolver(DataResolver):
         DirectoryResolver.unzip_all(data_root)
         image_paths = list(DirectoryResolver.recurse_data_root(data_root))
         items = []
+        multipliers = {}
+        skip_folders = []
         
         for pathname in tqdm.tqdm(image_paths):
-            caption = ImageCaption.from_file(pathname)
-            item = self.image_train_item(pathname, caption)
+            current_dir = os.path.dirname(pathname)
+            
+            if current_dir not in multipliers:
+                multiply_txt_path = os.path.join(current_dir, "multiply.txt")
+                if os.path.exists(multiply_txt_path):
+                    try:
+                        with open(multiply_txt_path, 'r') as f:
+                            val = float(f.read().strip())
+                            multipliers[current_dir] = val
+                            logging.info(f" * DLMA multiply.txt in {current_dir} set to {val}")
+                    except Exception as e:
+                        logging.warning(f" * {Fore.LIGHTYELLOW_EX}Error trying to read multiply.txt for {current_dir}: {Style.RESET_ALL}{e}")
+                        skip_folders.append(current_dir)
+                        multipliers[current_dir] = 1.0
+                else:
+                    skip_folders.append(current_dir)
+                    multipliers[current_dir] = 1.0
+            
+            caption = ImageCaption.resolve(pathname)
+            item = self.image_train_item(pathname, caption, multiplier=multipliers[current_dir])
 
             if item:
                 items.append(item)
@@ -182,68 +210,48 @@ def strategy(data_root: str):
     raise ValueError(f"data_root '{data_root}' is not a valid directory or JSON file.")
                     
 
-def resolve_root(path: str, aspects: list[float], flip_p: float = 0.0, on_event: OptionalCallable=None) -> list[ImageTrainItem]:
+def resolve_root(path: str, aspects: list[float], flip_p: float = 0.0) -> typing.Tuple[list[ImageTrainItem], list[Event]]:
     """
     :param data_root: Directory or JSON file.
     :param aspects: The list of aspect ratios to use
     :param flip_p: The probability of flipping the image
     """
     if os.path.isfile(path) and path.endswith('.json'):
-        resolver = JSONResolver(aspects, flip_p, on_event)
+        resolver = JSONResolver(aspects, flip_p)
     
     if os.path.isdir(path):
-        resolver = DirectoryResolver(aspects, flip_p, on_event)
+        resolver = DirectoryResolver(aspects, flip_p)
         
     if not resolver:
         raise ValueError(f"data_root '{path}' is not a valid directory or JSON file.")
 
-    return resolver.image_train_items(path)
+    items = resolver.image_train_items(path)
+    events = resolver.events 
+    return items, events
 
-def resolve(value: typing.Union[dict, str], aspects: list[float], flip_p: float=0.0, on_event: OptionalCallable=None) -> list[ImageTrainItem]:
+def resolve(value: typing.Union[dict, str], aspects: list[float], flip_p: float=0.0) -> typing.Tuple[list[ImageTrainItem], list[Event]]:
     """
     Resolve the training data from the value.
     :param value: The value to resolve, either a dict or a string.
     :param aspects: The list of aspect ratios to use
     :param flip_p: The probability of flipping the image
-    :param on_event: The callback to call when an event occurs (e.g. undersized image detected)
     """
     if isinstance(value, str):
-        return resolve_root(value, aspects, flip_p, on_event)
+        return resolve_root(value, aspects, flip_p)
     
     if isinstance(value, dict):
         resolver = value.get('resolver', None)
         match resolver:
             case 'directory' | 'json':
                 path = value.get('path', None)
-                return resolve_root(path, aspects, flip_p, on_event)
+                return resolve_root(path, aspects, flip_p)
             case 'multi':
-                items = []
+                resolved_items = []
+                resolved_events = []
                 for resolver in value.get('resolvers', []):
-                    items += resolve(resolver, aspects, flip_p, on_event)
-                return items
+                    items, events = resolve(resolver, aspects, flip_p)
+                    resolved_items.extend(items)
+                    resolved_events.extend(events)
+                return resolved_items, resolved_events
             case _:
                 raise ValueError(f"Cannot resolve training data for resolver value '{resolver}'")
-
-        
-# example = {
-#     'resolver': 'directory',
-#     'data_root': 'data',
-# }
-
-# example = {
-#     'resolver': 'json',
-#     'data_root': 'data.json',
-# }
-
-# example = {
-#     'resolver': 'multi',    
-#     'resolvers': [
-#         {
-#             'resolver': 'directory',
-#             'data_root': 'data',
-#         }, {
-#             'resolver': 'json',
-#             'data_root': 'data.json',
-#         },
-#     ]
-# }
