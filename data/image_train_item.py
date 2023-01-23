@@ -137,7 +137,7 @@ class ImageCaption:
         """
         (file_name, _) = os.path.splitext(os.path.basename(file_path))
         caption = file_name.split("_")[0]
-        return ImageCaption(caption, 1.0, [], [], DEFAULT_MAX_CAPTION_LENGTH, False)
+        return ImageCaption.parse(caption)
     
     @staticmethod
     def from_text_file(file_path: str, default_caption: OptionalImageCaption=None) -> OptionalImageCaption:
