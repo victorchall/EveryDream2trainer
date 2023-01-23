@@ -1,5 +1,5 @@
 """
-Copyright [2022] Victor C Hall
+Copyright [2022-2023] Victor C Hall
 
 Licensed under the GNU Affero General Public License;
 You may not use this code except in compliance with the License.
@@ -343,7 +343,7 @@ def main(args):
         logging.info(f" * Saving SD model to {sd_ckpt_full}")
         converter(model_path=save_path, checkpoint_path=sd_ckpt_full, half=half)
 
-        if yaml_name:
+        if yaml_name and yaml_name != "v1-inference.yaml":
             yaml_save_path = f"{os.path.join(save_ckpt_dir, os.path.basename(save_path))}.yaml"
             logging.info(f" * Saving yaml to {yaml_save_path}")
             shutil.copyfile(yaml_name, yaml_save_path)
@@ -367,7 +367,6 @@ def main(args):
             safety_checker=None, # save vram
             requires_safety_checker=None, # avoid nag
             feature_extractor=None, # must be none of no safety checker
-            disable_tqdm=True,
         )
 
         return pipe
@@ -410,6 +409,8 @@ def main(args):
         generates samples at different cfg scales and saves them to disk
         """
         logging.info(f"Generating samples gs:{gs}, for {prompts}")
+        pipe.set_progress_bar_config(disable=True)
+
         seed = args.seed if args.seed != -1 else random.randint(0, 2**30)
         gen = torch.Generator(device=device).manual_seed(seed)
 
@@ -588,7 +589,7 @@ def main(args):
 
     """
     print(f" {Fore.LIGHTGREEN_EX}** Welcome to EveryDream trainer 2.0!**{Style.RESET_ALL}")
-    print(f" (C) 2022 Victor C Hall  This program is licensed under AGPL 3.0 https://www.gnu.org/licenses/agpl-3.0.en.html")
+    print(f" (C) 2022-2023 Victor C Hall  This program is licensed under AGPL 3.0 https://www.gnu.org/licenses/agpl-3.0.en.html")
     print()
     print("** Trainer Starting **")
 
@@ -691,6 +692,24 @@ def main(args):
     assert len(train_batch) > 0, "train_batch is empty, check that your data_root is correct"
     
     try:
+        # # dummy batch to pin memory to avoid fragmentation in torch, uses square aspect which is maximum bytes size per aspects.py
+        # pixel_values = torch.randn_like(torch.zeros([args.batch_size, 3, args.resolution, args.resolution]))
+        # pixel_values = pixel_values.to(unet.device)
+        # with autocast(enabled=args.amp):
+        #     latents = vae.encode(pixel_values, return_dict=False)
+        # latents = latents[0].sample() * 0.18215
+        # noise = torch.randn_like(latents)
+        # bsz = latents.shape[0]
+        # timesteps = torch.randint(0, noise_scheduler.config.num_train_timesteps, (bsz,), device=latents.device)
+        # timesteps = timesteps.long()
+        # noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
+        # cuda_caption = torch.linspace(100,177, steps=77, dtype=int).to(text_encoder.device)
+        # encoder_hidden_states = text_encoder(cuda_caption, output_hidden_states=True).last_hidden_state
+        # with autocast(enabled=args.amp):
+        #     model_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
+        # # discard the grads, just want to pin memory
+        # optimizer.zero_grad(set_to_none=True)
+
         for epoch in range(args.max_epochs):
             loss_epoch = []
             epoch_start_time = time.time()
@@ -801,7 +820,6 @@ def main(args):
                 if (global_step + 1) % args.sample_steps == 0:
                     pipe = __create_inference_pipe(unet=unet, text_encoder=text_encoder, tokenizer=tokenizer, scheduler=sample_scheduler, vae=vae)
                     pipe = pipe.to(device)
-                    #pipe.set_progress_bar_config(progress_bar=False)
 
                     with torch.no_grad():
                         if sample_prompts is not None and len(sample_prompts) > 0 and len(sample_prompts[0]) > 1:

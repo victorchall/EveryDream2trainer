@@ -71,7 +71,6 @@ class EveryDreamBatch(Dataset):
         self.rated_dataset = rated_dataset
         self.rated_dataset_dropout_target = rated_dataset_dropout_target
 
-
         if seed == -1:
             seed = random.randint(0, 99999)
         
@@ -85,7 +84,7 @@ class EveryDreamBatch(Dataset):
                                          resolution=resolution,
                                          log_folder=self.log_folder,
                                         )
-        
+
         self.image_train_items = dls.shared_dataloader.get_shuffled_image_buckets(1.0) # First epoch always trains on all images
 
         num_images = len(self.image_train_items)

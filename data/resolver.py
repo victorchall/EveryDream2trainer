@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import random
 import typing
 import zipfile
 
@@ -25,7 +26,7 @@ class UndersizedImageEvent(Event):
         self.target_size = target_size
 
 class DataResolver:
-    def __init__(self, aspects: list[typing.Tuple[int, int]], flip_p=0.0):
+    def __init__(self, aspects: list[typing.Tuple[int, int]], flip_p=0.0, seed=555):
         self.aspects = aspects
         self.flip_p = flip_p
         self.events = []
@@ -141,6 +142,7 @@ class DirectoryResolver(DataResolver):
         items = []
         multipliers = {}
         skip_folders = []
+        randomizer = random.Random(self.seed)
         
         for pathname in tqdm.tqdm(image_paths):
             current_dir = os.path.dirname(pathname)
@@ -163,6 +165,16 @@ class DirectoryResolver(DataResolver):
             
             caption = ImageCaption.resolve(pathname)
             item = self.image_train_item(pathname, caption, multiplier=multipliers[current_dir])
+            
+            cur_file_multiplier = multipliers[current_dir]
+
+            while cur_file_multiplier >= 1.0:
+                items.append(item)
+                cur_file_multiplier -= 1
+            
+            if cur_file_multiplier > 0:
+                if randomizer.random() < cur_file_multiplier:
+                    items.append(item) 
 
             if item:
                 items.append(item)
@@ -210,17 +222,17 @@ def strategy(data_root: str):
     raise ValueError(f"data_root '{data_root}' is not a valid directory or JSON file.")
                     
 
-def resolve_root(path: str, aspects: list[float], flip_p: float = 0.0) -> typing.Tuple[list[ImageTrainItem], list[Event]]:
+def resolve_root(path: str, aspects: list[float], flip_p: float = 0.0, seed) -> typing.Tuple[list[ImageTrainItem], list[Event]]:
     """
     :param data_root: Directory or JSON file.
     :param aspects: The list of aspect ratios to use
     :param flip_p: The probability of flipping the image
     """
     if os.path.isfile(path) and path.endswith('.json'):
-        resolver = JSONResolver(aspects, flip_p)
+        resolver = JSONResolver(aspects, flip_p, seed)
     
     if os.path.isdir(path):
-        resolver = DirectoryResolver(aspects, flip_p)
+        resolver = DirectoryResolver(aspects, flip_p, seed)
         
     if not resolver:
         raise ValueError(f"data_root '{path}' is not a valid directory or JSON file.")
@@ -229,7 +241,7 @@ def resolve_root(path: str, aspects: list[float], flip_p: float = 0.0) -> typing
     events = resolver.events 
     return items, events
 
-def resolve(value: typing.Union[dict, str], aspects: list[float], flip_p: float=0.0) -> typing.Tuple[list[ImageTrainItem], list[Event]]:
+def resolve(value: typing.Union[dict, str], aspects: list[float], flip_p: float=0.0, seed=555) -> typing.Tuple[list[ImageTrainItem], list[Event]]:
     """
     Resolve the training data from the value.
     :param value: The value to resolve, either a dict or a string.
@@ -244,12 +256,12 @@ def resolve(value: typing.Union[dict, str], aspects: list[float], flip_p: float=
         match resolver:
             case 'directory' | 'json':
                 path = value.get('path', None)
-                return resolve_root(path, aspects, flip_p)
+                return resolve_root(path, aspects, flip_p, seed)
             case 'multi':
                 resolved_items = []
                 resolved_events = []
                 for resolver in value.get('resolvers', []):
-                    items, events = resolve(resolver, aspects, flip_p)
+                    items, events = resolve(resolver, aspects, flip_p, seed)
                     resolved_items.extend(items)
                     resolved_events.extend(events)
                 return resolved_items, resolved_events

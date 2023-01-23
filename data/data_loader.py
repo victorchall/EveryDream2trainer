@@ -17,6 +17,7 @@ import bisect
 import math
 import os
 import logging
+import copy
 
 import random
 from data.image_train_item import ImageTrainItem
@@ -46,7 +47,6 @@ class DataLoaderMultiAspect():
         self.aspects = aspects.get_aspect_buckets(resolution=resolution, square_only=False)
         
         logging.info(f"* DLMA resolution {resolution}, buckets: {self.aspects}")
-        logging.info(" Preloading images...")
         self.__prepare_train_data()
         (self.rating_overall_sum, self.ratings_summed) = self.__sort_and_precalc_image_ratings()
 
@@ -55,32 +55,37 @@ class DataLoaderMultiAspect():
         """
         Deals with multiply.txt whole and fractional numbers
         """
-        prepared_train_data_local = self.prepared_train_data.copy()
+        #print(f"Picking multiplied set from {len(self.prepared_train_data)}")
+        data_copy = copy.deepcopy(self.prepared_train_data) # deep copy to avoid modifying original multiplier property
         epoch_size = len(self.prepared_train_data)
         picked_images = []
 
         # add by whole number part first and decrement multiplier in copy
-        for iti in prepared_train_data_local:
+        for iti in data_copy:
+            #print(f"check for whole number {iti.multiplier}: {iti.pathname}, remaining {iti.multiplier}")
             while iti.multiplier >= 1.0:
                 picked_images.append(iti)
-                iti.multiplier -= 1
-            if iti.multiplier == 0:
-                prepared_train_data_local.remove(iti)
+                #print(f"Adding {iti.multiplier}: {iti.pathname}, remaining {iti.multiplier}, , datalen: {len(picked_images)}")
+                iti.multiplier -= 1.0
 
         remaining = epoch_size - len(picked_images)
 
         assert remaining >= 0, "Something went wrong with the multiplier calculation"
+        #print(f"Remaining to fill epoch after whole number adds: {remaining}")
+        #print(f"Remaining in data copy: {len(data_copy)}")
 
         # add by renaming fractional numbers by random chance
         while remaining > 0:
-            for iti in prepared_train_data_local:
-                if randomizer.uniform(0.0, 1) < iti.multiplier:
+            for iti in data_copy:
+                if randomizer.uniform(0.0, 1.0) < iti.multiplier:
+                    #print(f"Adding {iti.multiplier}: {iti.pathname}, remaining {remaining}, datalen: {len(data_copy)}")
                     picked_images.append(iti)
                     remaining -= 1
-                    prepared_train_data_local.remove(iti)
+                    data_copy.remove(iti)
                 if remaining <= 0:
                     break
         
+        del data_copy
         return picked_images
 
     def get_shuffled_image_buckets(self, dropout_fraction: float = 1.0):
@@ -150,9 +155,17 @@ class DataLoaderMultiAspect():
         """
         Create ImageTrainItem objects with metadata for hydration later
         """
+
         if not self.has_scanned:
             self.has_scanned = True
-            self.prepared_train_data, events = resolver.resolve(self.data_root, self.aspects, flip_p=flip_p)
+            
+            logging.info(" Preloading images...")
+            
+            items, events = resolver.resolve(self.data_root, self.aspects, flip_p=flip_p, seed=self.seed)
+            image_paths = set(map(lambda item: item.pathname, items))
+
+            print (f" * DLMA: {len(items)} images loaded from {len(image_paths)} files")
+            
             random.Random(self.seed).shuffle(self.prepared_train_data)
             self.__report_undersized_images(events)
     
