@@ -1,5 +1,5 @@
 """
-Copyright [2022] Victor C Hall
+Copyright [2022-2023] Victor C Hall
 
 Licensed under the GNU Affero General Public License;
 You may not use this code except in compliance with the License.
@@ -343,7 +343,7 @@ def main(args):
         logging.info(f" * Saving SD model to {sd_ckpt_full}")
         converter(model_path=save_path, checkpoint_path=sd_ckpt_full, half=half)
 
-        if yaml_name:
+        if yaml_name and yaml_name != "v1-inference.yaml":
             yaml_save_path = f"{os.path.join(save_ckpt_dir, os.path.basename(save_path))}.yaml"
             logging.info(f" * Saving yaml to {yaml_save_path}")
             shutil.copyfile(yaml_name, yaml_save_path)
@@ -589,7 +589,7 @@ def main(args):
 
     """
     print(f" {Fore.LIGHTGREEN_EX}** Welcome to EveryDream trainer 2.0!**{Style.RESET_ALL}")
-    print(f" (C) 2022 Victor C Hall  This program is licensed under AGPL 3.0 https://www.gnu.org/licenses/agpl-3.0.en.html")
+    print(f" (C) 2022-2023 Victor C Hall  This program is licensed under AGPL 3.0 https://www.gnu.org/licenses/agpl-3.0.en.html")
     print()
     print("** Trainer Starting **")
 
