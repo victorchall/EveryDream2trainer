@@ -353,11 +353,11 @@ class ImageTrainItem:
     
     def __compute_target_width_height(self):
         try:
-            with Image.open(self.image_path) as image:
+            with Image.open(self.pathname) as image:
                 width, height = image.size
                 image_aspect = width / height
                 target_wh = min(self.aspects, key=lambda aspects:abs(aspects[0]/aspects[1] - image_aspect))
-
+                
                 self.is_undersized = width * height < target_wh[0] * target_wh[1]
                 self.target_wh = target_wh
         except Exception as e:
