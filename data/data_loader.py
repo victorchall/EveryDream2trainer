@@ -55,7 +55,7 @@ class DataLoaderMultiAspect():
         logging.info(f"* DLMA resolution {resolution}, buckets: {self.aspects}")
         logging.info(" Preloading images...")
 
-        self.unzip_all(data_root)
+        DirectoryResolver.unzip_all(data_root)
         
         for image_path in DirectoryResolver.recurse_data_root(data_root):
             self.image_paths.append(image_path)
@@ -148,18 +148,6 @@ class DataLoaderMultiAspect():
             image_caption_pairs.extend(buckets[bucket])
 
         return image_caption_pairs
-
-    @staticmethod
-    def unzip_all(path):
-        try:
-            for root, dirs, files in os.walk(path):
-                for file in files:
-                    if file.endswith('.zip'):
-                        logging.info(f"Unzipping {file}")
-                        with zipfile.ZipFile(path, 'r') as zip_ref:
-                            zip_ref.extractall(path)
-        except Exception as e:
-            logging.error(f"Error unzipping files {e}")
 
     def __sort_and_precalc_image_ratings(self) -> tuple[float, list[float]]:
         self.prepared_train_data = sorted(self.prepared_train_data, key=lambda img: img.caption.rating())
