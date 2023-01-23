@@ -44,3 +44,7 @@ Consider also including a style tag as above if you are training anything beside
 Include the surroundings and context in your captions.  Ex. "cloud strife standing on a dirt path in midgar city slums district"  Again, this will allow you to recall the "dirt path in midgar city slums district" style at inference time, and will even pick up on pieces of that like "midgar city" (if enough samples are present with similar words) as a style or scenery you can apply later.  This can extract additional value from your training besides just the character.
 
 Also consider some basic mention of pose.  ex. "clouds strife sitting on a blue wooden bench in front of a concrete wall" or "barrett wallace holding his fist in front of his face with an angry look on his face, looking at the camera."  Captions can capture value not only for the character's look, but also for the pose, the background scene, and the camera angle.  You can be creative here, there is a lot of potential!
+
+### Further reading
+
+The [Data Balancing](doc/BALANCING.md) guide has some more information on how to balance your data and what to consider for model preservation and mixing in ground truth data.
