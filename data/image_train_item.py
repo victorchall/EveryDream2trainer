@@ -271,6 +271,7 @@ class ImageTrainItem:
         else:
             self.image = image
             
+        self.is_undersized = False
         self.error = None
         self.__compute_target_width_height()
 

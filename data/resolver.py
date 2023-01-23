@@ -13,6 +13,7 @@ from data.image_train_item import ImageCaption, ImageTrainItem
 
 class DataResolver:
     def __init__(self, aspects: list[typing.Tuple[int, int]], flip_p=0.0, seed=555):
+        self.seed = seed
         self.aspects = aspects
         self.flip_p = flip_p
         
@@ -146,9 +147,6 @@ class DirectoryResolver(DataResolver):
             if cur_file_multiplier > 0:
                 if randomizer.random() < cur_file_multiplier:
                     items.append(item) 
-
-            if item:
-                items.append(item)
         return items
         
     @staticmethod
@@ -230,7 +228,7 @@ def resolve(value: typing.Union[dict, str], aspects: list[float], flip_p: float=
             case 'multi':
                 items = []
                 for resolver in value.get('resolvers', []):
-                    items.extend(resolve(resolver, aspects, flip_p, seed))
+                    items += resolve(resolver, aspects, flip_p, seed)
                 return items
             case _:
                 raise ValueError(f"Cannot resolve training data for resolver value '{resolver}'")
