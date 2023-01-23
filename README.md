@@ -29,14 +29,16 @@ Make sure to check out the [tools repo](https://github.com/victorchall/EveryDrea
 
 [Data Preparation](doc/DATA.md)
 
-[Training](doc/TRAINING.md)
+[Training](doc/TRAINING.md) - How to start training
 
-[Basic Tweaking](doc/TWEAKING.md)
+[Basic Tweaking](doc/TWEAKING.md) - Important args to understand to get started
 
-[Logging](doc/LOGGING.md)
+[Logging](doc/LOGGING.md) 
 
-[Advanced Tweaking](doc/ATWEAKING.md)
+[Advanced Tweaking](doc/ATWEAKING.md) - More stuff to tweak once you are comfortable
 
-[Chaining training sessions](doc/CHAINING.md)
+[Chaining training sessions](doc/CHAINING.md) - Modify training parameters by chaining training sessions together end to end
 
 [Shuffling Tags](doc/SHUFFLING_TAGS.md)
+
+[Data Balancing](doc/BALANCING.md) - Includes my small treatise on model preservation with ground truth data
