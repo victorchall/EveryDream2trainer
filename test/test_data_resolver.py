@@ -51,7 +51,7 @@ class TestResolve(unittest.TestCase):
             os.remove(file)    
 
     def test_directory_resolve_with_str(self):
-        items, events = resolver.resolve(DATA_PATH, ASPECTS)
+        items = resolver.resolve(DATA_PATH, ASPECTS)
         image_paths = [item.pathname for item in items]
         image_captions = [item.caption for item in items]
         captions = [caption.get_caption() for caption in image_captions]
@@ -60,8 +60,8 @@ class TestResolve(unittest.TestCase):
         self.assertEqual(image_paths, [IMAGE_1_PATH, IMAGE_2_PATH, IMAGE_3_PATH])
         self.assertEqual(captions, ['caption for test1', 'test2', 'test3'])
         
-        events = list(map(lambda e: e.name, events))
-        self.assertEqual(events, ['undersized_image'])
+        undersized_images = list(filter(lambda i: i.is_undersized, items))
+        self.assertEqual(undersized_images, 1)
     
     def test_directory_resolve_with_dict(self):
         data_root_spec = {
@@ -69,7 +69,7 @@ class TestResolve(unittest.TestCase):
             'path': DATA_PATH,
         }
         
-        items, events = resolver.resolve(data_root_spec, ASPECTS)
+        items = resolver.resolve(data_root_spec, ASPECTS)
         image_paths = [item.pathname for item in items]
         image_captions = [item.caption for item in items]
         captions = [caption.get_caption() for caption in image_captions]
@@ -78,11 +78,11 @@ class TestResolve(unittest.TestCase):
         self.assertEqual(image_paths, [IMAGE_1_PATH, IMAGE_2_PATH, IMAGE_3_PATH])
         self.assertEqual(captions, ['caption for test1', 'test2', 'test3'])
         
-        events = list(map(lambda e: e.name, events))
-        self.assertEqual(events, ['undersized_image'])
+        undersized_images = list(filter(lambda i: i.is_undersized, items))
+        self.assertEqual(undersized_images, 1)
     
     def test_json_resolve_with_str(self):
-        items, events = resolver.resolve(JSON_ROOT_PATH, ASPECTS)
+        items = resolver.resolve(JSON_ROOT_PATH, ASPECTS)
         image_paths = [item.pathname for item in items]
         image_captions = [item.caption for item in items]
         captions = [caption.get_caption() for caption in image_captions]
@@ -91,8 +91,8 @@ class TestResolve(unittest.TestCase):
         self.assertEqual(image_paths, [IMAGE_1_PATH, IMAGE_2_PATH, IMAGE_3_PATH])
         self.assertEqual(captions, ['caption for test1', 'caption for test2', 'test3'])
         
-        events = list(map(lambda e: e.name, events))
-        self.assertEqual(events, ['undersized_image'])
+        undersized_images = list(filter(lambda i: i.is_undersized, items))
+        self.assertEqual(undersized_images, 1)
     
     def test_json_resolve_with_dict(self):
         data_root_spec = {
@@ -100,7 +100,7 @@ class TestResolve(unittest.TestCase):
             'path': JSON_ROOT_PATH,
         }
         
-        items, events = resolver.resolve(data_root_spec, ASPECTS)
+        items = resolver.resolve(data_root_spec, ASPECTS)
         image_paths = [item.pathname for item in items]
         image_captions = [item.caption for item in items]
         captions = [caption.get_caption() for caption in image_captions]
@@ -109,5 +109,5 @@ class TestResolve(unittest.TestCase):
         self.assertEqual(image_paths, [IMAGE_1_PATH, IMAGE_2_PATH, IMAGE_3_PATH])
         self.assertEqual(captions, ['caption for test1', 'caption for test2', 'test3'])
         
-        events = list(map(lambda e: e.name, events))
-        self.assertEqual(events, ['undersized_image'])
+        undersized_images = list(filter(lambda i: i.is_undersized, items))
+        self.assertEqual(undersized_images, 1)
