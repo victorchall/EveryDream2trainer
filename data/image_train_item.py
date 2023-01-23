@@ -74,7 +74,7 @@ class ImageCaption:
                 tags_caption = self.__get_shuffled_tags(seed, self.__tags)
 
             return self.__main_prompt + ", " + tags_caption
-        return self.__main_prompt + ", " + tags_caption
+        return self.__main_prompt
 
     def get_caption(self) -> str:
         if self.__tags:
