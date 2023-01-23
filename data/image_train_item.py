@@ -77,7 +77,9 @@ class ImageCaption:
         return self.__main_prompt + ", " + tags_caption
 
     def get_caption(self) -> str:
-        return self.__main_prompt + ", " + ", ".join(self.__tags)
+        if self.__tags:
+            return self.__main_prompt + ", " + ", ".join(self.__tags)
+        return self.__main_prompt
 
     @staticmethod
     def __get_weighted_shuffled_tags(seed: int, tags: list[str], weights: list[float], max_target_tag_length: int) -> str:
