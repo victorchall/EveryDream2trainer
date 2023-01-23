@@ -22,6 +22,7 @@ import typing
 import yaml
 
 import PIL
+import PIL.Image as Image
 import numpy as np
 from torchvision import transforms
 
@@ -256,9 +257,9 @@ class ImageTrainItem:
     flip_p: probability of flipping image (0.0 to 1.0)
     rating: the relative rating of the images. The rating is measured in comparison to the other images.
     """
-    def __init__(self, image: PIL.Image, caption: ImageCaption, target_wh: list, pathname: str, flip_p=0.0, multiplier: float=1.0):
+    def __init__(self, image: PIL.Image, caption: ImageCaption, aspects: list[float], pathname: str, flip_p=0.0, multiplier: float=1.0):
         self.caption = caption
-        self.target_wh = target_wh
+        self.aspects = aspects
         self.pathname = pathname
         self.flip = transforms.RandomHorizontalFlip(p=flip_p)
         self.cropped_img = None
@@ -269,6 +270,9 @@ class ImageTrainItem:
             self.image = []
         else:
             self.image = image
+            
+        self.error = None
+        self.__compute_target_width_height()
 
     def hydrate(self, crop=False, save=False, crop_jitter=20):
         """
@@ -345,6 +349,18 @@ class ImageTrainItem:
         # print(self.image.shape)
 
         return self
+    
+    def __compute_target_width_height(self):
+        try:
+            with Image.open(self.image_path) as image:
+                width, height = image.size
+                image_aspect = width / height
+                target_wh = min(self.aspects, key=lambda aspects:abs(aspects[0]/aspects[1] - image_aspect))
+
+                self.is_undersized = width * height < target_wh[0] * target_wh[1]
+                self.target_wh = target_wh
+        except Exception as e:
+            self.error = e
 
     @staticmethod
     def __autocrop(image: PIL.Image, q=.404):
