@@ -34,5 +34,6 @@
     "shuffle_tags": false,
     "useadam8bit": true,
     "wandb": false,
-    "write_schedule": true
+    "write_schedule": true,
+    "notebook": true
 }
