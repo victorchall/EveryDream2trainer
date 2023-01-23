@@ -459,8 +459,9 @@ def main(args):
 
     try:
         # first try to download from HF using resume_ckpt as a repo id
+        hf_repo_subfolder = args.hf_repo_subfolder if hasattr(args, 'hf_repo_subfolder') else None
         model_root_folder, is_sd1attn, yaml = try_download_model_from_hf(repo_id=args.resume_ckpt,
-                                                                         subfolder=args.hf_repo_subfolder)
+                                                                         subfolder=hf_repo_subfolder)
         # if that doesn't work, try to load resume_ckpt as a local file or folder
         if model_root_folder is None:
             model_root_folder, is_sd1attn, yaml = convert_to_hf(args.resume_ckpt)
