@@ -30,8 +30,13 @@ def try_download_model_from_hf(repo_id: str,
         return None, None, None
 
     model_subfolders = ["text_encoder", "vae", "unet", "scheduler", "tokenizer"]
-    allow_patterns = [os.path.join(subfolder or '', f, "*") for f in model_subfolders]
-    downloaded_folder = huggingface_hub.snapshot_download(repo_id=repo_id, allow_patterns=allow_patterns)
+    allow_patterns = ["model_index.json"] + [os.path.join(subfolder or '', f, "*") for f in model_subfolders]
+    # prefer *.bin files for now
+    # TODO: look for *.safetensors files and download them instead, if they exist
+    ignore_patterns = "*.safetensors"
+    downloaded_folder = huggingface_hub.snapshot_download(repo_id=repo_id,
+                                                          allow_patterns=allow_patterns,
+                                                          ignore_patterns=ignore_patterns)
 
     is_sd1_attn, yaml_path = patch_unet(downloaded_folder)
     return downloaded_folder, is_sd1_attn, yaml_path
