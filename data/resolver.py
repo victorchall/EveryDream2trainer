@@ -154,33 +154,23 @@ class DirectoryResolver(DataResolver):
     
     @staticmethod
     def recurse_data_root(recurse_root):
-        multiply = 1
-        multiply_path = os.path.join(recurse_root, "multiply.txt")
-        if os.path.exists(multiply_path):
-            try:
-                with open(multiply_path, encoding='utf-8', mode='r') as f:
-                    multiply = int(float(f.read().strip()))
-                    logging.info(f" * DLMA multiply.txt in {recurse_root} set to {multiply}")
-            except:
-                logging.error(f" *** Error reading multiply.txt in {recurse_root}, defaulting to 1")
-                pass
-
         for f in os.listdir(recurse_root):
             current = os.path.join(recurse_root, f)
 
             if os.path.isfile(current):
                 ext = os.path.splitext(f)[1].lower()
                 if ext in ['.jpg', '.jpeg', '.png', '.bmp', '.webp', '.jfif']:
-                    # Add image multiplyrepeats number of times
-                    for _ in range(multiply):
-                        yield current
+                    yield current
+
+        sub_dirs = []
 
         for d in os.listdir(recurse_root):
             current = os.path.join(recurse_root, d)
             if os.path.isdir(current):
-                for file in DirectoryResolver.recurse_data_root(recurse_root=dir):
-                    yield file
-                    
+                sub_dirs.append(current)
+
+        for dir in sub_dirs:
+            DirectoryResolver.__recurse_data_root(dir)
 
 def strategy(data_root: str):
     if os.path.isfile(data_root) and data_root.endswith('.json'):
