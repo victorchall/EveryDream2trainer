@@ -37,6 +37,6 @@ def try_download_model_from_hf(repo_id: str,
     downloaded_folder = huggingface_hub.snapshot_download(repo_id=repo_id,
                                                           allow_patterns=allow_patterns,
                                                           ignore_patterns=ignore_patterns)
-
+    print(f"model with repo id {repo_id} downloaded to {downloaded_folder}")
     is_sd1_attn, yaml_path = patch_unet(downloaded_folder)
     return downloaded_folder, is_sd1_attn, yaml_path
