@@ -458,10 +458,10 @@ def main(args):
             del images
 
     try:
-        # first try to download from HF
+        # first try to download from HF using resume_ckpt as a repo id
         model_root_folder, is_sd1attn, yaml = try_download_model_from_hf(repo_id=args.resume_ckpt,
                                                                          subfolder=args.hf_repo_subfolder)
-        # if that doesn't work, try a local folder
+        # if that doesn't work, try to load resume_ckpt as a local file or folder
         if model_root_folder is None:
             model_root_folder, is_sd1attn, yaml = convert_to_hf(args.resume_ckpt)
 
