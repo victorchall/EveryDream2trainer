@@ -588,8 +588,8 @@ def main(args):
 
     if args.wandb is not None and args.wandb:
         wandb.init(project=args.project_name, sync_tensorboard=True, )
-    else:
-        log_writer = SummaryWriter(log_dir=log_folder, 
+  
+    log_writer = SummaryWriter(log_dir=log_folder, 
                                    flush_secs=5,
                                    comment="EveryDream2FineTunes",
                                   )
