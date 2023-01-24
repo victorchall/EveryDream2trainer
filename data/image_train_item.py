@@ -351,6 +351,7 @@ class ImageTrainItem:
         return self
     
     def __compute_target_width_height(self):
+        self.target_wh = None
         try:
             with Image.open(self.pathname) as image:
                 width, height = image.size

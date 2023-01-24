@@ -166,7 +166,7 @@ class DataLoaderMultiAspect():
 
             print (f" * DLMA: {len(items)} images loaded from {len(image_paths)} files")
             
-            self.prepared_train_data = items
+            self.prepared_train_data = [item for item in items if item.error is None]
             random.Random(self.seed).shuffle(self.prepared_train_data)
             self.__report_errors(items)
     
