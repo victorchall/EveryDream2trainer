@@ -191,16 +191,12 @@ def resolve_root(path: str, aspects: list[float], flip_p: float = 0.0, seed=555)
     :param flip_p: The probability of flipping the image
     """
     if os.path.isfile(path) and path.endswith('.json'):
-        resolver = JSONResolver(aspects, flip_p, seed)
+        return JSONResolver(aspects, flip_p, seed).image_train_items(path)
     
     if os.path.isdir(path):
-        resolver = DirectoryResolver(aspects, flip_p, seed)
+        return DirectoryResolver(aspects, flip_p, seed).image_train_items(path)
         
-    if not resolver:
-        raise ValueError(f"data_root '{path}' is not a valid directory or JSON file.")
-
-    items = resolver.image_train_items(path)
-    return items
+    raise ValueError(f"data_root '{path}' is not a valid directory or JSON file.")
 
 def resolve(value: typing.Union[dict, str], aspects: list[float], flip_p: float=0.0, seed=555) -> list[ImageTrainItem]:
     """
