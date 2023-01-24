@@ -113,7 +113,6 @@ class DirectoryResolver(DataResolver):
         image_paths = list(DirectoryResolver.recurse_data_root(data_root))
         items = []
         multipliers = {}
-        skip_folders = []
         randomizer = random.Random(self.seed)
         
         for pathname in tqdm.tqdm(image_paths):
@@ -129,10 +128,8 @@ class DirectoryResolver(DataResolver):
                             logging.info(f" * DLMA multiply.txt in {current_dir} set to {val}")
                     except Exception as e:
                         logging.warning(f" * {Fore.LIGHTYELLOW_EX}Error trying to read multiply.txt for {current_dir}: {Style.RESET_ALL}{e}")
-                        skip_folders.append(current_dir)
                         multipliers[current_dir] = 1.0
                 else:
-                    skip_folders.append(current_dir)
                     multipliers[current_dir] = 1.0
             
             caption = ImageCaption.resolve(pathname)
