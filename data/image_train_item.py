@@ -105,10 +105,6 @@ class ImageCaption:
             if caption:
                 caption += ", "
             caption += tag
-            
-            if caption:
-                caption += ", "
-            caption += tag
 
         return caption
 
