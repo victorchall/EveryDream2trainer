@@ -7,3 +7,5 @@
 **/.pytest_cache
 /logs/**
 /tmp/**
+/wandb/**
+/mycfgs/**
