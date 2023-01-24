@@ -171,15 +171,11 @@ class DirectoryResolver(DataResolver):
                 if ext in ['.jpg', '.jpeg', '.png', '.bmp', '.webp', '.jfif']:
                     yield current
 
-        sub_dirs = []
-
         for d in os.listdir(recurse_root):
             current = os.path.join(recurse_root, d)
             if os.path.isdir(current):
-                sub_dirs.append(current)
-
-        for dir in sub_dirs:
-            DirectoryResolver.recurse_data_root(dir)
+                yield from DirectoryResolver.recurse_data_root(current)
+        
 
 def strategy(data_root: str):
     if os.path.isfile(data_root) and data_root.endswith('.json'):
