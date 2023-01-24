@@ -25,7 +25,7 @@ class TestResolve(unittest.TestCase):
             f.write('caption for test1')
 
         Image.new('RGB', (512, 512)).save(IMAGE_2_PATH)
-        # Undersized image. Should cause an event.
+        # Undersized image
         Image.new('RGB', (256, 256)).save(IMAGE_3_PATH)
         
         json_data = [
@@ -61,7 +61,7 @@ class TestResolve(unittest.TestCase):
         self.assertEqual(captions, ['caption for test1', 'test2', 'test3'])
         
         undersized_images = list(filter(lambda i: i.is_undersized, items))
-        self.assertEqual(undersized_images, 1)
+        self.assertEqual(len(undersized_images), 1)
     
     def test_directory_resolve_with_dict(self):
         data_root_spec = {
@@ -79,7 +79,7 @@ class TestResolve(unittest.TestCase):
         self.assertEqual(captions, ['caption for test1', 'test2', 'test3'])
         
         undersized_images = list(filter(lambda i: i.is_undersized, items))
-        self.assertEqual(undersized_images, 1)
+        self.assertEqual(len(undersized_images), 1)
     
     def test_json_resolve_with_str(self):
         items = resolver.resolve(JSON_ROOT_PATH, ASPECTS)
@@ -92,7 +92,7 @@ class TestResolve(unittest.TestCase):
         self.assertEqual(captions, ['caption for test1', 'caption for test2', 'test3'])
         
         undersized_images = list(filter(lambda i: i.is_undersized, items))
-        self.assertEqual(undersized_images, 1)
+        self.assertEqual(len(undersized_images), 1)
     
     def test_json_resolve_with_dict(self):
         data_root_spec = {
@@ -110,4 +110,4 @@ class TestResolve(unittest.TestCase):
         self.assertEqual(captions, ['caption for test1', 'caption for test2', 'test3'])
         
         undersized_images = list(filter(lambda i: i.is_undersized, items))
-        self.assertEqual(undersized_images, 1)
+        self.assertEqual(len(undersized_images), 1)

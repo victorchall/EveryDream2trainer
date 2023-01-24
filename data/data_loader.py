@@ -173,7 +173,7 @@ class DataLoaderMultiAspect():
     def __report_errors(self, items: list[ImageTrainItem]):
         for item in items:
             if item.error is not None:
-                logging.error(f"{Fore.LIGHTRED_EX} *** Error opening {Fore.LIGHTYELLOW_EX}{item.image_path}{Fore.LIGHTRED_EX} to get metadata. File may be corrupt and will be skipped.{Style.RESET_ALL}")
+                logging.error(f"{Fore.LIGHTRED_EX} *** Error opening {Fore.LIGHTYELLOW_EX}{item.pathname}{Fore.LIGHTRED_EX} to get metadata. File may be corrupt and will be skipped.{Style.RESET_ALL}")
                 logging.error(f" *** exception: {item.error}")
         
         undersized_items = [item for item in items if item.is_undersized]
@@ -184,8 +184,8 @@ class DataLoaderMultiAspect():
             logging.warning(f"{Fore.LIGHTRED_EX} ** Check {underized_log_path} for more information.{Style.RESET_ALL}")
             with open(underized_log_path, "w") as undersized_images_file:
                 undersized_images_file.write(f" The following images are smaller than the target size, consider removing or sourcing a larger copy:")
-                for event in undersized_items:
-                    message = f" *** {event.image_path} with size: {event.image_size} is smaller than target size: {event.target_size}, consider using larger images"
+                for undersized_item in undersized_items:
+                    message = f" *** {undersized_item.pathname} with size: {undersized_item.image_size} is smaller than target size: {undersized_item.target_wh}, consider using larger images"
                     undersized_images_file.write(message)
                     
 

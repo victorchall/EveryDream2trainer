@@ -266,10 +266,13 @@ class ImageTrainItem:
         self.runt_size = 0
         self.multiplier = multiplier
 
+        self.image_size = None
         if image is None:
             self.image = []
         else:
             self.image = image
+            self.image_size = image.size
+            self.target_size = None
             
         self.is_undersized = False
         self.error = None
