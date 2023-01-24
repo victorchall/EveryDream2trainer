@@ -79,7 +79,7 @@ ex.
 
 If you don't want the hassle of downloading and converting ckpt files, you can pass a Hugging Face "repo id" for `--resume-ckpt` and the model will be automatically downloaded from Huggingface if it exists.
 
-For example, to use Stable Diffusion V2.1, use which corresponds to [this model on Huggingface](https://huggingface.co/stabilityai/stable-diffusion-2-1), which has the repo id `stabilityai/stable-diffusion-2-1`:
+For example, to use [Stable Diffusion 2.1](https://huggingface.co/stabilityai/stable-diffusion-2-1), you can pass the repo id `stabilityai/stable-diffusion-2-1` for `--resume_ckpt`:
 
     python train.py --resume_ckpt stabilityai/stable-diffusion-2-1 ...
 
