@@ -179,7 +179,7 @@ class DirectoryResolver(DataResolver):
                 sub_dirs.append(current)
 
         for dir in sub_dirs:
-            DirectoryResolver.__recurse_data_root(dir)
+            DirectoryResolver.recurse_data_root(dir)
 
 def strategy(data_root: str):
     if os.path.isfile(data_root) and data_root.endswith('.json'):
