@@ -483,7 +483,7 @@ def main(args):
         tokenizer = CLIPTokenizer.from_pretrained(model_root_folder, subfolder="tokenizer", use_fast=False)
     except Exception as e:
         traceback.print_exc()
-        logging.ERROR(" * Failed to load checkpoint *")
+        logging.error(" * Failed to load checkpoint *")
 
     if args.gradient_checkpointing:
         unet.enable_gradient_checkpointing()
