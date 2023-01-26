@@ -887,7 +887,7 @@ def main(args):
 
         # end of training
 
-        save_path = os.path.join(f"{log_folder}/ckpts/last-{args.project_name}-ep{epoch:02}-gs{global_step:05}")
+        save_path = os.path.join(f"{log_folder}/ckpts/{args.project_name}-last-ep{epoch:02}-gs{global_step:05}")
         __save_model(save_path, unet, text_encoder, tokenizer, noise_scheduler, vae, args.save_ckpt_dir, yaml, args.save_full_precision)
 
         total_elapsed_time = time.time() - training_start_time
@@ -897,7 +897,7 @@ def main(args):
 
     except Exception as ex:
         logging.error(f"{Fore.LIGHTYELLOW_EX}Something went wrong, attempting to save model{Style.RESET_ALL}")
-        save_path = os.path.join(f"{log_folder}/ckpts/errored-{args.project_name}-ep{epoch:02}-gs{global_step:05}")
+        save_path = os.path.join(f"{log_folder}/ckpts/{args.project_name}-errored-ep{epoch:02}-gs{global_step:05}")
         __save_model(save_path, unet, text_encoder, tokenizer, noise_scheduler, vae, args.save_ckpt_dir, yaml, args.save_full_precision)
         raise ex
 
