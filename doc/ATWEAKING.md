@@ -50,19 +50,6 @@ Learning rate adjustment is a very important part of training.  You can use the 
 
 By default, the learning rate is constant for the entire training session.  However, if you want it to change by itself during training, you can use cosine.
 
-## Every Dream 1.0 mode
-
-If you want to train in a mode that simulates closer to EveryDream 1.0 behavior when training SD 1.x models, you can use this:
-
-    --ed1_mode ^
-
-This forces disabling of Xformers.  You may need to adjust batch_size.
-
-I recommended to use lower LR more similar to EveryDream 1.0 as well with this option, such as 1e-6.
-
-**This is strongly recommended for SD1.x models, and strongly against for SD2.x models.**
-
-
 ## Clip skip
 
 Aka "penultimate layer", this takes the output from the text encoder not from its last output layer, but layers before.  

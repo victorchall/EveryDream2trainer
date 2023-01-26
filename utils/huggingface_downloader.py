@@ -3,7 +3,7 @@ import os
 from typing import Optional, Tuple
 
 import huggingface_hub
-from utils.patch_unet import patch_unet
+from utils.analyze_unet import get_attn_yaml
 
 
 def try_download_model_from_hf(repo_id: str,
@@ -38,5 +38,5 @@ def try_download_model_from_hf(repo_id: str,
                                                           allow_patterns=allow_patterns,
                                                           ignore_patterns=ignore_patterns)
     print(f"model with repo id {repo_id} downloaded to {downloaded_folder}")
-    is_sd1_attn, yaml_path = patch_unet(downloaded_folder)
+    is_sd1_attn, yaml_path = get_attn_yaml(downloaded_folder)
     return downloaded_folder, is_sd1_attn, yaml_path
