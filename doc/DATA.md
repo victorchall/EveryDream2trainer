@@ -47,4 +47,4 @@ Also consider some basic mention of pose.  ex. "clouds strife sitting on a blue 
 
 ### Further reading
 
-The [Data Balancing](doc/BALANCING.md) guide has some more information on how to balance your data and what to consider for model preservation and mixing in ground truth data.
+The [Data Balancing](BALANCING.md) guide has some more information on how to balance your data and what to consider for model preservation and mixing in ground truth data.
