@@ -1,5 +1,5 @@
 """
-Copyright [2022-2023] Victor C Hall
+Copyright [2022] Victor C Hall
 
 Licensed under the GNU Affero General Public License;
 You may not use this code except in compliance with the License.
@@ -13,7 +13,6 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 """
-
 import os
 import sys
 import math
@@ -23,14 +22,12 @@ import logging
 import time
 import gc
 import random
-import traceback
-import shutil
 
 import torch.nn.functional as F
-from torch.cuda.amp import autocast, GradScaler
+from torch.cuda.amp import autocast
 import torchvision.transforms as transforms
 
-from colorama import Fore, Style, Cursor
+from colorama import Fore, Style
 import numpy as np
 import itertools
 import torch
@@ -49,13 +46,28 @@ from accelerate.utils import set_seed
 import wandb
 from torch.utils.tensorboard import SummaryWriter
 
+import keyboard
+
 from data.every_dream import EveryDreamBatch
-from utils.huggingface_downloader import try_download_model_from_hf
 from utils.convert_diff_to_ckpt import convert as converter
 from utils.gpu import GPU
+forstepTime = time.time()
 
 _SIGTERM_EXIT_CODE = 130
 _VERY_LARGE_NUMBER = 1e9
+
+# def is_notebook() -> bool:
+#     try:
+#         from IPython import get_ipython
+#         shell = get_ipython().__class__.__name__
+#         if shell == 'ZMQInteractiveShell':
+#             return True   # Jupyter notebook or qtconsole
+#         elif shell == 'TerminalInteractiveShell':
+#             return False  # Terminal running IPython
+#         else:
+#             return False  # Other type (?)
+#     except NameError:
+#         return False      # Probably standard Python interpreter
 
 def clean_filename(filename):
     """
@@ -63,12 +75,8 @@ def clean_filename(filename):
     """
     return "".join([c for c in filename if c.isalpha() or c.isdigit() or c==' ']).rstrip()
 
-def get_hf_ckpt_cache_path(ckpt_path):
-    return os.path.join("ckpt_cache", os.path.basename(ckpt_path))
-
 def convert_to_hf(ckpt_path):
-
-    hf_cache = get_hf_ckpt_cache_path(ckpt_path)
+    hf_cache = os.path.join("ckpt_cache", os.path.basename(ckpt_path))
     from utils.analyze_unet import get_attn_yaml
 
     if os.path.isfile(ckpt_path):        
@@ -79,19 +87,19 @@ def convert_to_hf(ckpt_path):
                 import utils.convert_original_stable_diffusion_to_diffusers as convert
                 convert.convert(ckpt_path, f"ckpt_cache/{ckpt_path}")
             except:
-                logging.info("Please manually convert the checkpoint to Diffusers format (one time setup), see readme.")
+                logging.info("Please manually convert the checkpoint to Diffusers format, see readme.")
                 exit()
         else:
             logging.info(f"Found cached checkpoint at {hf_cache}")
         
-        is_sd1attn, yaml = get_attn_yaml(hf_cache)
-        return hf_cache, is_sd1attn, yaml
+        is_sd1attn = get_attn_yaml(hf_cache)
+        return hf_cache, is_sd1attn
     elif os.path.isdir(hf_cache):
-        is_sd1attn, yaml = get_attn_yaml(hf_cache)
-        return hf_cache, is_sd1attn, yaml
+        is_sd1attn = get_attn_yaml(hf_cache)
+        return hf_cache, is_sd1attn
     else:
-        is_sd1attn, yaml = get_attn_yaml(ckpt_path)
-        return ckpt_path, is_sd1attn, yaml
+        is_sd1attn = get_attn_yaml(ckpt_path)
+        return ckpt_path, is_sd1attn
 
 def setup_local_logger(args):
     """
@@ -166,6 +174,7 @@ def append_epoch_log(global_step: int, epoch_pbar, gpu, log_writer, **logs):
 
     if logs is not None:
         epoch_pbar.set_postfix(**logs, vram=f"{epoch_mem_color}{gpu_used_mem}/{gpu_total_mem} MB{Style.RESET_ALL} gs:{global_step}")
+        print(f"{epoch_mem_color}{gpu_used_mem}/{gpu_total_mem} MB{Style.RESET_ALL} gs:{global_step} | Elapsed : {time.time() - forstepTime}s")
 
 
 def set_args_12gb(args):
@@ -267,28 +276,6 @@ def setup_args(args):
 
     return args
 
-def update_grad_scaler(scaler: GradScaler, global_step, epoch, step):
-    if global_step == 250 or (epoch >= 4 and step == 1):
-        factor = 1.8
-        scaler.set_growth_factor(factor)
-        scaler.set_backoff_factor(1/factor)
-        scaler.set_growth_interval(50)
-    if global_step == 500 or (epoch >= 8 and step == 1):
-        factor = 1.6
-        scaler.set_growth_factor(factor)
-        scaler.set_backoff_factor(1/factor)
-        scaler.set_growth_interval(50)
-    if global_step == 1000 or (epoch >= 10 and step == 1):
-        factor = 1.3
-        scaler.set_growth_factor(factor)
-        scaler.set_backoff_factor(1/factor)
-        scaler.set_growth_interval(100)
-    if global_step == 3000 or (epoch >= 20 and step == 1):
-        factor = 1.15
-        scaler.set_growth_factor(factor)
-        scaler.set_backoff_factor(1/factor)
-        scaler.set_growth_interval(100)
-
 def main(args):
     """
     Main entry point
@@ -310,12 +297,12 @@ def main(args):
     torch.backends.cudnn.benchmark = True
 
     log_folder = os.path.join(args.logdir, f"{args.project_name}_{log_time}")
-
+    logging.info(f"Logging to {log_folder}")
     if not os.path.exists(log_folder):
         os.makedirs(log_folder)
 
     @torch.no_grad()
-    def __save_model(save_path, unet, text_encoder, tokenizer, scheduler, vae, save_ckpt_dir, yaml_name, save_full_precision=False):
+    def __save_model(save_path, unet, text_encoder, tokenizer, scheduler, vae, save_ckpt_dir, save_full_precision=False):
         """
         Save the model to disk
         """
@@ -336,24 +323,17 @@ def main(args):
         )
         pipeline.save_pretrained(save_path)
         sd_ckpt_path = f"{os.path.basename(save_path)}.ckpt"
-        
         if save_ckpt_dir is not None:
             sd_ckpt_full = os.path.join(save_ckpt_dir, sd_ckpt_path)
         else:
             sd_ckpt_full = os.path.join(os.curdir, sd_ckpt_path)
-            save_ckpt_dir = os.curdir
         
         half = not save_full_precision
 
         logging.info(f" * Saving SD model to {sd_ckpt_full}")
         converter(model_path=save_path, checkpoint_path=sd_ckpt_full, half=half)
-
-        if yaml_name and yaml_name != "v1-inference.yaml":
-            yaml_save_path = f"{os.path.join(save_ckpt_dir, os.path.basename(save_path))}.yaml"
-            logging.info(f" * Saving yaml to {yaml_save_path}")
-            shutil.copyfile(yaml_name, yaml_save_path)
-
         # optimizer_path = os.path.join(save_path, "optimizer.pt")
+
         # if self.save_optimizer_flag:
         #     logging.info(f" Saving optimizer state to {save_path}")
         #     self.save_optimizer(self.ctx.optimizer, optimizer_path)
@@ -414,8 +394,6 @@ def main(args):
         generates samples at different cfg scales and saves them to disk
         """
         logging.info(f"Generating samples gs:{gs}, for {prompts}")
-        pipe.set_progress_bar_config(disable=True)
-
         seed = args.seed if args.seed != -1 else random.randint(0, 2**30)
         gen = torch.Generator(device=device).manual_seed(seed)
 
@@ -460,47 +438,30 @@ def main(args):
             del tfimage
             del images
 
-    try:
-
-        # check for a local file
-        hf_cache_path = get_hf_ckpt_cache_path(args.resume_ckpt)
-        if os.path.exists(hf_cache_path) or os.path.exists(args.resume_ckpt):
-            model_root_folder, is_sd1attn, yaml = convert_to_hf(args.resume_ckpt)
-        else:
-            # try to download from HF using resume_ckpt as a repo id
-            print(f"local file/folder not found for {args.resume_ckpt}, will try to download from huggingface.co")
-            hf_repo_subfolder = args.hf_repo_subfolder if hasattr(args, 'hf_repo_subfolder') else None
-            model_root_folder, is_sd1attn, yaml = try_download_model_from_hf(repo_id=args.resume_ckpt,
-                                                                             subfolder=hf_repo_subfolder)
-            if model_root_folder is None:
-                raise ValueError(f"No local file/folder for {args.resume_ckpt}, and no matching huggingface.co repo could be downloaded")
-
-        text_encoder = CLIPTextModel.from_pretrained(model_root_folder, subfolder="text_encoder")
-        vae = AutoencoderKL.from_pretrained(model_root_folder, subfolder="vae")
-        unet = UNet2DConditionModel.from_pretrained(model_root_folder, subfolder="unet")
-        sample_scheduler = DDIMScheduler.from_pretrained(model_root_folder, subfolder="scheduler")
-        noise_scheduler = DDPMScheduler.from_pretrained(model_root_folder, subfolder="scheduler")
-        tokenizer = CLIPTokenizer.from_pretrained(model_root_folder, subfolder="tokenizer", use_fast=False)
-    except Exception as e:
-        traceback.print_exc()
-        logging.error(" * Failed to load checkpoint *")
+    try: 
+        hf_ckpt_path, is_sd1attn = convert_to_hf(args.resume_ckpt)
+        text_encoder = CLIPTextModel.from_pretrained(hf_ckpt_path, subfolder="text_encoder")
+        vae = AutoencoderKL.from_pretrained(hf_ckpt_path, subfolder="vae")
+        unet = UNet2DConditionModel.from_pretrained(hf_ckpt_path, subfolder="unet", upcast_attention=not is_sd1attn)
+        sample_scheduler = DDIMScheduler.from_pretrained(hf_ckpt_path, subfolder="scheduler")
+        noise_scheduler = DDPMScheduler.from_pretrained(hf_ckpt_path, subfolder="scheduler")
+        tokenizer = CLIPTokenizer.from_pretrained(hf_ckpt_path, subfolder="tokenizer", use_fast=False)
+    except:
+        logging.ERROR(" * Failed to load checkpoint *")
 
     if args.gradient_checkpointing:
         unet.enable_gradient_checkpointing()
         text_encoder.gradient_checkpointing_enable()
     
-    if not args.disable_xformers:
-        if (args.amp and is_sd1attn) or (not is_sd1attn):
-            try:
-                unet.enable_xformers_memory_efficient_attention()
-                logging.info("Enabled xformers")
-            except Exception as ex:
-                logging.warning("failed to load xformers, using attention slicing instead")
-                unet.set_attention_slice("auto")
-                pass
+    if not args.disable_xformers and (args.amp and is_sd1attn) or (not is_sd1attn):
+        try:
+            unet.enable_xformers_memory_efficient_attention()
+            logging.info("Enabled xformers")
+        except Exception as ex:
+            logging.warning("failed to load xformers, continuing without it")
+            pass
     else:
-        logging.info("xformers disabled, using attention slicing instead")
-        unet.set_attention_slice("auto")
+        logging.info("xformers not available or disabled")
 
     default_lr = 2e-6
     curr_lr = args.lr if args.lr is not None else default_lr
@@ -517,10 +478,10 @@ def main(args):
         logging.info(f"{Fore.CYAN} * NOT Training Text Encoder, quality reduced *{Style.RESET_ALL}")
         params_to_train = itertools.chain(unet.parameters())
     elif args.disable_unet_training:
-        logging.info(f"{Fore.CYAN} * Training Text Encoder Only *{Style.RESET_ALL}")
+        logging.info(f"{Fore.CYAN} * Training Text Encoder *{Style.RESET_ALL}")
         params_to_train = itertools.chain(text_encoder.parameters())
     else:
-        logging.info(f"{Fore.CYAN} * Training Text and Unet *{Style.RESET_ALL}")
+        logging.info(f"{Fore.CYAN} * Training Text Encoder *{Style.RESET_ALL}")
         params_to_train = itertools.chain(unet.parameters(), text_encoder.parameters())
 
     betas = (0.9, 0.999)
@@ -588,8 +549,8 @@ def main(args):
 
     if args.wandb is not None and args.wandb:
         wandb.init(project=args.project_name, sync_tensorboard=True, )
-  
-    log_writer = SummaryWriter(log_dir=log_folder, 
+    else:
+        log_writer = SummaryWriter(log_dir=log_folder, 
                                    flush_secs=5,
                                    comment="EveryDream2FineTunes",
                                   )
@@ -602,13 +563,14 @@ def main(args):
     
     log_args(log_writer, args)
 
+    
 
     """
     Train the model
 
     """
     print(f" {Fore.LIGHTGREEN_EX}** Welcome to EveryDream trainer 2.0!**{Style.RESET_ALL}")
-    print(f" (C) 2022-2023 Victor C Hall  This program is licensed under AGPL 3.0 https://www.gnu.org/licenses/agpl-3.0.en.html")
+    print(f" (C) 2022 Victor C Hall  This program is licensed under AGPL 3.0 https://www.gnu.org/licenses/agpl-3.0.en.html")
     print()
     print("** Trainer Starting **")
 
@@ -686,17 +648,25 @@ def main(args):
     logging.info(f" {Fore.GREEN}batch_size: {Style.RESET_ALL}{Fore.LIGHTGREEN_EX}{args.batch_size}{Style.RESET_ALL}")
     logging.info(f" {Fore.GREEN}epoch_len: {Fore.LIGHTGREEN_EX}{epoch_len}{Style.RESET_ALL}")
 
-    scaler = GradScaler(
+
+    #scaler = torch.cuda.amp.GradScaler()
+    scaler = torch.cuda.amp.GradScaler(
         enabled=args.amp,
+        #enabled=True,
         init_scale=2**17.5,
-        growth_factor=2,
-        backoff_factor=1.0/2,
-        growth_interval=25,
+        growth_factor=1.8,
+        backoff_factor=1.0/1.8,
+        growth_interval=50,
     )
     logging.info(f" Grad scaler enabled: {scaler.is_enabled()} (amp mode)")
 
+
     epoch_pbar = tqdm(range(args.max_epochs), position=0, leave=True)
     epoch_pbar.set_description(f"{Fore.LIGHTCYAN_EX}Epochs{Style.RESET_ALL}")
+
+    # steps_pbar = tqdm(range(epoch_len), position=1, leave=True)
+    # steps_pbar.set_description(f"{Fore.LIGHTCYAN_EX}Steps{Style.RESET_ALL}")
+
     epoch_times = []
 
     global global_step
@@ -707,28 +677,8 @@ def main(args):
     append_epoch_log(global_step=global_step, epoch_pbar=epoch_pbar, gpu=gpu, log_writer=log_writer)
 
     loss_log_step = []
-
-    assert len(train_batch) > 0, "train_batch is empty, check that your data_root is correct"
     
     try:
-        # # dummy batch to pin memory to avoid fragmentation in torch, uses square aspect which is maximum bytes size per aspects.py
-        # pixel_values = torch.randn_like(torch.zeros([args.batch_size, 3, args.resolution, args.resolution]))
-        # pixel_values = pixel_values.to(unet.device)
-        # with autocast(enabled=args.amp):
-        #     latents = vae.encode(pixel_values, return_dict=False)
-        # latents = latents[0].sample() * 0.18215
-        # noise = torch.randn_like(latents)
-        # bsz = latents.shape[0]
-        # timesteps = torch.randint(0, noise_scheduler.config.num_train_timesteps, (bsz,), device=latents.device)
-        # timesteps = timesteps.long()
-        # noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
-        # cuda_caption = torch.linspace(100,177, steps=77, dtype=int).to(text_encoder.device)
-        # encoder_hidden_states = text_encoder(cuda_caption, output_hidden_states=True).last_hidden_state
-        # with autocast(enabled=args.amp):
-        #     model_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
-        # # discard the grads, just want to pin memory
-        # optimizer.zero_grad(set_to_none=True)
-
         for epoch in range(args.max_epochs):
             loss_epoch = []
             epoch_start_time = time.time()
@@ -777,7 +727,7 @@ def main(args):
                 with autocast(enabled=args.amp):
                     model_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
 
-                #del timesteps, encoder_hidden_states, noisy_latents
+                del timesteps, encoder_hidden_states, noisy_latents
                 #with autocast(enabled=args.amp):
                 loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
 
@@ -793,7 +743,7 @@ def main(args):
 
                 if batch["runt_size"] > 0:
                     grad_scale = batch["runt_size"] / args.batch_size
-                    with torch.no_grad(): # not required? just in case for now, needs more testing
+                    with torch.no_grad():
                         for param in unet.parameters():
                             if param.grad is not None:
                                 param.grad *= grad_scale
@@ -836,7 +786,7 @@ def main(args):
                     append_epoch_log(global_step=global_step, epoch_pbar=epoch_pbar, gpu=gpu, log_writer=log_writer, **logs)
                     torch.cuda.empty_cache()
 
-                if (global_step + 1) % args.sample_steps == 0:
+                if (not args.notebook and keyboard.is_pressed("ctrl+alt+page up")) or ((global_step + 1) % args.sample_steps == 0):
                     pipe = __create_inference_pipe(unet=unet, text_encoder=text_encoder, tokenizer=tokenizer, scheduler=sample_scheduler, vae=vae)
                     pipe = pipe.to(device)
 
@@ -858,16 +808,23 @@ def main(args):
                     last_epoch_saved_time = time.time()
                     logging.info(f"Saving model, {args.ckpt_every_n_minutes} mins at step {global_step}")
                     save_path = os.path.join(f"{log_folder}/ckpts/{args.project_name}-ep{epoch:02}-gs{global_step:05}")
-                    __save_model(save_path, unet, text_encoder, tokenizer, noise_scheduler, vae, args.save_ckpt_dir, yaml, args.save_full_precision)
+                    __save_model(save_path, unet, text_encoder, tokenizer, noise_scheduler, vae, args.save_ckpt_dir, args.save_full_precision)
 
                 if epoch > 0 and epoch % args.save_every_n_epochs == 0 and step == 1 and epoch < args.max_epochs - 1:
                     logging.info(f" Saving model, {args.save_every_n_epochs} epochs at step {global_step}")
                     save_path = os.path.join(f"{log_folder}/ckpts/{args.project_name}-ep{epoch:02}-gs{global_step:05}")
-                    __save_model(save_path, unet, text_encoder, tokenizer, noise_scheduler, vae, args.save_ckpt_dir, yaml, args.save_full_precision)
+                    __save_model(save_path, unet, text_encoder, tokenizer, noise_scheduler, vae, args.save_ckpt_dir, args.save_full_precision)
 
                 del batch
                 global_step += 1
-                update_grad_scaler(scaler, global_step, epoch, step) if args.amp else None
+
+                if global_step == 500:
+                    scaler.set_growth_factor(1.4)
+                    scaler.set_backoff_factor(1/1.4)
+                if global_step == 1000:
+                    scaler.set_growth_factor(1.2)
+                    scaler.set_backoff_factor(1/1.2)
+                    scaler.set_growth_interval(100)
                 # end of step
 
             steps_pbar.close()
@@ -882,13 +839,12 @@ def main(args):
 
             loss_local = sum(loss_epoch) / len(loss_epoch)
             log_writer.add_scalar(tag="loss/epoch", scalar_value=loss_local, global_step=global_step)
-            gc.collect()
             # end of epoch
 
         # end of training
 
         save_path = os.path.join(f"{log_folder}/ckpts/last-{args.project_name}-ep{epoch:02}-gs{global_step:05}")
-        __save_model(save_path, unet, text_encoder, tokenizer, noise_scheduler, vae, args.save_ckpt_dir, yaml, args.save_full_precision)
+        __save_model(save_path, unet, text_encoder, tokenizer, noise_scheduler, vae, args.save_ckpt_dir, args.save_full_precision)
 
         total_elapsed_time = time.time() - training_start_time
         logging.info(f"{Fore.CYAN}Training complete{Style.RESET_ALL}")
@@ -898,7 +854,7 @@ def main(args):
     except Exception as ex:
         logging.error(f"{Fore.LIGHTYELLOW_EX}Something went wrong, attempting to save model{Style.RESET_ALL}")
         save_path = os.path.join(f"{log_folder}/ckpts/errored-{args.project_name}-ep{epoch:02}-gs{global_step:05}")
-        __save_model(save_path, unet, text_encoder, tokenizer, noise_scheduler, vae, args.save_ckpt_dir, yaml, args.save_full_precision)
+        __save_model(save_path, unet, text_encoder, tokenizer, noise_scheduler, vae, args.save_ckpt_dir, args.save_full_precision)
         raise ex
 
     logging.info(f"{Fore.LIGHTWHITE_EX} ***************************{Style.RESET_ALL}")
@@ -962,7 +918,6 @@ if __name__ == "__main__":
         argparser.add_argument("--gpuid", type=int, default=0, help="id of gpu to use for training, (def: 0) (ex: 1 to use GPU_ID 1)")
         argparser.add_argument("--gradient_checkpointing", action="store_true", default=False, help="enable gradient checkpointing to reduce VRAM use, may reduce performance (def: False)")
         argparser.add_argument("--grad_accum", type=int, default=1, help="Gradient accumulation factor (def: 1), (ex, 2)")
-        argparser.add_argument("--hf_repo_subfolder", type=str, default=None, help="Subfolder inside the huggingface repo to download, if the model is not in the root of the repo.")
         argparser.add_argument("--logdir", type=str, default="logs", help="folder to save logs to (def: logs)")
         argparser.add_argument("--log_step", type=int, default=25, help="How often to log training stats, def: 25, recommend default!")
         argparser.add_argument("--lowvram", action="store_true", default=False, help="automatically overrides various args to support 12GB gpu")
@@ -974,7 +929,7 @@ if __name__ == "__main__":
         argparser.add_argument("--notebook", action="store_true", default=False, help="disable keypresses and uses tqdm.notebook for jupyter notebook (def: False)")
         argparser.add_argument("--project_name", type=str, default="myproj", help="Project name for logs and checkpoints, ex. 'tedbennett', 'superduperV1'")
         argparser.add_argument("--resolution", type=int, default=512, help="resolution to train", choices=supported_resolutions)
-        argparser.add_argument("--resume_ckpt", type=str, required=True, default="sd_v1-5_vae.ckpt", help="The checkpoint to resume from, either a local .ckpt file, a converted Diffusers format folder, or a Huggingface.co repo id such as stabilityai/stable-diffusion-2-1 ")
+        argparser.add_argument("--resume_ckpt", type=str, required=True, default="sd_v1-5_vae.ckpt")
         argparser.add_argument("--sample_prompts", type=str, default="sample_prompts.txt", help="File with prompts to generate test samples from (def: sample_prompts.txt)")
         argparser.add_argument("--sample_steps", type=int, default=250, help="Number of steps between samples (def: 250)")
         argparser.add_argument("--save_ckpt_dir", type=str, default=None, help="folder to save checkpoints to (def: root training folder)")

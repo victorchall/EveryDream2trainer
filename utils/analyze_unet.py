@@ -17,7 +17,7 @@ import os
 import json
 import logging
 
-def patch_unet(ckpt_path):
+def get_attn_yaml(ckpt_path):
     """
     Patch the UNet to use updated attention heads for xformers support in FP32
     """
