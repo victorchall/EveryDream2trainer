@@ -526,7 +526,7 @@ def main(args):
     betas = (0.9, 0.999)
     epsilon = 1e-8
     if args.amp:
-        epsilon = 2e-8
+        epsilon = 1e-8
     
     weight_decay = 0.01
     if args.useadam8bit:

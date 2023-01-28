@@ -30,12 +30,12 @@ I recommend you copy one of the examples below and keep it in a text file for fu
 
 Training examples:
 
-Resuming from a checkpoint, 50 epochs, 6 batch size, 3e-6 learning rate, cosine scheduler, generate samples evern 200 steps, 10 minute checkpoint interval, adam8bit, and using the default "input" folder for training data:
+Resuming from a checkpoint, 50 epochs, 6 batch size, 3e-6 learning rate, constant scheduler, generate samples evern 200 steps, 10 minute checkpoint interval, adam8bit, and using the default "input" folder for training data:
 
     python train.py --resume_ckpt "sd_v1-5_vae" ^
     --max_epochs 50 ^
     --data_root "input" ^
-    --lr_scheduler cosine ^
+    --lr_scheduler constant ^
     --project_name myproj ^
     --batch_size 6 ^
     --sample_steps 200 ^
