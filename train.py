@@ -49,10 +49,12 @@ from accelerate.utils import set_seed
 import wandb
 from torch.utils.tensorboard import SummaryWriter
 
-from data.every_dream import EveryDreamBatch
+from data.every_dream import EveryDreamBatch, build_torch_dataloader
+from data.every_dream_validation import EveryDreamValidator
 from utils.huggingface_downloader import try_download_model_from_hf
 from utils.convert_diff_to_ckpt import convert as converter
-from utils.gpu import GPU
+if torch.cuda.is_available():
+    from utils.gpu import GPU
 
 _SIGTERM_EXIT_CODE = 130
 _VERY_LARGE_NUMBER = 1e9
@@ -289,6 +291,7 @@ def update_grad_scaler(scaler: GradScaler, global_step, epoch, step):
         scaler.set_backoff_factor(1/factor)
         scaler.set_growth_interval(100)
 
+
 def main(args):
     """
     Main entry point
@@ -304,10 +307,12 @@ def main(args):
     seed = args.seed if args.seed != -1 else random.randint(0, 2**30)
     logging.info(f" Seed: {seed}")
     set_seed(seed)
-    gpu = GPU()
-    device = torch.device(f"cuda:{args.gpuid}")
-
-    torch.backends.cudnn.benchmark = True
+    if torch.cuda.is_available():
+        gpu = GPU()
+        device = torch.device(f"cuda:{args.gpuid}")
+        torch.backends.cudnn.benchmark = True
+    else:
+        device = 'cpu'
 
     log_folder = os.path.join(args.logdir, f"{args.project_name}_{log_time}")
 
@@ -523,6 +528,11 @@ def main(args):
         logging.info(f"{Fore.CYAN} * Training Text and Unet *{Style.RESET_ALL}")
         params_to_train = itertools.chain(unet.parameters(), text_encoder.parameters())
 
+    log_writer = SummaryWriter(log_dir=log_folder,
+                                   flush_secs=5,
+                                   comment="EveryDream2FineTunes",
+                                  )
+
     betas = (0.9, 0.999)
     epsilon = 1e-8
     if args.amp:
@@ -546,10 +556,11 @@ def main(args):
             amsgrad=False,
         )
 
+
     log_optimizer(optimizer, betas, epsilon)
 
     train_batch = EveryDreamBatch(
-        data_root=args.data_root,
+        data=args.data_root,
         flip_p=args.flip_p,
         debug_level=1,
         batch_size=args.batch_size,
@@ -561,8 +572,13 @@ def main(args):
         write_schedule=args.write_schedule,
         shuffle_tags=args.shuffle_tags,
         rated_dataset=args.rated_dataset,
-        rated_dataset_dropout_target=(1.0 - (args.rated_dataset_target_dropout_percent / 100.0))
+        rated_dataset_dropout_target=(1.0 - (args.rated_dataset_target_dropout_percent / 100.0)),
+        name='train'
     )
+    validator = EveryDreamValidator(args.validation_config,
+                                    train_batch=train_batch,
+                                    log_writer=log_writer)
+
 
     torch.cuda.benchmark = False
 
@@ -589,10 +605,7 @@ def main(args):
     if args.wandb is not None and args.wandb:
         wandb.init(project=args.project_name, sync_tensorboard=True, )
   
-    log_writer = SummaryWriter(log_dir=log_folder, 
-                                   flush_secs=5,
-                                   comment="EveryDream2FineTunes",
-                                  )
+
 
     def log_args(log_writer, args):
         arglog = "args:\n"
@@ -643,35 +656,7 @@ def main(args):
     logging.info(f" saving ckpts every {args.ckpt_every_n_minutes} minutes")
     logging.info(f" saving ckpts every {args.save_every_n_epochs } epochs")
 
-
-    def collate_fn(batch):
-        """
-        Collates batches
-        """
-        images = [example["image"] for example in batch]
-        captions = [example["caption"] for example in batch]
-        tokens = [example["tokens"] for example in batch]
-        runt_size = batch[0]["runt_size"]
-
-        images = torch.stack(images)
-        images = images.to(memory_format=torch.contiguous_format).float()
-
-        ret = {
-            "tokens": torch.stack(tuple(tokens)),
-            "image": images,
-            "captions": captions,
-            "runt_size": runt_size,
-        }
-        del batch
-        return ret
-
-    train_dataloader = torch.utils.data.DataLoader(
-        train_batch,
-        batch_size=args.batch_size,
-        shuffle=False,
-        num_workers=0,
-        collate_fn=collate_fn
-    )
+    train_dataloader = build_torch_dataloader(train_batch, batch_size=args.batch_size)
 
     unet.train() if not args.disable_unet_training else unet.eval()
     text_encoder.train() if not args.disable_textenc_training else text_encoder.eval() 
@@ -709,7 +694,49 @@ def main(args):
     loss_log_step = []
 
     assert len(train_batch) > 0, "train_batch is empty, check that your data_root is correct"
-    
+
+    # actual prediction function - shared between train and validate
+    def get_model_prediction_and_target(image, tokens):
+        with torch.no_grad():
+            with autocast(enabled=args.amp):
+                pixel_values = image.to(memory_format=torch.contiguous_format).to(unet.device)
+                latents = vae.encode(pixel_values, return_dict=False)
+            del pixel_values
+            latents = latents[0].sample() * 0.18215
+
+            noise = torch.randn_like(latents)
+            bsz = latents.shape[0]
+
+            timesteps = torch.randint(0, noise_scheduler.config.num_train_timesteps, (bsz,), device=latents.device)
+            timesteps = timesteps.long()
+
+            cuda_caption = tokens.to(text_encoder.device)
+
+        # with autocast(enabled=args.amp):
+        encoder_hidden_states = text_encoder(cuda_caption, output_hidden_states=True)
+
+        if args.clip_skip > 0:
+            encoder_hidden_states = text_encoder.text_model.final_layer_norm(
+                encoder_hidden_states.hidden_states[-args.clip_skip])
+        else:
+            encoder_hidden_states = encoder_hidden_states.last_hidden_state
+
+        noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
+
+        if noise_scheduler.config.prediction_type == "epsilon":
+            target = noise
+        elif noise_scheduler.config.prediction_type in ["v_prediction", "v-prediction"]:
+            target = noise_scheduler.get_velocity(latents, noise, timesteps)
+        else:
+            raise ValueError(f"Unknown prediction type {noise_scheduler.config.prediction_type}")
+        del noise, latents, cuda_caption
+
+        with autocast(enabled=args.amp):
+            model_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
+
+        return model_pred, target
+
+
     try:
         # # dummy batch to pin memory to avoid fragmentation in torch, uses square aspect which is maximum bytes size per aspects.py
         # pixel_values = torch.randn_like(torch.zeros([args.batch_size, 3, args.resolution, args.resolution]))
@@ -729,6 +756,10 @@ def main(args):
         # # discard the grads, just want to pin memory
         # optimizer.zero_grad(set_to_none=True)
 
+
+
+
+
         for epoch in range(args.max_epochs):
             loss_epoch = []
             epoch_start_time = time.time()
@@ -741,41 +772,7 @@ def main(args):
             for step, batch in enumerate(train_dataloader):
                 step_start_time = time.time()
 
-                with torch.no_grad():
-                    with autocast(enabled=args.amp):     
-                        pixel_values = batch["image"].to(memory_format=torch.contiguous_format).to(unet.device)
-                        latents = vae.encode(pixel_values, return_dict=False)
-                    del pixel_values
-                    latents = latents[0].sample() * 0.18215
-
-                    noise = torch.randn_like(latents)
-                    bsz = latents.shape[0]
-
-                    timesteps = torch.randint(0, noise_scheduler.config.num_train_timesteps, (bsz,), device=latents.device)
-                    timesteps = timesteps.long()
-
-                    cuda_caption = batch["tokens"].to(text_encoder.device)
-
-                #with autocast(enabled=args.amp):
-                encoder_hidden_states = text_encoder(cuda_caption, output_hidden_states=True)
-
-                if args.clip_skip > 0:
-                    encoder_hidden_states = text_encoder.text_model.final_layer_norm(encoder_hidden_states.hidden_states[-args.clip_skip])
-                else:
-                    encoder_hidden_states = encoder_hidden_states.last_hidden_state
-
-                noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
-
-                if noise_scheduler.config.prediction_type == "epsilon":
-                    target = noise
-                elif noise_scheduler.config.prediction_type in ["v_prediction", "v-prediction"]:
-                    target = noise_scheduler.get_velocity(latents, noise, timesteps)
-                else:
-                    raise ValueError(f"Unknown prediction type {noise_scheduler.config.prediction_type}")
-                del noise, latents, cuda_caption
-
-                with autocast(enabled=args.amp):
-                    model_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
+                model_pred, target = get_model_prediction_and_target(batch["image"], batch["tokens"])
 
                 #del timesteps, encoder_hidden_states, noisy_latents
                 #with autocast(enabled=args.amp):
@@ -882,7 +879,12 @@ def main(args):
 
             loss_local = sum(loss_epoch) / len(loss_epoch)
             log_writer.add_scalar(tag="loss/epoch", scalar_value=loss_local, global_step=global_step)
+
+            # validate
+            validator.do_validation_if_appropriate(epoch, global_step, get_model_prediction_and_target)
+
             gc.collect()
+
             # end of epoch
 
         # end of training
@@ -928,6 +930,9 @@ def update_old_args(t_args):
     if not hasattr(t_args, "rated_dataset_target_dropout_percent"):
         print(f" Config json is missing 'rated_dataset_target_dropout_percent' flag")
         t_args.__dict__["rated_dataset_target_dropout_percent"] = 50
+    if not hasattr(t_args, "validation_config"):
+        print(f" Config json is missing 'validation_config' flag")
+        t_args.__dict__["validation_config"] = None
 
 
 if __name__ == "__main__":
@@ -955,6 +960,7 @@ if __name__ == "__main__":
         argparser.add_argument("--clip_skip", type=int, default=0, help="Train using penultimate layer (def: 0) (2 is 'penultimate')", choices=[0, 1, 2, 3, 4])
         argparser.add_argument("--cond_dropout", type=float, default=0.04, help="Conditional drop out as decimal 0.0-1.0, see docs for more info (def: 0.04)")
         argparser.add_argument("--data_root", type=str, default="input", help="folder where your training images are")
+        argparser.add_argument("--validation_config", type=str, default=None, help="(optional) path to the validation config file (.json)")
         argparser.add_argument("--disable_textenc_training", action="store_true", default=False, help="disables training of text encoder (def: False)")
         argparser.add_argument("--disable_unet_training", action="store_true", default=False, help="disables training of unet (def: False) NOT RECOMMENDED")
         argparser.add_argument("--disable_xformers", action="store_true", default=False, help="disable xformers, may reduce performance (def: False)")

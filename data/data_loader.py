@@ -32,23 +32,49 @@ class DataLoaderMultiAspect():
     """
     Data loader for multi-aspect-ratio training and bucketing
 
-    data_root: root folder of training data
+    data: either a str indicating the root path of all your training images, will be recursively searched for images; or a list of ImageTrainItem
     batch_size: number of images per batch
     flip_p: probability of flipping image horizontally (i.e. 0-0.5)
     """
-    def __init__(self, data_root, seed=555, debug_level=0, batch_size=1, flip_p=0.0, resolution=512, log_folder=None):
-        self.data_root = data_root
+    def __init__(self, data, seed=555, debug_level=0, batch_size=1, flip_p=0.0, resolution=512, log_folder=None, name='train'):
+        self.data = data
         self.debug_level = debug_level
         self.flip_p = flip_p
         self.log_folder = log_folder
         self.seed = seed
         self.batch_size = batch_size
         self.has_scanned = False
+        self.name = name
         self.aspects = aspects.get_aspect_buckets(resolution=resolution, square_only=False)
-        
+
         logging.info(f"* DLMA resolution {resolution}, buckets: {self.aspects}")
+
         self.__prepare_train_data()
+        self.__update_ratings()
+
+    def __update_ratings(self):
         (self.rating_overall_sum, self.ratings_summed) = self.__sort_and_precalc_image_ratings()
+
+
+    def get_random_split(self, split_proportion: float, remove_from_dataset: bool=False) -> list[ImageTrainItem]:
+        item_count = math.ceil(split_proportion * len(self.prepared_train_data) // self.batch_size) * self.batch_size
+        items_copy = self.prepared_train_data.copy()
+        random.shuffle(items_copy)
+        split_items = items_copy[:item_count]
+        if remove_from_dataset:
+            self.delete_items(split_items)
+        return split_items
+
+
+    def delete_items(self, items: list[ImageTrainItem]):
+        #old_item_count = len(self.prepared_train_data)
+        for item_to_delete in items:
+            try:
+                matching_item = next(i for i in self.prepared_train_data if i.pathname==item_to_delete.pathname)
+                self.prepared_train_data.remove(matching_item)
+            except StopIteration:
+                raise ValueError(f"tried to remove {item_to_delete} but couldn't find it")
+        self.__update_ratings()
 
 
     def __pick_multiplied_set(self, randomizer):
@@ -86,7 +112,7 @@ class DataLoaderMultiAspect():
         del data_copy
         return picked_images
 
-    def get_shuffled_image_buckets(self, dropout_fraction: float = 1.0):
+    def get_shuffled_image_buckets(self, dropout_fraction: float = 1.0) -> list[ImageTrainItem]:
         """
         returns the current list of images including their captions in a randomized order,
         sorted into buckets with same sized images
@@ -132,7 +158,7 @@ class DataLoaderMultiAspect():
                     buckets[bucket].extend(runt_bucket)
 
         # flatten the buckets
-        image_caption_pairs = []
+        image_caption_pairs: list[ImageTrainItem] = []
         for bucket in buckets:
             image_caption_pairs.extend(buckets[bucket])
 
@@ -149,25 +175,27 @@ class DataLoaderMultiAspect():
 
         return rating_overall_sum, ratings_summed
 
-    def __prepare_train_data(self, flip_p=0.0) -> list[ImageTrainItem]:
+    def __prepare_train_data(self, flip_p=0.0):
         """
         Create ImageTrainItem objects with metadata for hydration later
         """
-
         if not self.has_scanned:
             self.has_scanned = True
             
-            logging.info(" Preloading images...")
-            
-            items = resolver.resolve(self.data_root, self.aspects, flip_p=flip_p, seed=self.seed)
-            image_paths = set(map(lambda item: item.pathname, items))
-
-            print (f" * DLMA: {len(items)} images loaded from {len(image_paths)} files")
+            if type(self.data) is list:
+                items = self.data
+                print (f" * DLMA: {len(items)} images")
+            else:
+                logging.info(" Preloading images...")
+                items = resolver.resolve(self.data, self.aspects, flip_p=flip_p, seed=self.seed)
+                image_paths = set(map(lambda item: item.pathname, items))
+                print (f" * DLMA: {len(items)} images loaded from {len(image_paths)} files")
             
             self.prepared_train_data = [item for item in items if item.error is None]
             random.Random(self.seed).shuffle(self.prepared_train_data)
             self.__report_errors(items)
-    
+
+
     def __report_errors(self, items: list[ImageTrainItem]):
         for item in items:
             if item.error is not None:
@@ -177,7 +205,7 @@ class DataLoaderMultiAspect():
         undersized_items = [item for item in items if item.is_undersized]
 
         if len(undersized_items) > 0:
-            underized_log_path = os.path.join(self.log_folder, "undersized_images.txt")
+            underized_log_path = os.path.join(self.log_folder, f"undersized_images_{self.name}.txt")
             logging.warning(f"{Fore.LIGHTRED_EX} ** Some images are smaller than the target size, consider using larger images{Style.RESET_ALL}")
             logging.warning(f"{Fore.LIGHTRED_EX} ** Check {underized_log_path} for more information.{Style.RESET_ALL}")
             with open(underized_log_path, "w") as undersized_images_file:
@@ -185,6 +213,7 @@ class DataLoaderMultiAspect():
                 for undersized_item in undersized_items:
                     message = f" *** {undersized_item.pathname} with size: {undersized_item.image_size} is smaller than target size: {undersized_item.target_wh}\n"
                     undersized_images_file.write(message)
+
 
     def __pick_random_subset(self, dropout_fraction: float, picker: random.Random) -> list[ImageTrainItem]:
         """
