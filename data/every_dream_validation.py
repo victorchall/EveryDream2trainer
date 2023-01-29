@@ -64,7 +64,7 @@ class EveryDreamValidator:
         with torch.no_grad(), isolate_rng():
             loss_validation_epoch = []
             steps_pbar = tqdm(range(len(dataloader)), position=1)
-            steps_pbar.set_description(f"{Fore.LIGHTCYAN_EX}Steps ({tag}){Style.RESET_ALL}")
+            steps_pbar.set_description(f"{Fore.LIGHTCYAN_EX}Validate ({tag}){Style.RESET_ALL}")
 
             for step, batch in enumerate(dataloader):
                 # ok to override seed here because we are in a `with isolate_rng():` block
@@ -97,9 +97,9 @@ class EveryDreamValidator:
             return None
         elif validation_split_mode == 'automatic':
             return self._build_dataloader_from_automatic_split(train_batch, split_proportion, name='val', enforce_split=True)
-        elif validation_split_mode == 'custom':
+        elif validation_split_mode == 'manual':
             if val_data_root is None:
-                raise ValueError("val_data_root is required for 'split-custom' validation mode")
+                raise ValueError("val_data_root is required for 'manual' validation split mode")
             return self._build_dataloader_from_custom_split(self.val_data_root, reference_train_batch=train_batch)
         else:
             raise ValueError(f"unhandled validation split mode '{validation_split_mode}'")
