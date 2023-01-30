@@ -2,6 +2,7 @@ import json
 import glob
 import os
 import unittest
+import argparse
 
 import PIL.Image as Image
 
@@ -10,12 +11,17 @@ import data.resolver as resolver
 
 DATA_PATH = os.path.abspath('./test/data')
 JSON_ROOT_PATH = os.path.join(DATA_PATH, 'test_root.json')
-ASPECTS = aspects.get_aspect_buckets(512)
 
 IMAGE_1_PATH = os.path.join(DATA_PATH, 'test1.jpg')
 CAPTION_1_PATH = os.path.join(DATA_PATH, 'test1.txt')
 IMAGE_2_PATH = os.path.join(DATA_PATH, 'test2.jpg')
 IMAGE_3_PATH = os.path.join(DATA_PATH, 'test3.jpg')
+
+ARGS = argparse.Namespace(
+    aspects=aspects.get_aspect_buckets(512),
+    flip_p=0.5,
+    seed=42,
+)
 
 class TestResolve(unittest.TestCase):
     @classmethod
@@ -51,7 +57,7 @@ class TestResolve(unittest.TestCase):
             os.remove(file)    
 
     def test_directory_resolve_with_str(self):
-        items = resolver.resolve(DATA_PATH, ASPECTS)
+        items = resolver.resolve(DATA_PATH, ARGS)
         image_paths = [item.pathname for item in items]
         image_captions = [item.caption for item in items]
         captions = [caption.get_caption() for caption in image_captions]
@@ -69,7 +75,7 @@ class TestResolve(unittest.TestCase):
             'path': DATA_PATH,
         }
         
-        items = resolver.resolve(data_root_spec, ASPECTS)
+        items = resolver.resolve(data_root_spec, ARGS)
         image_paths = [item.pathname for item in items]
         image_captions = [item.caption for item in items]
         captions = [caption.get_caption() for caption in image_captions]
@@ -82,7 +88,7 @@ class TestResolve(unittest.TestCase):
         self.assertEqual(len(undersized_images), 1)
     
     def test_json_resolve_with_str(self):
-        items = resolver.resolve(JSON_ROOT_PATH, ASPECTS)
+        items = resolver.resolve(JSON_ROOT_PATH, ARGS)
         image_paths = [item.pathname for item in items]
         image_captions = [item.caption for item in items]
         captions = [caption.get_caption() for caption in image_captions]
@@ -100,7 +106,7 @@ class TestResolve(unittest.TestCase):
             'path': JSON_ROOT_PATH,
         }
         
-        items = resolver.resolve(data_root_spec, ASPECTS)
+        items = resolver.resolve(data_root_spec, ARGS)
         image_paths = [item.pathname for item in items]
         image_captions = [item.caption for item in items]
         captions = [caption.get_caption() for caption in image_captions]

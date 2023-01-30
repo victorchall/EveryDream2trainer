@@ -38,12 +38,9 @@ class EveryDreamBatch(Dataset):
     jitter: number of pixels to jitter the crop by, only for non-square images
     """
     def __init__(self,
-                 data_root,
-                 flip_p=0.0,
+                 data_loader: dlma,
                  debug_level=0,
-                 batch_size=1,
                  conditional_dropout=0.02,
-                 resolution=512,
                  crop_jitter=20,
                  seed=555,
                  tokenizer=None,
@@ -54,8 +51,8 @@ class EveryDreamBatch(Dataset):
                  rated_dataset=False,
                  rated_dataset_dropout_target=0.5
                  ):
-        self.data_root = data_root
-        self.batch_size = batch_size
+        self.data_loader = data_loader
+        self.batch_size = data_loader.batch_size
         self.debug_level = debug_level
         self.conditional_dropout = conditional_dropout
         self.crop_jitter = crop_jitter
@@ -70,26 +67,11 @@ class EveryDreamBatch(Dataset):
         self.seed = seed
         self.rated_dataset = rated_dataset
         self.rated_dataset_dropout_target = rated_dataset_dropout_target
-
-        if seed == -1:
-            seed = random.randint(0, 99999)
-        
-        if not dls.shared_dataloader:
-            logging.info(" * Creating new dataloader singleton")
-            dls.shared_dataloader = dlma(data_root=data_root,
-                                         seed=seed,
-                                         debug_level=debug_level,
-                                         batch_size=self.batch_size,
-                                         flip_p=flip_p,
-                                         resolution=resolution,
-                                         log_folder=self.log_folder,
-                                        )
-
-        self.image_train_items = dls.shared_dataloader.get_shuffled_image_buckets(1.0) # First epoch always trains on all images
+        self.image_train_items = self.data_loader.get_shuffled_image_buckets(1.0) # First epoch always trains on all images
 
         num_images = len(self.image_train_items)
 
-        logging.info(f" ** Trainer Set: {num_images / batch_size:.0f}, num_images: {num_images}, batch_size: {self.batch_size}")
+        logging.info(f" ** Trainer Set: {num_images / self.batch_size:.0f}, num_images: {num_images}, batch_size: {self.batch_size}")
         if self.write_schedule:
             self.__write_batch_schedule(0)
 

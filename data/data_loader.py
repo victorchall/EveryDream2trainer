@@ -15,15 +15,10 @@ limitations under the License.
 """
 import bisect
 import math
-import os
-import logging
 import copy
 
 import random
 from data.image_train_item import ImageTrainItem
-import data.aspects as aspects
-import data.resolver as resolver
-from colorama import Fore, Style
 import PIL
 
 PIL.Image.MAX_IMAGE_PIXELS = 715827880*4 # increase decompression bomb error limit to 4x default
@@ -34,22 +29,20 @@ class DataLoaderMultiAspect():
 
     data_root: root folder of training data
     batch_size: number of images per batch
-    flip_p: probability of flipping image horizontally (i.e. 0-0.5)
     """
-    def __init__(self, data_root, seed=555, debug_level=0, batch_size=1, flip_p=0.0, resolution=512, log_folder=None):
-        self.data_root = data_root
-        self.debug_level = debug_level
-        self.flip_p = flip_p
-        self.log_folder = log_folder
+    def __init__(self, image_train_items, seed=555, batch_size=1):
         self.seed = seed
         self.batch_size = batch_size
-        self.has_scanned = False
-        self.aspects = aspects.get_aspect_buckets(resolution=resolution, square_only=False)
-        
-        logging.info(f"* DLMA resolution {resolution}, buckets: {self.aspects}")
-        self.__prepare_train_data()
-        (self.rating_overall_sum, self.ratings_summed) = self.__sort_and_precalc_image_ratings()
-
+        # Prepare data
+        self.prepared_train_data = image_train_items
+        random.Random(self.seed).shuffle(self.prepared_train_data)
+        self.prepared_train_data = sorted(self.prepared_train_data, key=lambda img: img.caption.rating())
+        # Initialize ratings
+        self.rating_overall_sum: float = 0.0
+        self.ratings_summed: list[float] = []
+        for image in self.prepared_train_data:
+            self.rating_overall_sum += image.caption.rating()
+            self.ratings_summed.append(self.rating_overall_sum)
 
     def __pick_multiplied_set(self, randomizer):
         """
@@ -137,54 +130,6 @@ class DataLoaderMultiAspect():
             image_caption_pairs.extend(buckets[bucket])
 
         return image_caption_pairs
-
-    def __sort_and_precalc_image_ratings(self) -> tuple[float, list[float]]:
-        self.prepared_train_data = sorted(self.prepared_train_data, key=lambda img: img.caption.rating())
-
-        rating_overall_sum: float = 0.0
-        ratings_summed: list[float] = []
-        for image in self.prepared_train_data:
-            rating_overall_sum += image.caption.rating()
-            ratings_summed.append(rating_overall_sum)
-
-        return rating_overall_sum, ratings_summed
-
-    def __prepare_train_data(self, flip_p=0.0) -> list[ImageTrainItem]:
-        """
-        Create ImageTrainItem objects with metadata for hydration later
-        """
-
-        if not self.has_scanned:
-            self.has_scanned = True
-            
-            logging.info(" Preloading images...")
-            
-            items = resolver.resolve(self.data_root, self.aspects, flip_p=flip_p, seed=self.seed)
-            image_paths = set(map(lambda item: item.pathname, items))
-
-            print (f" * DLMA: {len(items)} images loaded from {len(image_paths)} files")
-            
-            self.prepared_train_data = [item for item in items if item.error is None]
-            random.Random(self.seed).shuffle(self.prepared_train_data)
-            self.__report_errors(items)
-    
-    def __report_errors(self, items: list[ImageTrainItem]):
-        for item in items:
-            if item.error is not None:
-                logging.error(f"{Fore.LIGHTRED_EX} *** Error opening {Fore.LIGHTYELLOW_EX}{item.pathname}{Fore.LIGHTRED_EX} to get metadata. File may be corrupt and will be skipped.{Style.RESET_ALL}")
-                logging.error(f" *** exception: {item.error}")
-        
-        undersized_items = [item for item in items if item.is_undersized]
-
-        if len(undersized_items) > 0:
-            underized_log_path = os.path.join(self.log_folder, "undersized_images.txt")
-            logging.warning(f"{Fore.LIGHTRED_EX} ** Some images are smaller than the target size, consider using larger images{Style.RESET_ALL}")
-            logging.warning(f"{Fore.LIGHTRED_EX} ** Check {underized_log_path} for more information.{Style.RESET_ALL}")
-            with open(underized_log_path, "w") as undersized_images_file:
-                undersized_images_file.write(f" The following images are smaller than the target size, consider removing or sourcing a larger copy:")
-                for undersized_item in undersized_items:
-                    message = f" *** {undersized_item.pathname} with size: {undersized_item.image_size} is smaller than target size: {undersized_item.target_wh}\n"
-                    undersized_images_file.write(message)
 
     def __pick_random_subset(self, dropout_fraction: float, picker: random.Random) -> list[ImageTrainItem]:
         """
