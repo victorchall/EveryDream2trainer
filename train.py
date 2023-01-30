@@ -729,7 +729,7 @@ def main(args):
         train_batch,
         batch_size=args.batch_size,
         shuffle=False,
-        num_workers=1,
+        num_workers=4,
         collate_fn=collate_fn,
         pin_memory=True
     )
