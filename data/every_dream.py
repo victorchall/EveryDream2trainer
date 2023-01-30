@@ -25,14 +25,11 @@ import torch.nn.functional as F
 
 class EveryDreamBatch(Dataset):
     """
-    data_root: root path of all your training images, will be recursively searched for images
-    repeats: how many times to repeat each image in the dataset
-    flip_p: probability of flipping the image horizontally
+    data_loader: `DataLoaderMultiAspect` object
     debug_level: 0=none, 1=print drops due to unfilled batches on aspect ratio buckets, 2=debug info per image, 3=save crops to disk for inspection
-    batch_size: how many images to return in a batch
     conditional_dropout: probability of dropping the caption for a given image
-    resolution: max resolution (relative to square)
-    jitter: number of pixels to jitter the crop by, only for non-square images
+    crop_jitter: number of pixels to jitter the crop by, only for non-square images
+    seed: random seed
     """
     def __init__(self,
                  data_loader: DataLoaderMultiAspect,
