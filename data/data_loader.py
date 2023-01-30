@@ -58,7 +58,8 @@ class DataLoaderMultiAspect():
 
     def get_random_split(self, split_proportion: float, remove_from_dataset: bool=False) -> list[ImageTrainItem]:
         item_count = math.ceil(split_proportion * len(self.prepared_train_data) // self.batch_size) * self.batch_size
-        items_copy = self.prepared_train_data.copy()
+        # sort first, then shuffle, to ensure determinate outcome for the current random state
+        items_copy = list(sorted(self.prepared_train_data, key=lambda i: i.pathname))
         random.shuffle(items_copy)
         split_items = items_copy[:item_count]
         if remove_from_dataset:
