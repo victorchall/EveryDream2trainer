@@ -21,6 +21,7 @@ import math
 import signal
 import argparse
 import logging
+import threading
 import time
 import gc
 import random
@@ -676,18 +677,19 @@ def main(args):
         """
         handles sigterm
         """
-        global interrupted
-        if not interrupted:
-            interrupted=True            
-            global global_step
-            #TODO: save model on ctrl-c
-            interrupted_checkpoint_path = os.path.join(f"{log_folder}/ckpts/interrupted-gs{global_step}")
-            print()
-            logging.error(f"{Fore.LIGHTRED_EX} ************************************************************************{Style.RESET_ALL}")
-            logging.error(f"{Fore.LIGHTRED_EX} CTRL-C received, attempting to save model to {interrupted_checkpoint_path}{Style.RESET_ALL}")
-            logging.error(f"{Fore.LIGHTRED_EX} ************************************************************************{Style.RESET_ALL}")
-            time.sleep(2) # give opportunity to ctrl-C again to cancel save
-            __save_model(interrupted_checkpoint_path, unet, text_encoder, tokenizer, noise_scheduler, vae, args.save_ckpt_dir, args.save_full_precision)
+        if threading.current_thread().__class__.__name__ == '_MainThread':
+            global interrupted
+            if not interrupted:
+                interrupted=True
+                global global_step
+                #TODO: save model on ctrl-c
+                interrupted_checkpoint_path = os.path.join(f"{log_folder}/ckpts/interrupted-gs{global_step}")
+                print()
+                logging.error(f"{Fore.LIGHTRED_EX} ************************************************************************{Style.RESET_ALL}")
+                logging.error(f"{Fore.LIGHTRED_EX} CTRL-C received, attempting to save model to {interrupted_checkpoint_path}{Style.RESET_ALL}")
+                logging.error(f"{Fore.LIGHTRED_EX} ************************************************************************{Style.RESET_ALL}")
+                time.sleep(2) # give opportunity to ctrl-C again to cancel save
+                __save_model(interrupted_checkpoint_path, unet, text_encoder, tokenizer, noise_scheduler, vae, args.save_ckpt_dir, args.save_full_precision)
         exit(_SIGTERM_EXIT_CODE)
 
     signal.signal(signal.SIGINT, sigterm_handler)
@@ -726,8 +728,9 @@ def main(args):
         train_batch,
         batch_size=args.batch_size,
         shuffle=False,
-        num_workers=0,
-        collate_fn=collate_fn
+        num_workers=1,
+        collate_fn=collate_fn,
+        pin_memory=True
     )
 
     unet.train() if not args.disable_unet_training else unet.eval()
