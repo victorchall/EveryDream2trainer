@@ -38,9 +38,7 @@ class EveryDreamBatch(Dataset):
                  crop_jitter=20,
                  seed=555,
                  tokenizer=None,
-                 log_folder=None,
                  retain_contrast=False,
-                 write_schedule=False,
                  shuffle_tags=False,
                  rated_dataset=False,
                  rated_dataset_dropout_target=0.5
@@ -52,10 +50,8 @@ class EveryDreamBatch(Dataset):
         self.crop_jitter = crop_jitter
         self.unloaded_to_idx = 0
         self.tokenizer = tokenizer
-        self.log_folder = log_folder
         self.max_token_length = self.tokenizer.model_max_length
         self.retain_contrast = retain_contrast
-        self.write_schedule = write_schedule
         self.shuffle_tags = shuffle_tags
         self.seed = seed
         self.rated_dataset = rated_dataset
@@ -64,18 +60,7 @@ class EveryDreamBatch(Dataset):
         self.image_train_items = self.data_loader.get_shuffled_image_buckets(1.0)
             
         num_images = len(self.image_train_items)
-
         logging.info(f" ** Trainer Set: {num_images / self.batch_size:.0f}, num_images: {num_images}, batch_size: {self.batch_size}")
-        if self.write_schedule:
-            self.__write_batch_schedule(0)
-
-    def __write_batch_schedule(self, epoch_n):
-        with open(f"{self.log_folder}/ep{epoch_n}_batch_schedule.txt", "w", encoding='utf-8') as f:
-            for i in range(len(self.image_train_items)):
-                try:
-                    f.write(f"step:{int(i / self.batch_size):05}, wh:{self.image_train_items[i].target_wh}, r:{self.image_train_items[i].runt_size}, path:{self.image_train_items[i].pathname}\n")
-                except Exception as e:
-                    logging.error(f" * Error writing to batch schedule for file path: {self.image_train_items[i].pathname}")
 
     def shuffle(self, epoch_n: int, max_epochs: int):
         self.seed += 1
@@ -86,9 +71,6 @@ class EveryDreamBatch(Dataset):
             dropout_fraction = 1.0
 
         self.image_train_items = self.data_loader.get_shuffled_image_buckets(dropout_fraction)
-
-        if self.write_schedule:
-            self.__write_batch_schedule(epoch_n + 1)
 
     def __len__(self):
         return len(self.image_train_items)
