@@ -27,10 +27,11 @@ class DataLoaderMultiAspect():
     """
     Data loader for multi-aspect-ratio training and bucketing
 
-    data_root: root folder of training data
+    image_train_items: list of `lImageTrainItem` objects
+    seed: random seed
     batch_size: number of images per batch
     """
-    def __init__(self, image_train_items, seed=555, batch_size=1):
+    def __init__(self, image_train_items: list[ImageTrainItem], seed=555, batch_size=1):
         self.seed = seed
         self.batch_size = batch_size
         # Prepare data
