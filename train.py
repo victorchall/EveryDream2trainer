@@ -677,7 +677,8 @@ def main(args):
         """
         handles sigterm
         """
-        if threading.current_thread().__class__.__name__ == '_MainThread':
+        is_main_thread = (torch.utils.data.get_worker_info() == None)
+        if is_main_thread:
             global interrupted
             if not interrupted:
                 interrupted=True
