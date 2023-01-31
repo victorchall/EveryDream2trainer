@@ -349,6 +349,29 @@ def read_sample_prompts(sample_prompts_file_path: str):
     return sample_prompts
 
 
+
+def collate_fn(batch):
+    """
+    Collates batches
+    """
+    images = [example["image"] for example in batch]
+    captions = [example["caption"] for example in batch]
+    tokens = [example["tokens"] for example in batch]
+    runt_size = batch[0]["runt_size"]
+
+    images = torch.stack(images)
+    images = images.to(memory_format=torch.contiguous_format).float()
+
+    ret = {
+        "tokens": torch.stack(tuple(tokens)),
+        "image": images,
+        "captions": captions,
+        "runt_size": runt_size,
+    }
+    del batch
+    return ret
+
+
 def main(args):
     """
     Main entry point
@@ -706,27 +729,6 @@ def main(args):
     logging.info(f" saving ckpts every {args.ckpt_every_n_minutes} minutes")
     logging.info(f" saving ckpts every {args.save_every_n_epochs } epochs")
 
-
-    def collate_fn(batch):
-        """
-        Collates batches
-        """
-        images = [example["image"] for example in batch]
-        captions = [example["caption"] for example in batch]
-        tokens = [example["tokens"] for example in batch]
-        runt_size = batch[0]["runt_size"]
-
-        images = torch.stack(images)
-        images = images.to(memory_format=torch.contiguous_format).float()
-
-        ret = {
-            "tokens": torch.stack(tuple(tokens)),
-            "image": images,
-            "captions": captions,
-            "runt_size": runt_size,
-        }
-        del batch
-        return ret
 
     train_dataloader = torch.utils.data.DataLoader(
         train_batch,
