@@ -36,5 +36,5 @@
   "wandb": false,
   "write_schedule": false,
   "rated_dataset": false,
-  "rated_dataset_target_dropout_rate": 50
+  "rated_dataset_target_dropout_percent": 50
 }
