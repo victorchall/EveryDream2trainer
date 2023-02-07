@@ -43,7 +43,13 @@ class EveryDreamValidator:
         self.config = {
             'batch_size': default_batch_size,
             'every_n_epochs': 1,
-            'seed': 555
+            'seed': 555,
+
+            'val_split_mode': 'automatic',
+            'val_split_proportion': 0.15,
+
+            'stabilize_training_loss': False,
+            'stabilize_split_proportion': 0.15
         }
         if val_config_path is not None:
             with open(val_config_path, 'rt') as f:
@@ -114,8 +120,8 @@ class EveryDreamValidator:
 
     def _build_val_dataloader_if_required(self, image_train_items: list[ImageTrainItem], tokenizer)\
             -> tuple[Optional[torch.utils.data.DataLoader], list[ImageTrainItem]]:
-        val_split_mode = self.config.get('val_split_mode', 'automatic')
-        val_split_proportion = self.config.get('val_split_proportion', 0.15)
+        val_split_mode = self.config['val_split_mode']
+        val_split_proportion = self.config['val_split_proportion']
         remaining_train_items = image_train_items
         if val_split_mode == 'none':
             return None, image_train_items
@@ -137,11 +143,11 @@ class EveryDreamValidator:
 
     def _build_train_stabiliser_dataloader_if_required(self, image_train_items: list[ImageTrainItem], tokenizer) \
             -> Optional[torch.utils.data.DataLoader]:
-        stabilize_training_loss = self.config.get('stabilize_training_loss', False)
+        stabilize_training_loss = self.config['stabilize_training_loss']
         if not stabilize_training_loss:
             return None
 
-        stabilize_split_proportion = self.config.get('stabilize_split_proportion', 0.15)
+        stabilize_split_proportion = self.config['stabilize_split_proportion']
         stabilise_items, _ = get_random_split(image_train_items, stabilize_split_proportion, batch_size=self.batch_size)
         stabilize_ed_batch = self._build_ed_batch(stabilise_items, batch_size=self.batch_size, tokenizer=tokenizer,
                                                   name='stabilize-train')
