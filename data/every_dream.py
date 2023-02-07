@@ -41,7 +41,8 @@ class EveryDreamBatch(Dataset):
                  retain_contrast=False,
                  shuffle_tags=False,
                  rated_dataset=False,
-                 rated_dataset_dropout_target=0.5
+                 rated_dataset_dropout_target=0.5,
+                 name='train'
                  ):
         self.data_loader = data_loader
         self.batch_size = data_loader.batch_size
@@ -57,10 +58,18 @@ class EveryDreamBatch(Dataset):
         self.rated_dataset = rated_dataset
         self.rated_dataset_dropout_target = rated_dataset_dropout_target
         # First epoch always trains on all images
-        self.image_train_items = self.data_loader.get_shuffled_image_buckets(1.0)
+        self.image_train_items  = []
+        self.__update_image_train_items(1.0)
+        self.name = name
             
         num_images = len(self.image_train_items)
         logging.info(f" ** Trainer Set: {num_images / self.batch_size:.0f}, num_images: {num_images}, batch_size: {self.batch_size}")
+
+    def get_random_split(self, split_proportion: float, remove_from_dataset: bool=False) -> list[ImageTrainItem]:
+        items = self.data_loader.get_random_split(split_proportion, remove_from_dataset)
+        self.__update_image_train_items(1.0)
+        return items
+
 
     def shuffle(self, epoch_n: int, max_epochs: int):
         self.seed += 1
@@ -69,8 +78,8 @@ class EveryDreamBatch(Dataset):
             dropout_fraction = (max_epochs - (epoch_n * self.rated_dataset_dropout_target)) / max_epochs
         else:
             dropout_fraction = 1.0
-
-        self.image_train_items = self.data_loader.get_shuffled_image_buckets(dropout_fraction)
+            
+        self.__update_image_train_items(dropout_fraction)
 
     def __len__(self):
         return len(self.image_train_items)
@@ -130,3 +139,38 @@ class EveryDreamBatch(Dataset):
         example["caption"] = image_train_tmp.caption
         example["runt_size"] = image_train_tmp.runt_size
         return example
+
+    def __update_image_train_items(self, dropout_fraction: float):
+        self.image_train_items = self.data_loader.get_shuffled_image_buckets(dropout_fraction)
+        
+def build_torch_dataloader(items, batch_size) -> torch.utils.data.DataLoader:
+    dataloader = torch.utils.data.DataLoader(
+        items,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=0,
+        collate_fn=collate_fn
+    )
+    return dataloader
+
+
+def collate_fn(batch):
+    """
+    Collates batches
+    """
+    images = [example["image"] for example in batch]
+    captions = [example["caption"] for example in batch]
+    tokens = [example["tokens"] for example in batch]
+    runt_size = batch[0]["runt_size"]
+
+    images = torch.stack(images)
+    images = images.to(memory_format=torch.contiguous_format).float()
+
+    ret = {
+        "tokens": torch.stack(tuple(tokens)),
+        "image": images,
+        "captions": captions,
+        "runt_size": runt_size,
+    }
+    del batch
+    return ret
