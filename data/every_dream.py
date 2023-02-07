@@ -63,7 +63,7 @@ class EveryDreamBatch(Dataset):
         self.name = name
             
         num_images = len(self.image_train_items)
-        logging.info(f" ** Trainer Set: {num_images / self.batch_size:.0f}, num_images: {num_images}, batch_size: {self.batch_size}")
+        logging.info(f" ** Dataset '{name}': {num_images / self.batch_size:.0f} batches, num_images: {num_images}, batch_size: {self.batch_size}")
 
     def get_random_split(self, split_proportion: float, remove_from_dataset: bool=False) -> list[ImageTrainItem]:
         items = self.data_loader.get_random_split(split_proportion, remove_from_dataset)
