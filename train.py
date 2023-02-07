@@ -966,29 +966,6 @@ def main(args):
     logging.info(f"{Fore.LIGHTWHITE_EX} **** Finished training ****{Style.RESET_ALL}")
     logging.info(f"{Fore.LIGHTWHITE_EX} ***************************{Style.RESET_ALL}")
 
-def update_old_args(t_args):
-    """
-    Update old args to new args to deal with json config loading and missing args for compatibility
-    """
-    if not hasattr(t_args, "shuffle_tags"):
-        print(f" Config json is missing 'shuffle_tags' flag")
-        t_args.__dict__["shuffle_tags"] = False
-    if not hasattr(t_args, "save_full_precision"):
-        print(f" Config json is missing 'save_full_precision' flag")
-        t_args.__dict__["save_full_precision"] = False
-    if not hasattr(t_args, "notebook"):
-        print(f" Config json is missing 'notebook' flag")
-        t_args.__dict__["notebook"] = False
-    if not hasattr(t_args, "disable_unet_training"):
-        print(f" Config json is missing 'disable_unet_training' flag")
-        t_args.__dict__["disable_unet_training"] = False
-    if not hasattr(t_args, "rated_dataset"):
-        print(f" Config json is missing 'rated_dataset' flag")
-        t_args.__dict__["rated_dataset"] = False
-    if not hasattr(t_args, "rated_dataset_target_dropout_percent"):
-        print(f" Config json is missing 'rated_dataset_target_dropout_percent' flag")
-        t_args.__dict__["rated_dataset_target_dropout_percent"] = 50
-
 
 if __name__ == "__main__":
     supported_resolutions = [256, 384, 448, 512, 576, 640, 704, 768, 832, 896, 960, 1024, 1088, 1152]
@@ -1001,7 +978,6 @@ if __name__ == "__main__":
         print(f"Loading training config from {args.config}.")
         with open(args.config, 'rt') as f:
             args.__dict__.update(json.load(f))
-            update_old_args(args) # update args to support older configs
             if len(argv) > 0:
                 print(f"Config .json loaded but there are additional CLI arguments -- these will override values in {args.config}.")
     else:
