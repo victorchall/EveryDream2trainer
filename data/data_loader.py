@@ -169,24 +169,6 @@ class DataLoaderMultiAspect():
 
         return picked_images
 
-    def get_random_split(self, split_proportion: float, remove_from_dataset: bool=False) -> list[ImageTrainItem]:
-        item_count = math.ceil(split_proportion * len(self.prepared_train_data) // self.batch_size) * self.batch_size
-        # sort first, then shuffle, to ensure determinate outcome for the current random state
-        items_copy = list(sorted(self.prepared_train_data, key=lambda i: i.pathname))
-        random.shuffle(items_copy)
-        split_items = items_copy[:item_count]
-        if remove_from_dataset:
-            self.delete_items(split_items)
-        return split_items
-
-    def delete_items(self, items: list[ImageTrainItem]):
-        for item in items:
-            for i, other_item in enumerate(self.prepared_train_data):
-                if other_item.pathname == item.pathname:
-                    self.prepared_train_data.pop(i)
-                    break
-        self.__update_rating_sums()
-
     def __update_rating_sums(self):        
         self.rating_overall_sum: float = 0.0
         self.ratings_summed: list[float] = []

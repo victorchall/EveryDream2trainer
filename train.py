@@ -52,7 +52,8 @@ import wandb
 from torch.utils.tensorboard import SummaryWriter
 from data.data_loader import DataLoaderMultiAspect
 
-from data.every_dream import EveryDreamBatch
+from data.every_dream import EveryDreamBatch, build_torch_dataloader
+from data.every_dream_validation import EveryDreamValidator
 from data.image_train_item import ImageTrainItem
 from utils.huggingface_downloader import try_download_model_from_hf
 from utils.convert_diff_to_ckpt import convert as converter
@@ -349,29 +350,6 @@ def read_sample_prompts(sample_prompts_file_path: str):
     return sample_prompts
 
 
-
-def collate_fn(batch):
-    """
-    Collates batches
-    """
-    images = [example["image"] for example in batch]
-    captions = [example["caption"] for example in batch]
-    tokens = [example["tokens"] for example in batch]
-    runt_size = batch[0]["runt_size"]
-
-    images = torch.stack(images)
-    images = images.to(memory_format=torch.contiguous_format).float()
-
-    ret = {
-        "tokens": torch.stack(tuple(tokens)),
-        "image": images,
-        "captions": captions,
-        "runt_size": runt_size,
-    }
-    del batch
-    return ret
-
-
 def main(args):
     """
     Main entry point
@@ -387,10 +365,13 @@ def main(args):
     seed = args.seed if args.seed != -1 else random.randint(0, 2**30)
     logging.info(f" Seed: {seed}")
     set_seed(seed)
-    gpu = GPU()
-    device = torch.device(f"cuda:{args.gpuid}")
-
-    torch.backends.cudnn.benchmark = True
+    if torch.cuda.is_available():
+        gpu = GPU()
+        device = torch.device(f"cuda:{args.gpuid}")
+        torch.backends.cudnn.benchmark = True
+    else:
+        logging.warning("*** Running on CPU. This is for testing loading/config parsing code only.")
+        device = 'cpu'
 
     log_folder = os.path.join(args.logdir, f"{args.project_name}_{log_time}")
 
@@ -606,6 +587,11 @@ def main(args):
         logging.info(f"{Fore.CYAN} * Training Text and Unet *{Style.RESET_ALL}")
         params_to_train = itertools.chain(unet.parameters(), text_encoder.parameters())
 
+    log_writer = SummaryWriter(log_dir=log_folder,
+                                   flush_secs=5,
+                                   comment="EveryDream2FineTunes",
+                                  )
+
     betas = (0.9, 0.999)
     epsilon = 1e-8
     if args.amp:
@@ -630,8 +616,13 @@ def main(args):
         )
 
     log_optimizer(optimizer, betas, epsilon)
-    
+
+
     image_train_items = resolve_image_train_items(args, log_folder)
+
+    validator = EveryDreamValidator(args.validation_config, log_writer=log_writer, default_batch_size=args.batch_size)
+    # the validation dataset may need to steal some items from image_train_items
+    image_train_items = validator.prepare_validation_splits(image_train_items, tokenizer=tokenizer)
 
     data_loader = DataLoaderMultiAspect(
         image_train_items=image_train_items,
@@ -668,12 +659,7 @@ def main(args):
 
     if args.wandb is not None and args.wandb:
         wandb.init(project=args.project_name, sync_tensorboard=True, )
-  
-    log_writer = SummaryWriter(
-        log_dir=log_folder, 
-        flush_secs=5,
-        comment="EveryDream2FineTunes",
-    )
+
 
     def log_args(log_writer, args):
         arglog = "args:\n"
@@ -729,15 +715,7 @@ def main(args):
     logging.info(f" saving ckpts every {args.ckpt_every_n_minutes} minutes")
     logging.info(f" saving ckpts every {args.save_every_n_epochs } epochs")
 
-
-    train_dataloader = torch.utils.data.DataLoader(
-        train_batch,
-        batch_size=args.batch_size,
-        shuffle=False,
-        num_workers=4,
-        collate_fn=collate_fn,
-        pin_memory=True
-    )
+    train_dataloader = build_torch_dataloader(train_batch, batch_size=args.batch_size)
 
     unet.train() if not args.disable_unet_training else unet.eval()
     text_encoder.train() if not args.disable_textenc_training else text_encoder.eval() 
@@ -775,7 +753,49 @@ def main(args):
     loss_log_step = []
 
     assert len(train_batch) > 0, "train_batch is empty, check that your data_root is correct"
-    
+
+    # actual prediction function - shared between train and validate
+    def get_model_prediction_and_target(image, tokens):
+        with torch.no_grad():
+            with autocast(enabled=args.amp):
+                pixel_values = image.to(memory_format=torch.contiguous_format).to(unet.device)
+                latents = vae.encode(pixel_values, return_dict=False)
+            del pixel_values
+            latents = latents[0].sample() * 0.18215
+
+            noise = torch.randn_like(latents)
+            bsz = latents.shape[0]
+
+            timesteps = torch.randint(0, noise_scheduler.config.num_train_timesteps, (bsz,), device=latents.device)
+            timesteps = timesteps.long()
+
+            cuda_caption = tokens.to(text_encoder.device)
+
+        # with autocast(enabled=args.amp):
+        encoder_hidden_states = text_encoder(cuda_caption, output_hidden_states=True)
+
+        if args.clip_skip > 0:
+            encoder_hidden_states = text_encoder.text_model.final_layer_norm(
+                encoder_hidden_states.hidden_states[-args.clip_skip])
+        else:
+            encoder_hidden_states = encoder_hidden_states.last_hidden_state
+
+        noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
+
+        if noise_scheduler.config.prediction_type == "epsilon":
+            target = noise
+        elif noise_scheduler.config.prediction_type in ["v_prediction", "v-prediction"]:
+            target = noise_scheduler.get_velocity(latents, noise, timesteps)
+        else:
+            raise ValueError(f"Unknown prediction type {noise_scheduler.config.prediction_type}")
+        del noise, latents, cuda_caption
+
+        with autocast(enabled=args.amp):
+            model_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
+
+        return model_pred, target
+
+
     try:
         # # dummy batch to pin memory to avoid fragmentation in torch, uses square aspect which is maximum bytes size per aspects.py
         # pixel_values = torch.randn_like(torch.zeros([args.batch_size, 3, args.resolution, args.resolution]))
@@ -809,41 +829,7 @@ def main(args):
             for step, batch in enumerate(train_dataloader):
                 step_start_time = time.time()
 
-                with torch.no_grad():
-                    with autocast(enabled=args.amp):     
-                        pixel_values = batch["image"].to(memory_format=torch.contiguous_format).to(unet.device)
-                        latents = vae.encode(pixel_values, return_dict=False)
-                    del pixel_values
-                    latents = latents[0].sample() * 0.18215
-
-                    noise = torch.randn_like(latents)
-                    bsz = latents.shape[0]
-
-                    timesteps = torch.randint(0, noise_scheduler.config.num_train_timesteps, (bsz,), device=latents.device)
-                    timesteps = timesteps.long()
-
-                    cuda_caption = batch["tokens"].to(text_encoder.device)
-
-                #with autocast(enabled=args.amp):
-                encoder_hidden_states = text_encoder(cuda_caption, output_hidden_states=True)
-
-                if args.clip_skip > 0:
-                    encoder_hidden_states = text_encoder.text_model.final_layer_norm(encoder_hidden_states.hidden_states[-args.clip_skip])
-                else:
-                    encoder_hidden_states = encoder_hidden_states.last_hidden_state
-
-                noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
-
-                if noise_scheduler.config.prediction_type == "epsilon":
-                    target = noise
-                elif noise_scheduler.config.prediction_type in ["v_prediction", "v-prediction"]:
-                    target = noise_scheduler.get_velocity(latents, noise, timesteps)
-                else:
-                    raise ValueError(f"Unknown prediction type {noise_scheduler.config.prediction_type}")
-                del noise, latents, cuda_caption
-
-                with autocast(enabled=args.amp):
-                    model_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
+                model_pred, target = get_model_prediction_and_target(batch["image"], batch["tokens"])
 
                 #del timesteps, encoder_hidden_states, noisy_latents
                 #with autocast(enabled=args.amp):
@@ -952,6 +938,10 @@ def main(args):
 
             loss_local = sum(loss_epoch) / len(loss_epoch)
             log_writer.add_scalar(tag="loss/epoch", scalar_value=loss_local, global_step=global_step)
+
+            # validate
+            validator.do_validation_if_appropriate(epoch, global_step, get_model_prediction_and_target)
+
             gc.collect()
             # end of epoch
 
