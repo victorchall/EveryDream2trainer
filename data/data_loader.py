@@ -14,11 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 import bisect
+from functools import reduce
 import math
 import copy
 
 import random
-from data.image_train_item import ImageTrainItem
+from data.image_train_item import ImageTrainItem, ImageCaption
 import PIL
 
 PIL.Image.MAX_IMAGE_PIXELS = 715827880*4 # increase decompression bomb error limit to 4x default
@@ -27,23 +28,19 @@ class DataLoaderMultiAspect():
     """
     Data loader for multi-aspect-ratio training and bucketing
 
-    image_train_items: list of `lImageTrainItem` objects
+    image_train_items: list of `ImageTrainItem` objects
     seed: random seed
     batch_size: number of images per batch
     """
     def __init__(self, image_train_items: list[ImageTrainItem], seed=555, batch_size=1):
         self.seed = seed
         self.batch_size = batch_size
-        # Prepare data
         self.prepared_train_data = image_train_items
         random.Random(self.seed).shuffle(self.prepared_train_data)
         self.prepared_train_data = sorted(self.prepared_train_data, key=lambda img: img.caption.rating())
-        # Initialize ratings
         self.rating_overall_sum: float = 0.0
         self.ratings_summed: list[float] = []
-        for image in self.prepared_train_data:
-            self.rating_overall_sum += image.caption.rating()
-            self.ratings_summed.append(self.rating_overall_sum)
+        self.__update_rating_sums()
 
     def __pick_multiplied_set(self, randomizer):
         """
@@ -80,14 +77,17 @@ class DataLoaderMultiAspect():
         del data_copy
         return picked_images
 
-    def get_shuffled_image_buckets(self, dropout_fraction: float = 1.0):
+    def get_shuffled_image_buckets(self, dropout_fraction: float = 1.0) -> list[ImageTrainItem]:
         """
-        returns the current list of images including their captions in a randomized order,
-        sorted into buckets with same sized images
-        if dropout_fraction < 1.0, only a subset of the images will be returned
-        if dropout_fraction >= 1.0, repicks fractional multipliers based on folder/multiply.txt values swept at prescan
+        Returns the current list of `ImageTrainItem` in randomized order,
+        sorted into buckets with same sized images.
+        
+        If dropout_fraction < 1.0, only a subset of the images will be returned.
+        
+        If dropout_fraction >= 1.0, repicks fractional multipliers based on folder/multiply.txt values swept at prescan.
+        
         :param dropout_fraction: must be between 0.0 and 1.0.
-        :return: randomized list of (image, caption) pairs, sorted into same sized buckets
+        :return: Randomized list of `ImageTrainItem` objects
         """
 
         self.seed += 1
@@ -126,11 +126,11 @@ class DataLoaderMultiAspect():
                     buckets[bucket].extend(runt_bucket)
 
         # flatten the buckets
-        image_caption_pairs = []
+        items: list[ImageTrainItem] = []
         for bucket in buckets:
-            image_caption_pairs.extend(buckets[bucket])
+            items.extend(buckets[bucket])
 
-        return image_caption_pairs
+        return items
 
     def __pick_random_subset(self, dropout_fraction: float, picker: random.Random) -> list[ImageTrainItem]:
         """
@@ -168,3 +168,10 @@ class DataLoaderMultiAspect():
             prepared_train_data.pop(pos)
 
         return picked_images
+
+    def __update_rating_sums(self):        
+        self.rating_overall_sum: float = 0.0
+        self.ratings_summed: list[float] = []
+        for item in self.prepared_train_data:
+            self.rating_overall_sum += item.caption.rating()
+            self.ratings_summed.append(self.rating_overall_sum)
