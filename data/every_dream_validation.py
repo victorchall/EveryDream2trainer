@@ -78,7 +78,7 @@ class EveryDreamValidator:
             self.val_dataloader, remaining_train_items = self._build_val_dataloader_if_required(train_items, tokenizer)
             # order is important - if we're removing images from train, this needs to happen before making
             # the overlapping dataloader
-            self.train_overlapping_dataloader = self._build_train_stabiliser_dataloader_if_required(
+            self.train_overlapping_dataloader = self._build_train_stabilizer_dataloader_if_required(
                 remaining_train_items, tokenizer)
             return remaining_train_items
 
@@ -141,15 +141,15 @@ class EveryDreamValidator:
         val_dataloader = build_torch_dataloader(val_ed_batch, batch_size=self.batch_size)
         return val_dataloader, remaining_train_items
 
-    def _build_train_stabiliser_dataloader_if_required(self, image_train_items: list[ImageTrainItem], tokenizer) \
+    def _build_train_stabilizer_dataloader_if_required(self, image_train_items: list[ImageTrainItem], tokenizer) \
             -> Optional[torch.utils.data.DataLoader]:
         stabilize_training_loss = self.config['stabilize_training_loss']
         if not stabilize_training_loss:
             return None
 
         stabilize_split_proportion = self.config['stabilize_split_proportion']
-        stabilise_items, _ = get_random_split(image_train_items, stabilize_split_proportion, batch_size=self.batch_size)
-        stabilize_ed_batch = self._build_ed_batch(stabilise_items, batch_size=self.batch_size, tokenizer=tokenizer,
+        stabilize_items, _ = get_random_split(image_train_items, stabilize_split_proportion, batch_size=self.batch_size)
+        stabilize_ed_batch = self._build_ed_batch(stabilize_items, batch_size=self.batch_size, tokenizer=tokenizer,
                                                   name='stabilize-train')
         stabilize_dataloader = build_torch_dataloader(stabilize_ed_batch, batch_size=self.batch_size)
         return stabilize_dataloader

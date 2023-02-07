@@ -4,7 +4,7 @@
         "val_split_mode": "Either 'automatic' or 'manual', ignored if validate_training is false. 'automatic' val_split_mode picks a random subset of the training set (the number of items is controlled by val_split_proportion) and removes them from training to use as a validation set. 'manual' val_split_mode lets you provide your own folder of validation items (images+captions), specified using 'val_data_root'.",
         "val_split_proportion": "For 'automatic' val_split_mode, how much of the train dataset that should be removed to use for validation. Typical values are 0.15-0.2 (15-20% of the total dataset). Higher is more accurate but slower.",
         "val_data_root": "For 'manual' val_split_mode, the path to a folder containing validation items.",
-        "stabilize_training_loss": "If true, stabilise the train loss curves for `loss/epoch` and `loss/log step` by re-calculating training loss with a fixed random seed, and log the results as `loss/train-stabilized`. This more clearly shows the training progress, but it is not enough alone to tell you if you're overfitting.",
+        "stabilize_training_loss": "If true, stabilize the train loss curves for `loss/epoch` and `loss/log step` by re-calculating training loss with a fixed random seed, and log the results as `loss/train-stabilized`. This more clearly shows the training progress, but it is not enough alone to tell you if you're overfitting.",
         "stabilize_split_proportion": "For stabilize_training_loss, the proportion of the train dataset to overlap for stabilizing the train loss graph. Typical values are 0.15-0.2 (15-20% of the total dataset). Higher is more accurate but slower.",
         "every_n_epochs": "How often to run validation (1=every epoch).",
         "seed": "The seed to use when running validation and stabilization passes."
@@ -13,7 +13,7 @@
     "val_split_mode": "automatic",
     "val_data_root": null,
     "val_split_proportion": 0.15,
-    "stabilize_training_loss": true,
+    "stabilize_training_loss": false,
     "stabilize_split_proportion": 0.15,
     "every_n_epochs": 1,
     "seed": 555
