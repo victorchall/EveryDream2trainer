@@ -63,7 +63,7 @@ class EveryDreamBatch(Dataset):
         self.name = name
             
         num_images = len(self.image_train_items)
-        logging.info(f" ** Trainer Set: {num_images / self.batch_size:.0f}, num_images: {num_images}, batch_size: {self.batch_size}")
+        logging.info(f" ** Dataset '{name}': {num_images / self.batch_size:.0f} batches, num_images: {num_images}, batch_size: {self.batch_size}")
 
     def get_random_split(self, split_proportion: float, remove_from_dataset: bool=False) -> list[ImageTrainItem]:
         items = self.data_loader.get_random_split(split_proportion, remove_from_dataset)
@@ -143,12 +143,12 @@ class EveryDreamBatch(Dataset):
     def __update_image_train_items(self, dropout_fraction: float):
         self.image_train_items = self.data_loader.get_shuffled_image_buckets(dropout_fraction)
         
-def build_torch_dataloader(items, batch_size) -> torch.utils.data.DataLoader:
+def build_torch_dataloader(dataset, batch_size) -> torch.utils.data.DataLoader:
     dataloader = torch.utils.data.DataLoader(
-        items,
+        dataset,
         batch_size=batch_size,
         shuffle=False,
-        num_workers=0,
+        num_workers=4,
         collate_fn=collate_fn
     )
     return dataloader
