@@ -623,6 +623,7 @@ def main(args):
 
     image_train_items = resolve_image_train_items(args, log_folder)
 
+    validator = None
     if args.validation_config is not None:
         validator = EveryDreamValidator(args.validation_config,
                                         default_batch_size=args.batch_size,
@@ -948,7 +949,8 @@ def main(args):
             loss_local = sum(loss_epoch) / len(loss_epoch)
             log_writer.add_scalar(tag="loss/epoch", scalar_value=loss_local, global_step=global_step)
 
-            validator.do_validation_if_appropriate(epoch, global_step, get_model_prediction_and_target) if validator  is not None else None
+            if validator:
+                validator.do_validation_if_appropriate(epoch, global_step, get_model_prediction_and_target)
 
             gc.collect()
             # end of epoch
