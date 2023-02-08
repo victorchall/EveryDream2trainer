@@ -948,8 +948,7 @@ def main(args):
             loss_local = sum(loss_epoch) / len(loss_epoch)
             log_writer.add_scalar(tag="loss/epoch", scalar_value=loss_local, global_step=global_step)
 
-            # validate
-            validator.do_validation_if_appropriate(epoch, global_step, get_model_prediction_and_target)
+            validator.do_validation_if_appropriate(epoch, global_step, get_model_prediction_and_target) if validator  is not None else None
 
             gc.collect()
             # end of epoch
