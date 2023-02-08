@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 import bisect
+import logging
 from functools import reduce
 import math
 import copy
@@ -41,40 +42,27 @@ class DataLoaderMultiAspect():
         self.rating_overall_sum: float = 0.0
         self.ratings_summed: list[float] = []
         self.__update_rating_sums()
+        count_including_multipliers = sum([math.floor(max(i.multiplier, 1)) for i in self.prepared_train_data])
+        if count_including_multipliers > len(self.prepared_train_data):
+            logging.info(f" * DLMA initialized with {len(image_train_items)} items ({count_including_multipliers} items total after applying multipliers)")
+        else:
+            logging.info(f" * DLMA initialized with {len(image_train_items)} items")
+
 
     def __pick_multiplied_set(self, randomizer):
         """
         Deals with multiply.txt whole and fractional numbers
         """
-        #print(f"Picking multiplied set from {len(self.prepared_train_data)}")
-        data_copy = copy.deepcopy(self.prepared_train_data) # deep copy to avoid modifying original multiplier property
-        epoch_size = len(self.prepared_train_data)
         picked_images = []
-
-        # add by whole number part first and decrement multiplier in copy
-        for iti in data_copy:
-            #print(f"check for whole number {iti.multiplier}: {iti.pathname}, remaining {iti.multiplier}")
-            while iti.multiplier >= 1.0:
+        for iti in self.prepared_train_data:
+            multiplier = iti.multiplier
+            while multiplier >= 1:
                 picked_images.append(iti)
-                #print(f"Adding {iti.multiplier}: {iti.pathname}, remaining {iti.multiplier}, , datalen: {len(picked_images)}")
-                iti.multiplier -= 1.0
+                multiplier -= 1
+            # deal with fractional remainder
+            if multiplier > randomizer.uniform(0, 1):
+                picked_images.append(iti)
 
-        remaining = epoch_size - len(picked_images)
-
-        assert remaining >= 0, "Something went wrong with the multiplier calculation"
-
-        # add by remaining fractional numbers by random chance
-        while remaining > 0:
-            for iti in data_copy:
-                if randomizer.uniform(0.0, 1.0) < iti.multiplier:
-                    #print(f"Adding {iti.multiplier}: {iti.pathname}, remaining {remaining}, datalen: {len(data_copy)}")
-                    picked_images.append(iti)
-                    remaining -= 1
-                    iti.multiplier = 0.0
-                if remaining <= 0:
-                    break
-        
-        del data_copy
         return picked_images
 
     def get_shuffled_image_buckets(self, dropout_fraction: float = 1.0) -> list[ImageTrainItem]:

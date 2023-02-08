@@ -128,7 +128,7 @@ class DirectoryResolver(DataResolver):
                         with open(multiply_txt_path, 'r') as f:
                             val = float(f.read().strip())
                             multipliers[current_dir] = val
-                            logging.info(f" * DLMA multiply.txt in {current_dir} set to {val}")
+                            logging.info(f" - multiply.txt in '{current_dir}' set to {val}")
                     except Exception as e:
                         logging.warning(f" * {Fore.LIGHTYELLOW_EX}Error trying to read multiply.txt for {current_dir}: {Style.RESET_ALL}{e}")
                         multipliers[current_dir] = 1.0
@@ -137,16 +137,8 @@ class DirectoryResolver(DataResolver):
             
             caption = ImageCaption.resolve(pathname)
             item = self.image_train_item(pathname, caption, multiplier=multipliers[current_dir])
-            
-            cur_file_multiplier = multipliers[current_dir]
+            items.append(item)
 
-            while cur_file_multiplier >= 1.0:
-                items.append(item)
-                cur_file_multiplier -= 1
-            
-            if cur_file_multiplier > 0:
-                if randomizer.random() < cur_file_multiplier:
-                    items.append(item) 
         return items
         
     @staticmethod

@@ -65,12 +65,6 @@ class EveryDreamBatch(Dataset):
         num_images = len(self.image_train_items)
         logging.info(f" ** Dataset '{name}': {num_images / self.batch_size:.0f} batches, num_images: {num_images}, batch_size: {self.batch_size}")
 
-    def get_random_split(self, split_proportion: float, remove_from_dataset: bool=False) -> list[ImageTrainItem]:
-        items = self.data_loader.get_random_split(split_proportion, remove_from_dataset)
-        self.__update_image_train_items(1.0)
-        return items
-
-
     def shuffle(self, epoch_n: int, max_epochs: int):
         self.seed += 1
         
