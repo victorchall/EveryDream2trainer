@@ -550,6 +550,7 @@ def main(args):
     except Exception as e:
         traceback.print_exc()
         logging.error(" * Failed to load checkpoint *")
+        raise
 
     if args.gradient_checkpointing:
         unet.enable_gradient_checkpointing()
