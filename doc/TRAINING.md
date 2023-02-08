@@ -22,7 +22,7 @@ One particular note is if your path to `data_root` or `resume_ckpt` has backslas
 
 ## Running from the command line with arguments
 
-I recommend you copy one of the examples below and keep it in a text file for future reference.  Your settings are logged in the logs folder, but you'll need to make a command to start training.  
+I recommend you copy one of the examples below and keep it in a text file for future reference.  Your settings are logged in the logs folder, but you'll need to make a command to start training.
 
 Training examples:
 

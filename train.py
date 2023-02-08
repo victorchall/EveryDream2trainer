@@ -623,13 +623,14 @@ def main(args):
 
     image_train_items = resolve_image_train_items(args, log_folder)
 
-    validator = EveryDreamValidator(args.validation_config,
-                                    default_batch_size=args.batch_size,
-                                    resolution=args.resolution,
-                                    log_writer=log_writer,
-                                    )
-    # the validation dataset may need to steal some items from image_train_items
-    image_train_items = validator.prepare_validation_splits(image_train_items, tokenizer=tokenizer)
+    if args.validation_config is not None:
+        validator = EveryDreamValidator(args.validation_config,
+                                        default_batch_size=args.batch_size,
+                                        resolution=args.resolution,
+                                        log_writer=log_writer,
+                                        )
+        # the validation dataset may need to steal some items from image_train_items
+        image_train_items = validator.prepare_validation_splits(image_train_items, tokenizer=tokenizer)
 
     data_loader = DataLoaderMultiAspect(
         image_train_items=image_train_items,

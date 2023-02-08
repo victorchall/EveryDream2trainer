@@ -18,6 +18,7 @@ import logging
 import os.path
 from collections import defaultdict
 import math
+import copy
 
 import random
 from data.image_train_item import ImageTrainItem
@@ -39,9 +40,9 @@ class DataLoaderMultiAspect():
         self.prepared_train_data = image_train_items
         random.Random(self.seed).shuffle(self.prepared_train_data)
         self.prepared_train_data = sorted(self.prepared_train_data, key=lambda img: img.caption.rating())
-        expected_epoch_size = math.floor(sum([i.multiplier for i in self.prepared_train_data]))
-        if expected_epoch_size != len(self.prepared_train_data):
-            logging.info(f" * DLMA initialized with {len(image_train_items)} source images. After applying multipliers, each epoch will train on at least {expected_epoch_size} images.")
+        self.expected_epoch_size = math.floor(sum([i.multiplier for i in self.prepared_train_data]))
+        if self.expected_epoch_size != len(self.prepared_train_data):
+            logging.info(f" * DLMA initialized with {len(image_train_items)} source images. After applying multipliers, each epoch will train on at least {self.expected_epoch_size} images.")
         else:
             logging.info(f" * DLMA initialized with {len(image_train_items)} images.")
 
@@ -55,24 +56,26 @@ class DataLoaderMultiAspect():
         Deals with multiply.txt whole and fractional numbers
         """
         picked_images = []
-        fractional_images_per_directory = defaultdict(list[ImageTrainItem])
-        for iti in self.prepared_train_data:
-            multiplier = iti.multiplier
-            while multiplier >= 1:
+        data_copy = copy.deepcopy(self.prepared_train_data) # deep copy to avoid modifying original multiplier property
+        for iti in data_copy:
+            while iti.multiplier >= 1:
                 picked_images.append(iti)
-                multiplier -= 1
-            # fractional remainders must be dealt with separately
-            if multiplier > 0:
-                directory = os.path.dirname(iti.pathname)
-                fractional_images_per_directory[directory].append(iti)
+                iti.multiplier -= 1
 
-        # resolve fractional parts per-directory
-        for _, fractional_items in fractional_images_per_directory.items():
-            randomizer.shuffle(fractional_items)
-            multiplier = fractional_items[0].multiplier % 1.0
-            count_to_take = math.ceil(multiplier * len(fractional_items))
-            picked_images.extend(fractional_items[:count_to_take])
+        remaining = self.expected_epoch_size - len(picked_images)
 
+        assert remaining >= 0, "Something went wrong with the multiplier calculation"
+
+        # resolve fractional parts, ensure each is only added max once
+        while remaining > 0:
+            for iti in data_copy:
+                if randomizer.random() < iti.multiplier:
+                    picked_images.append(iti)
+                    iti.multiplier = 0
+                    remaining -= 1
+                    if remaining <= 0:
+                        break
+        
         return picked_images
 
     def get_shuffled_image_buckets(self, dropout_fraction: float = 1.0) -> list[ImageTrainItem]:
