@@ -263,7 +263,7 @@ class ImageTrainItem:
         self.multiplier = multiplier
 
         self.image_size = None
-        if image is None:
+        if image is None or len(image) == 0:
             self.image = []
         else:
             self.image = image
