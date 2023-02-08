@@ -14,13 +14,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 import bisect
-from functools import reduce
+import logging
+import os.path
+from collections import defaultdict
 import math
-import copy
 
 import random
-from data.image_train_item import ImageTrainItem, ImageCaption
-import PIL
+from data.image_train_item import ImageTrainItem
+import PIL.Image
 
 PIL.Image.MAX_IMAGE_PIXELS = 715827880*4 # increase decompression bomb error limit to 4x default
 
@@ -38,43 +39,40 @@ class DataLoaderMultiAspect():
         self.prepared_train_data = image_train_items
         random.Random(self.seed).shuffle(self.prepared_train_data)
         self.prepared_train_data = sorted(self.prepared_train_data, key=lambda img: img.caption.rating())
+        expected_epoch_size = math.floor(sum([i.multiplier for i in self.prepared_train_data]))
+        if expected_epoch_size != len(self.prepared_train_data):
+            logging.info(f" * DLMA initialized with {len(image_train_items)} source images. After applying multipliers, each epoch will train on at least {expected_epoch_size} images.")
+        else:
+            logging.info(f" * DLMA initialized with {len(image_train_items)} images.")
+
         self.rating_overall_sum: float = 0.0
         self.ratings_summed: list[float] = []
         self.__update_rating_sums()
 
-    def __pick_multiplied_set(self, randomizer):
+
+    def __pick_multiplied_set(self, randomizer: random.Random):
         """
         Deals with multiply.txt whole and fractional numbers
         """
-        #print(f"Picking multiplied set from {len(self.prepared_train_data)}")
-        data_copy = copy.deepcopy(self.prepared_train_data) # deep copy to avoid modifying original multiplier property
-        epoch_size = len(self.prepared_train_data)
         picked_images = []
-
-        # add by whole number part first and decrement multiplier in copy
-        for iti in data_copy:
-            #print(f"check for whole number {iti.multiplier}: {iti.pathname}, remaining {iti.multiplier}")
-            while iti.multiplier >= 1.0:
+        fractional_images_per_directory = defaultdict(list[ImageTrainItem])
+        for iti in self.prepared_train_data:
+            multiplier = iti.multiplier
+            while multiplier >= 1:
                 picked_images.append(iti)
-                #print(f"Adding {iti.multiplier}: {iti.pathname}, remaining {iti.multiplier}, , datalen: {len(picked_images)}")
-                iti.multiplier -= 1.0
+                multiplier -= 1
+            # fractional remainders must be dealt with separately
+            if multiplier > 0:
+                directory = os.path.dirname(iti.pathname)
+                fractional_images_per_directory[directory].append(iti)
 
-        remaining = epoch_size - len(picked_images)
+        # resolve fractional parts per-directory
+        for _, fractional_items in fractional_images_per_directory.items():
+            randomizer.shuffle(fractional_items)
+            multiplier = fractional_items[0].multiplier % 1.0
+            count_to_take = math.ceil(multiplier * len(fractional_items))
+            picked_images.extend(fractional_items[:count_to_take])
 
-        assert remaining >= 0, "Something went wrong with the multiplier calculation"
-
-        # add by remaining fractional numbers by random chance
-        while remaining > 0:
-            for iti in data_copy:
-                if randomizer.uniform(0.0, 1.0) < iti.multiplier:
-                    #print(f"Adding {iti.multiplier}: {iti.pathname}, remaining {remaining}, datalen: {len(data_copy)}")
-                    picked_images.append(iti)
-                    remaining -= 1
-                    iti.multiplier = 0.0
-                if remaining <= 0:
-                    break
-        
-        del data_copy
         return picked_images
 
     def get_shuffled_image_buckets(self, dropout_fraction: float = 1.0) -> list[ImageTrainItem]:
@@ -110,20 +108,19 @@ class DataLoaderMultiAspect():
                 buckets[(target_wh[0],target_wh[1])] = []
             buckets[(target_wh[0],target_wh[1])].append(image_caption_pair)
 
-        if len(buckets) > 1:
-            for bucket in buckets:
-                truncate_count = len(buckets[bucket]) % batch_size
-                if truncate_count > 0:
-                    runt_bucket = buckets[bucket][-truncate_count:]
-                    for item in runt_bucket:
-                        item.runt_size = truncate_count
-                    while len(runt_bucket) < batch_size:
-                        runt_bucket.append(random.choice(runt_bucket))
+        for bucket in buckets:
+            truncate_count = len(buckets[bucket]) % batch_size
+            if truncate_count > 0:
+                runt_bucket = buckets[bucket][-truncate_count:]
+                for item in runt_bucket:
+                    item.runt_size = truncate_count
+                while len(runt_bucket) < batch_size:
+                    runt_bucket.append(random.choice(runt_bucket))
 
-                    current_bucket_size = len(buckets[bucket])
+                current_bucket_size = len(buckets[bucket])
 
-                    buckets[bucket] = buckets[bucket][:current_bucket_size - truncate_count]
-                    buckets[bucket].extend(runt_bucket)
+                buckets[bucket] = buckets[bucket][:current_bucket_size - truncate_count]
+                buckets[bucket].extend(runt_bucket)
 
         # flatten the buckets
         items: list[ImageTrainItem] = []

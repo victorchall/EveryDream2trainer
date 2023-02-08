@@ -57,7 +57,8 @@ from data.every_dream_validation import EveryDreamValidator
 from data.image_train_item import ImageTrainItem
 from utils.huggingface_downloader import try_download_model_from_hf
 from utils.convert_diff_to_ckpt import convert as converter
-from utils.gpu import GPU
+if torch.cuda.is_available():
+    from utils.gpu import GPU
 import data.aspects as aspects
 import data.resolver as resolver
 
@@ -159,20 +160,21 @@ def append_epoch_log(global_step: int, epoch_pbar, gpu, log_writer, **logs):
     """
     updates the vram usage for the epoch
     """
-    gpu_used_mem, gpu_total_mem = gpu.get_gpu_memory()
-    log_writer.add_scalar("performance/vram", gpu_used_mem, global_step)
-    epoch_mem_color = Style.RESET_ALL
-    if gpu_used_mem > 0.93 * gpu_total_mem:
-        epoch_mem_color = Fore.LIGHTRED_EX
-    elif gpu_used_mem > 0.85 * gpu_total_mem:
-        epoch_mem_color = Fore.LIGHTYELLOW_EX
-    elif gpu_used_mem > 0.7 * gpu_total_mem:
-        epoch_mem_color = Fore.LIGHTGREEN_EX
-    elif gpu_used_mem < 0.5 * gpu_total_mem:
-        epoch_mem_color = Fore.LIGHTBLUE_EX
+    if gpu is not None:
+        gpu_used_mem, gpu_total_mem = gpu.get_gpu_memory()
+        log_writer.add_scalar("performance/vram", gpu_used_mem, global_step)
+        epoch_mem_color = Style.RESET_ALL
+        if gpu_used_mem > 0.93 * gpu_total_mem:
+            epoch_mem_color = Fore.LIGHTRED_EX
+        elif gpu_used_mem > 0.85 * gpu_total_mem:
+            epoch_mem_color = Fore.LIGHTYELLOW_EX
+        elif gpu_used_mem > 0.7 * gpu_total_mem:
+            epoch_mem_color = Fore.LIGHTGREEN_EX
+        elif gpu_used_mem < 0.5 * gpu_total_mem:
+            epoch_mem_color = Fore.LIGHTBLUE_EX
 
-    if logs is not None:
-        epoch_pbar.set_postfix(**logs, vram=f"{epoch_mem_color}{gpu_used_mem}/{gpu_total_mem} MB{Style.RESET_ALL} gs:{global_step}")
+        if logs is not None:
+            epoch_pbar.set_postfix(**logs, vram=f"{epoch_mem_color}{gpu_used_mem}/{gpu_total_mem} MB{Style.RESET_ALL} gs:{global_step}")
 
 
 def set_args_12gb(args):
@@ -326,8 +328,7 @@ def resolve_image_train_items(args: argparse.Namespace, log_folder: str) -> list
     
     # Remove erroneous items
     image_train_items = [item for item in resolved_items if item.error is None]
-    
-    print (f" * DLMA: {len(image_train_items)} images loaded from {len(image_paths)} files")
+    print (f" * Found {len(image_paths)} files in '{args.data_root}'")
     
     return image_train_items
                 
@@ -372,6 +373,7 @@ def main(args):
     else:
         logging.warning("*** Running on CPU. This is for testing loading/config parsing code only.")
         device = 'cpu'
+        gpu = None
 
     log_folder = os.path.join(args.logdir, f"{args.project_name}_{log_time}")
 
@@ -548,6 +550,7 @@ def main(args):
     except Exception as e:
         traceback.print_exc()
         logging.error(" * Failed to load checkpoint *")
+        raise
 
     if args.gradient_checkpointing:
         unet.enable_gradient_checkpointing()
@@ -620,9 +623,13 @@ def main(args):
 
     image_train_items = resolve_image_train_items(args, log_folder)
 
-    #validator = EveryDreamValidator(args.validation_config, log_writer=log_writer, default_batch_size=args.batch_size)
+    validator = EveryDreamValidator(args.validation_config,
+                                    default_batch_size=args.batch_size,
+                                    resolution=args.resolution,
+                                    log_writer=log_writer,
+                                    )
     # the validation dataset may need to steal some items from image_train_items
-    #image_train_items = validator.prepare_validation_splits(image_train_items, tokenizer=tokenizer)
+    image_train_items = validator.prepare_validation_splits(image_train_items, tokenizer=tokenizer)
 
     data_loader = DataLoaderMultiAspect(
         image_train_items=image_train_items,
@@ -710,8 +717,9 @@ def main(args):
     if not os.path.exists(f"{log_folder}/samples/"):
         os.makedirs(f"{log_folder}/samples/")
 
-    gpu_used_mem, gpu_total_mem = gpu.get_gpu_memory()
-    logging.info(f" Pretraining GPU Memory: {gpu_used_mem} / {gpu_total_mem} MB")
+    if gpu is not None:
+        gpu_used_mem, gpu_total_mem = gpu.get_gpu_memory()
+        logging.info(f" Pretraining GPU Memory: {gpu_used_mem} / {gpu_total_mem} MB")
     logging.info(f" saving ckpts every {args.ckpt_every_n_minutes} minutes")
     logging.info(f" saving ckpts every {args.save_every_n_epochs } epochs")
 
@@ -940,7 +948,7 @@ def main(args):
             log_writer.add_scalar(tag="loss/epoch", scalar_value=loss_local, global_step=global_step)
 
             # validate
-            #validator.do_validation_if_appropriate(epoch, global_step, get_model_prediction_and_target)
+            validator.do_validation_if_appropriate(epoch, global_step, get_model_prediction_and_target)
 
             gc.collect()
             # end of epoch
@@ -1021,6 +1029,7 @@ if __name__ == "__main__":
     argparser.add_argument("--shuffle_tags", action="store_true", default=False, help="randomly shuffles CSV tags in captions, for booru datasets")
     argparser.add_argument("--useadam8bit", action="store_true", default=False, help="Use AdamW 8-Bit optimizer, recommended!")
     argparser.add_argument("--wandb", action="store_true", default=False, help="enable wandb logging instead of tensorboard, requires env var WANDB_API_KEY")
+    argparser.add_argument("--validation_config", default=None, help="Path to a JSON configuration file for the validator. Uses defaults if omitted.")
     argparser.add_argument("--write_schedule", action="store_true", default=False, help="write schedule of images and their batches to file (def: False)")
     argparser.add_argument("--rated_dataset", action="store_true", default=False, help="enable rated image set training, to less often train on lower rated images through the epochs")
     argparser.add_argument("--rated_dataset_target_dropout_percent", type=int, default=50, help="how many images (in percent) should be included in the last epoch (Default 50)")

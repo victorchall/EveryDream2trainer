@@ -1,7 +1,9 @@
+import copy
 import json
+import logging
 import math
 import random
-from typing import Callable, Any, Optional
+from typing import Callable, Any, Optional, Generator
 from argparse import Namespace
 
 import torch
@@ -29,22 +31,28 @@ def get_random_split(items: list[ImageTrainItem], split_proportion: float, batch
     remaining_items = list(items_copy[split_item_count:])
     return split_items, remaining_items
 
+def disable_multiplier_and_flip(items: list[ImageTrainItem]) -> Generator[ImageTrainItem, None, None]:
+    for i in items:
+        yield ImageTrainItem(image=i.image, caption=i.caption, aspects=i.aspects, pathname=i.pathname, flip_p=0, multiplier=1)
 
 class EveryDreamValidator:
     def __init__(self,
                  val_config_path: Optional[str],
                  default_batch_size: int,
+                 resolution: int,
                  log_writer: SummaryWriter):
         self.val_dataloader = None
         self.train_overlapping_dataloader = None
 
         self.log_writer = log_writer
+        self.resolution = resolution
 
         self.config = {
             'batch_size': default_batch_size,
             'every_n_epochs': 1,
             'seed': 555,
 
+            'validate_training': True,
             'val_split_mode': 'automatic',
             'val_split_proportion': 0.15,
 
@@ -120,21 +128,24 @@ class EveryDreamValidator:
 
     def _build_val_dataloader_if_required(self, image_train_items: list[ImageTrainItem], tokenizer)\
             -> tuple[Optional[torch.utils.data.DataLoader], list[ImageTrainItem]]:
-        val_split_mode = self.config['val_split_mode']
+        val_split_mode = self.config['val_split_mode'] if self.config['validate_training'] else None
         val_split_proportion = self.config['val_split_proportion']
         remaining_train_items = image_train_items
-        if val_split_mode == 'none':
+        if val_split_mode is None or val_split_mode == 'none':
             return None, image_train_items
         elif val_split_mode == 'automatic':
             val_items, remaining_train_items = get_random_split(image_train_items, val_split_proportion, batch_size=self.batch_size)
+            val_items = list(disable_multiplier_and_flip(val_items))
+            logging.info(f" * Removed {len(val_items)} images from the training set to use for validation")
         elif val_split_mode == 'manual':
             args = Namespace(
-                aspects=aspects.get_aspect_buckets(512),
+                aspects=aspects.get_aspect_buckets(self.resolution),
                 flip_p=0.0,
                 seed=self.seed,
             )
             val_data_root = self.config['val_data_root']
             val_items = resolver.resolve_root(val_data_root, args)
+            logging.info(f" * Loaded {len(val_items)} validation images from {val_data_root}")
         else:
             raise ValueError(f"Unrecognized validation split mode '{val_split_mode}'")
         val_ed_batch = self._build_ed_batch(val_items, batch_size=self.batch_size, tokenizer=tokenizer, name='val')
@@ -149,6 +160,7 @@ class EveryDreamValidator:
 
         stabilize_split_proportion = self.config['stabilize_split_proportion']
         stabilize_items, _ = get_random_split(image_train_items, stabilize_split_proportion, batch_size=self.batch_size)
+        stabilize_items = list(disable_multiplier_and_flip(stabilize_items))
         stabilize_ed_batch = self._build_ed_batch(stabilize_items, batch_size=self.batch_size, tokenizer=tokenizer,
                                                   name='stabilize-train')
         stabilize_dataloader = build_torch_dataloader(stabilize_ed_batch, batch_size=self.batch_size)
