@@ -44,9 +44,9 @@ The value is defaulted at 0.04, which means 4% conditional dropout.  You can set
 
 ## LR tweaking
 
-Learning rate adjustment is a very important part of training.  You can use the default settings, or you can tweak it.  Currently the default is 3e-6, which is higher than EveryDream1 which was defaulted to 1e-6, based on the results of testing and the ability to use larger batch sizes.  You should consider increasing this further if you increase your batch size further (10+) using [gradient checkpointing](#gradient_checkpointing).
+Learning rate adjustment is a very important part of training.  You can use the default settings, or you can tweak it.  You should consider increasing this further if you increase your batch size further (10+) using [gradient checkpointing](#gradient_checkpointing).
 
-    --lr 3e-6 ^
+    --lr 1.5e-6 ^
 
 By default, the learning rate is constant for the entire training session.  However, if you want it to change by itself during training, you can use cosine.
 
