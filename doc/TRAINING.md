@@ -20,10 +20,6 @@ Be careful with editing the json file, as any syntax errors will cause the progr
 
 One particular note is if your path to `data_root` or `resume_ckpt` has backslashes they need to use double \\\ or single /.  There is an example train.json in the repo root.
 
-## Instant sampling
-
-If you want to generate samples *right now* without waiting for the next sample step, **hold** `CTRL+ALT+PAGEUP` on your keyboard.  It will kick off sampling.  Let go of the keys when it starts sampling.
-
 ## Running from the command line with arguments
 
 I recommend you copy one of the examples below and keep it in a text file for future reference.  Your settings are logged in the logs folder, but you'll need to make a command to start training.  
