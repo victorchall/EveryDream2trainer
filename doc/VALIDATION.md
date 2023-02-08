@@ -1,8 +1,12 @@
 # Validation
 
-Validation allows you to split data for evaluating your training progress.  
+*This documentation is incomplete.  Please feel free to contribute to it.*
+
+Validation allows you to use a split of your data for evaluating your training progress.  
 
 When training a specific class, setting aside a portion of the data for validation will allow you to see trend lines you cannot see when purely looking at loss of the training itself.
+
+While loss on your training data should trend downward, if you set aside a validation set, you can see when your validation loss starts to trend upward.  This is a sign that you are overfitting.  You can then adjust your hyperparameters to reduce overfitting, such as reducing LR or reducing training epochs. 
 
 ## How to use validation
 
