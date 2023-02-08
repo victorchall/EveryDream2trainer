@@ -160,20 +160,21 @@ def append_epoch_log(global_step: int, epoch_pbar, gpu, log_writer, **logs):
     """
     updates the vram usage for the epoch
     """
-    gpu_used_mem, gpu_total_mem = gpu.get_gpu_memory()
-    log_writer.add_scalar("performance/vram", gpu_used_mem, global_step)
-    epoch_mem_color = Style.RESET_ALL
-    if gpu_used_mem > 0.93 * gpu_total_mem:
-        epoch_mem_color = Fore.LIGHTRED_EX
-    elif gpu_used_mem > 0.85 * gpu_total_mem:
-        epoch_mem_color = Fore.LIGHTYELLOW_EX
-    elif gpu_used_mem > 0.7 * gpu_total_mem:
-        epoch_mem_color = Fore.LIGHTGREEN_EX
-    elif gpu_used_mem < 0.5 * gpu_total_mem:
-        epoch_mem_color = Fore.LIGHTBLUE_EX
+    if gpu is not None:
+        gpu_used_mem, gpu_total_mem = gpu.get_gpu_memory()
+        log_writer.add_scalar("performance/vram", gpu_used_mem, global_step)
+        epoch_mem_color = Style.RESET_ALL
+        if gpu_used_mem > 0.93 * gpu_total_mem:
+            epoch_mem_color = Fore.LIGHTRED_EX
+        elif gpu_used_mem > 0.85 * gpu_total_mem:
+            epoch_mem_color = Fore.LIGHTYELLOW_EX
+        elif gpu_used_mem > 0.7 * gpu_total_mem:
+            epoch_mem_color = Fore.LIGHTGREEN_EX
+        elif gpu_used_mem < 0.5 * gpu_total_mem:
+            epoch_mem_color = Fore.LIGHTBLUE_EX
 
-    if logs is not None:
-        epoch_pbar.set_postfix(**logs, vram=f"{epoch_mem_color}{gpu_used_mem}/{gpu_total_mem} MB{Style.RESET_ALL} gs:{global_step}")
+        if logs is not None:
+            epoch_pbar.set_postfix(**logs, vram=f"{epoch_mem_color}{gpu_used_mem}/{gpu_total_mem} MB{Style.RESET_ALL} gs:{global_step}")
 
 
 def set_args_12gb(args):
@@ -372,6 +373,7 @@ def main(args):
     else:
         logging.warning("*** Running on CPU. This is for testing loading/config parsing code only.")
         device = 'cpu'
+        gpu = None
 
     log_folder = os.path.join(args.logdir, f"{args.project_name}_{log_time}")
 
@@ -714,8 +716,9 @@ def main(args):
     if not os.path.exists(f"{log_folder}/samples/"):
         os.makedirs(f"{log_folder}/samples/")
 
-    gpu_used_mem, gpu_total_mem = gpu.get_gpu_memory()
-    logging.info(f" Pretraining GPU Memory: {gpu_used_mem} / {gpu_total_mem} MB")
+    if gpu is not None:
+        gpu_used_mem, gpu_total_mem = gpu.get_gpu_memory()
+        logging.info(f" Pretraining GPU Memory: {gpu_used_mem} / {gpu_total_mem} MB")
     logging.info(f" saving ckpts every {args.ckpt_every_n_minutes} minutes")
     logging.info(f" saving ckpts every {args.save_every_n_epochs } epochs")
 

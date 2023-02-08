@@ -39,14 +39,15 @@ class DataLoaderMultiAspect():
         self.prepared_train_data = image_train_items
         random.Random(self.seed).shuffle(self.prepared_train_data)
         self.prepared_train_data = sorted(self.prepared_train_data, key=lambda img: img.caption.rating())
+        self.epoch_size = math.floor(sum([i.multiplier for i in self.prepared_train_data]))
+        if self.epoch_size != len(self.prepared_train_data):
+            logging.info(f" * DLMA initialized with {len(image_train_items)} source images. After applying multipliers, each epoch will train on at least {self.epoch_size} images.")
+        else:
+            logging.info(f" * DLMA initialized with {len(image_train_items)} images.")
+
         self.rating_overall_sum: float = 0.0
         self.ratings_summed: list[float] = []
         self.__update_rating_sums()
-        count_including_multipliers = sum([math.floor(max(i.multiplier, 1)) for i in self.prepared_train_data])
-        if count_including_multipliers > len(self.prepared_train_data):
-            logging.info(f" * DLMA initialized with {len(image_train_items)} items ({count_including_multipliers} items total after applying multipliers)")
-        else:
-            logging.info(f" * DLMA initialized with {len(image_train_items)} items")
 
 
     def __pick_multiplied_set(self, randomizer):
@@ -54,14 +55,28 @@ class DataLoaderMultiAspect():
         Deals with multiply.txt whole and fractional numbers
         """
         picked_images = []
+        fractional_images = []
         for iti in self.prepared_train_data:
             multiplier = iti.multiplier
             while multiplier >= 1:
                 picked_images.append(iti)
                 multiplier -= 1
-            # deal with fractional remainder
-            if multiplier > randomizer.uniform(0, 1):
+            # fractional remainders must be dealt with separately
+            if multiplier > 0:
+                fractional_images.append((iti, multiplier))
+
+        target_epoch_size = self.epoch_size
+        while len(picked_images) < target_epoch_size and len(fractional_images) > 0:
+            # cycle through fractional_images, randomly shifting each over to picked_images based on its multiplier
+            iti, multiplier = fractional_images.pop(0)
+            if randomizer.uniform(0, 1) < multiplier:
+                # shift it over to picked_images
                 picked_images.append(iti)
+            else:
+                # put it back and move on to the next
+                fractional_images.append((iti, multiplier))
+
+        assert len(picked_images) == target_epoch_size, "Something went wrong while attempting to apply multipliers"
 
         return picked_images
 
@@ -98,20 +113,19 @@ class DataLoaderMultiAspect():
                 buckets[(target_wh[0],target_wh[1])] = []
             buckets[(target_wh[0],target_wh[1])].append(image_caption_pair)
 
-        if len(buckets) > 1:
-            for bucket in buckets:
-                truncate_count = len(buckets[bucket]) % batch_size
-                if truncate_count > 0:
-                    runt_bucket = buckets[bucket][-truncate_count:]
-                    for item in runt_bucket:
-                        item.runt_size = truncate_count
-                    while len(runt_bucket) < batch_size:
-                        runt_bucket.append(random.choice(runt_bucket))
+        for bucket in buckets:
+            truncate_count = len(buckets[bucket]) % batch_size
+            if truncate_count > 0:
+                runt_bucket = buckets[bucket][-truncate_count:]
+                for item in runt_bucket:
+                    item.runt_size = truncate_count
+                while len(runt_bucket) < batch_size:
+                    runt_bucket.append(random.choice(runt_bucket))
 
-                    current_bucket_size = len(buckets[bucket])
+                current_bucket_size = len(buckets[bucket])
 
-                    buckets[bucket] = buckets[bucket][:current_bucket_size - truncate_count]
-                    buckets[bucket].extend(runt_bucket)
+                buckets[bucket] = buckets[bucket][:current_bucket_size - truncate_count]
+                buckets[bucket].extend(runt_bucket)
 
         # flatten the buckets
         items: list[ImageTrainItem] = []
