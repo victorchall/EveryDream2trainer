@@ -1,3 +1,6 @@
+## For Runpod instructions see [Runpod.ipynb](/installers/Runpod.ipynb)
+## For Google Colab see [Train_Colab.ipynb](/Train_Colab.ipynb)
+
 ## Install Python
 
 Install Python 3.10 from here if you do not already have Python 3.10.x installed.
