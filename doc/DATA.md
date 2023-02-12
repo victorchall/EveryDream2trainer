@@ -4,7 +4,7 @@ Since this trainer relies on having captions for your training images you will n
 
 There are two currently supported methods to retrieve captions:
 
-1. Name the files with the caption.  Underscore marks the end of the captoin (ex. "john smith on a boat_999.jpg")
+1. Name the files with the caption.  Underscore marks the end of the caption (ex. "john smith on a boat_999.jpg")
 2. Put your captions for each image in a .txt file with the same name as the image.  All UTF-8 text is supported with no reserved or special case characters. (ex. 00001.jpg, 00001.txt)
 
 You will need to place all your images and captions into a folder.  Inside that folder, you can use subfolders to organize data as you please.  The trainer will recursively search for images and captions.  It may be useful, for instance, to split each character into a subfolder, and have other subfolders for cityscapes, etc.
