@@ -279,22 +279,22 @@ def setup_args(args):
     return args
 
 def update_grad_scaler(scaler: GradScaler, global_step, epoch, step):
-    if global_step == 250 or (epoch == 4 and step == 1):
+    if global_step == 500:
         factor = 1.8
         scaler.set_growth_factor(factor)
         scaler.set_backoff_factor(1/factor)
         scaler.set_growth_interval(50)
-    if global_step == 500 or (epoch == 8 and step == 1):
+    if global_step == 1000:
         factor = 1.6
         scaler.set_growth_factor(factor)
         scaler.set_backoff_factor(1/factor)
         scaler.set_growth_interval(50)
-    if global_step == 1000 or (epoch == 10 and step == 1):
+    if global_step == 2000:
         factor = 1.3
         scaler.set_growth_factor(factor)
         scaler.set_backoff_factor(1/factor)
         scaler.set_growth_interval(100)
-    if global_step == 3000 or (epoch == 20 and step == 1):
+    if global_step == 4000:
         factor = 1.15
         scaler.set_growth_factor(factor)
         scaler.set_backoff_factor(1/factor)
@@ -598,7 +598,7 @@ def main(args):
     betas = (0.9, 0.999)
     epsilon = 1e-8
     if args.amp:
-        epsilon = 1e-8
+        epsilon = 2e-8
     
     weight_decay = 0.01
     if args.useadam8bit:
@@ -667,7 +667,7 @@ def main(args):
     )
 
     if args.wandb is not None and args.wandb:
-        wandb.init(project=args.project_name, sync_tensorboard=True, )
+        wandb.init(project=args.project_name, sync_tensorboard=True, dir=args.logdir, config=args)
 
 
     def log_args(log_writer, args):
@@ -847,6 +847,10 @@ def main(args):
 
                 del target, model_pred
 
+                if batch["runt_size"] > 0:
+                    loss_scale = batch["runt_size"] / args.batch_size
+                    loss = loss * loss_scale
+
                 scaler.scale(loss).backward()
 
                 if args.clip_grad_norm is not None:
@@ -854,17 +858,6 @@ def main(args):
                         torch.nn.utils.clip_grad_norm_(parameters=unet.parameters(), max_norm=args.clip_grad_norm)
                     if not args.disable_textenc_training:
                         torch.nn.utils.clip_grad_norm_(parameters=text_encoder.parameters(), max_norm=args.clip_grad_norm)
-
-                if batch["runt_size"] > 0:
-                    grad_scale = batch["runt_size"] / args.batch_size
-                    with torch.no_grad(): # not required? just in case for now, needs more testing
-                        for param in unet.parameters():
-                            if param.grad is not None:
-                                param.grad *= grad_scale
-                        if text_encoder.training:
-                            for param in text_encoder.parameters():
-                                if param.grad is not None:
-                                    param.grad *= grad_scale
 
                 if ((global_step + 1) % args.grad_accum == 0) or (step == epoch_len - 1):
                     scaler.step(optimizer)
@@ -875,7 +868,7 @@ def main(args):
 
                 loss_step = loss.detach().item()
 
-                steps_pbar.set_postfix({"loss/step": loss_step},{"gs": global_step})
+                steps_pbar.set_postfix({"loss/step": loss_step}, {"gs": global_step})
                 steps_pbar.update(1)
 
                 images_per_sec = args.batch_size / (time.time() - step_start_time)
@@ -925,7 +918,7 @@ def main(args):
                     save_path = os.path.join(f"{log_folder}/ckpts/{args.project_name}-ep{epoch:02}-gs{global_step:05}")
                     __save_model(save_path, unet, text_encoder, tokenizer, noise_scheduler, vae, args.save_ckpt_dir, yaml, args.save_full_precision)
 
-                if epoch > 0 and epoch % args.save_every_n_epochs == 0 and step == 1 and epoch < args.max_epochs - 1:
+                if epoch > 0 and epoch % args.save_every_n_epochs == 0 and step == 1 and epoch < args.max_epochs - 1 and epoch >= args.save_ckpts_from_n_epochs:
                     logging.info(f" Saving model, {args.save_every_n_epochs} epochs at step {global_step}")
                     save_path = os.path.join(f"{log_folder}/ckpts/{args.project_name}-ep{epoch:02}-gs{global_step:05}")
                     __save_model(save_path, unet, text_encoder, tokenizer, noise_scheduler, vae, args.save_ckpt_dir, yaml, args.save_full_precision)
@@ -1024,6 +1017,7 @@ if __name__ == "__main__":
     argparser.add_argument("--sample_steps", type=int, default=250, help="Number of steps between samples (def: 250)")
     argparser.add_argument("--save_ckpt_dir", type=str, default=None, help="folder to save checkpoints to (def: root training folder)")
     argparser.add_argument("--save_every_n_epochs", type=int, default=None, help="Save checkpoint every n epochs, def: 0 (disabled)")
+    argparser.add_argument("--save_ckpts_from_n_epochs", type=int, default=0, help="Only saves checkpoints starting an N epochs, def: 0 (disabled)")
     argparser.add_argument("--save_full_precision", action="store_true", default=False, help="save ckpts at full FP32")
     argparser.add_argument("--save_optimizer", action="store_true", default=False, help="saves optimizer state with ckpt, useful for resuming training later")
     argparser.add_argument("--scale_lr", action="store_true", default=False, help="automatically scale up learning rate based on batch size and grad accumulation (def: False)")
