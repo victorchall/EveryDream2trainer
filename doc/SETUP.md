@@ -1,4 +1,4 @@
-## For Runpod instructions see [Runpod.ipynb](/installers/Runpod.ipynb)
+## For Runpod/Vast instructions see [Cloud Setup](/doc/CLOUD_SETUP.md)
 ## For Google Colab see [Train_Colab.ipynb](/Train_Colab.ipynb)
 
 ## Install Python
