@@ -19,6 +19,7 @@ class DataResolver:
         self.aspects = args.aspects
         self.flip_p = args.flip_p
         self.seed = args.seed
+        self.ignore_multiply = args.ignore_multiply
         
     def image_train_items(self, data_root: str) -> list[ImageTrainItem]:
         """
@@ -122,18 +123,22 @@ class DirectoryResolver(DataResolver):
             current_dir = os.path.dirname(pathname)
             
             if current_dir not in multipliers:
-                multiply_txt_path = os.path.join(current_dir, "multiply.txt")
-                if os.path.exists(multiply_txt_path):
-                    try:
-                        with open(multiply_txt_path, 'r') as f:
-                            val = float(f.read().strip())
-                            multipliers[current_dir] = val
-                            logging.info(f" - multiply.txt in '{current_dir}' set to {val}")
-                    except Exception as e:
-                        logging.warning(f" * {Fore.LIGHTYELLOW_EX}Error trying to read multiply.txt for {current_dir}: {Style.RESET_ALL}{e}")
-                        multipliers[current_dir] = 1.0
-                else:
+                if self.ignore_multiply:
                     multipliers[current_dir] = 1.0
+                    logging.info(f"Ignoring 'multiply.txt' file found in '{os.path.dirname(pathname)}' directory due to --ignore-multiply flag.")
+                else:
+                    multiply_txt_path = os.path.join(current_dir, "multiply.txt")
+                    if os.path.exists(multiply_txt_path):
+                        try:
+                            with open(multiply_txt_path, 'r') as f:
+                                val = float(f.read().strip())
+                                multipliers[current_dir] = val
+                                logging.info(f" - multiply.txt in '{current_dir}' set to {val}")
+                        except Exception as e:
+                            logging.warning(f" * {Fore.LIGHTYELLOW_EX}Error trying to read multiply.txt for {current_dir}: {Style.RESET_ALL}{e}")
+                            multipliers[current_dir] = 1.0
+                    else:
+                        multipliers[current_dir] = 1.0
             
             caption = ImageCaption.resolve(pathname)
             item = self.image_train_item(pathname, caption, multiplier=multipliers[current_dir])
