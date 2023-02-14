@@ -47,4 +47,4 @@ Make sure to check out the [tools repo](https://github.com/victorchall/EveryDrea
 
 [Free tier Google Colab notebook](https://colab.research.google.com/github/victorchall/EveryDream2trainer/blob/main/Train_Colab.ipynb)
 
-[Runpod Installer](/installers/Runpod.ipynb)
+[RunPod / Vast](/doc/CLOUD_SETUP.md)
