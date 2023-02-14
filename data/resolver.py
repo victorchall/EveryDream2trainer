@@ -219,4 +219,4 @@ def resolve(value: typing.Union[dict, str], args: argparse.Namespace) -> list[Im
         items = []
         for item in value:
             items += resolve(item, args)
-        return items
+        return items 
