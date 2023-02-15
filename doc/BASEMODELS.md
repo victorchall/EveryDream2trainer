@@ -52,7 +52,7 @@ And the SD2.1 768 model (uses v2-v yaml and "v_prediction" prediction type):
     --image_size 768 ^
     --checkpoint_path v2-1_768-nonema-pruned.ckpt ^
     --prediction_type v_prediction ^
-    --upcast_attn False ^
+    --upcast_attn True ^
     --dump_path "ckpt_cache/v2-1_768-nonema-pruned"
 
 And finally the SD2.0 512 base model (generally not recommended base model):
@@ -62,7 +62,7 @@ And finally the SD2.0 512 base model (generally not recommended base model):
     --image_size 512 ^
     --checkpoint_path 512-base-ema.ckpt ^
     --prediction_type epsilon ^
-    --upcast_attn False ^
+    --upcast_attn True ^
     --dump_path "ckpt_cache/512-base-ema"
 
 If you have other models, you need to know the base model that was used for them, **in particular use the correct yaml (original_config_file) or it will not properly convert.** Make sure to put some sort of name in the dump_path after "ckpt_cache/" so you can reference it later.
