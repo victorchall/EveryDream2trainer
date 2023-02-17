@@ -824,7 +824,7 @@ if __name__ == "__main__":
         type=str,
         help=(
             "The prediction type that the model was trained on. Use 'epsilon' for Stable Diffusion v1.X and Stable"
-            " Siffusion v2 Base. Use 'v-prediction' for Stable Diffusion v2."
+            " Diffusion v2 Base. Use 'v-prediction' for Stable Diffusion v2."
         ),
     )
     parser.add_argument(
