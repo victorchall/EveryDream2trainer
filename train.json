@@ -39,5 +39,5 @@
   "write_schedule": false,
   "rated_dataset": false,
   "rated_dataset_target_dropout_percent": 50,
-  "zero_frequency_noise_ratio": 0.0
+  "zero_frequency_noise_ratio": 0.02
 }
