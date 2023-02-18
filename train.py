@@ -31,17 +31,16 @@ import importlib
 
 import torch.nn.functional as F
 from torch.cuda.amp import autocast, GradScaler
-import torchvision.transforms as transforms
 
-from colorama import Fore, Style, Cursor
+from colorama import Fore, Style
 import numpy as np
 import itertools
 import torch
 import datetime
 import json
-from PIL import Image, ImageDraw, ImageFont
 
-from diffusers import StableDiffusionPipeline, AutoencoderKL, UNet2DConditionModel, DDIMScheduler, DDPMScheduler, PNDMScheduler, EulerAncestralDiscreteScheduler
+from diffusers import StableDiffusionPipeline, AutoencoderKL, UNet2DConditionModel, DDIMScheduler, DDPMScheduler, \
+    DPMSolverMultistepScheduler
 #from diffusers.models import AttentionBlock
 from diffusers.optimization import get_scheduler
 from diffusers.utils.import_utils import is_xformers_available
@@ -62,15 +61,10 @@ if torch.cuda.is_available():
     from utils.gpu import GPU
 import data.aspects as aspects
 import data.resolver as resolver
+from utils.sample_generator import SampleGenerator
 
 _SIGTERM_EXIT_CODE = 130
 _VERY_LARGE_NUMBER = 1e9
-
-def clean_filename(filename):
-    """
-    removes all non-alphanumeric characters from a string so it is safe to use as a filename
-    """
-    return "".join([c for c in filename if c.isalpha() or c.isdigit() or c==' ']).rstrip()
 
 def get_hf_ckpt_cache_path(ckpt_path):
     return os.path.join("ckpt_cache", os.path.basename(ckpt_path))
@@ -425,108 +419,6 @@ def main(args):
         #     logging.info(f" Saving optimizer state to {save_path}")
         #     self.save_optimizer(self.ctx.optimizer, optimizer_path)
 
-    @torch.no_grad()
-    def __create_inference_pipe(unet, text_encoder, tokenizer, scheduler, vae):
-        """
-        creates a pipeline for SD inference
-        """
-        pipe = StableDiffusionPipeline(
-            vae=vae,
-            text_encoder=text_encoder,
-            tokenizer=tokenizer,
-            unet=unet,
-            scheduler=scheduler,
-            safety_checker=None, # save vram
-            requires_safety_checker=None, # avoid nag
-            feature_extractor=None, # must be none of no safety checker
-        )
-
-        return pipe
-
-    def __generate_sample(pipe: StableDiffusionPipeline, prompt : str, cfg: float, resolution: int, gen):
-        """
-        generates a single sample at a given cfg scale and saves it to disk
-        """       
-        with torch.no_grad(), autocast():
-            image = pipe(prompt,
-                    num_inference_steps=30,
-                    num_images_per_prompt=1,
-                    guidance_scale=cfg,
-                    generator=gen,
-                    height=resolution,
-                    width=resolution,
-            ).images[0]
-
-            draw = ImageDraw.Draw(image)
-            try:
-                font = ImageFont.truetype(font="arial.ttf", size=20)
-            except:
-                font = ImageFont.load_default()
-            print_msg = f"cfg:{cfg:.1f}"
-
-            l, t, r, b = draw.textbbox(xy=(0,0), text=print_msg, font=font)
-            text_width = r - l
-            text_height = b - t
-
-            x = float(image.width - text_width - 10)
-            y = float(image.height - text_height - 10)
-
-            draw.rectangle((x, y, image.width, image.height), fill="white")
-            draw.text((x, y), print_msg, fill="black", font=font)
-        del draw, font
-        return image
-
-    def __generate_test_samples(pipe, prompts, gs, log_writer, log_folder, random_captions=False, resolution=512):      
-        """
-        generates samples at different cfg scales and saves them to disk
-        """
-        logging.info(f"Generating samples gs:{gs}, for {prompts}")
-        pipe.set_progress_bar_config(disable=True)
-
-        seed = args.seed if args.seed != -1 else random.randint(0, 2**30)
-        gen = torch.Generator(device=device).manual_seed(seed)
-
-        i = 0
-        for prompt in prompts:
-            if prompt is None or len(prompt) < 2:
-                #logging.warning("empty prompt in sample prompts, check your prompts file")
-                continue
-            images = []
-            for cfg in [7.0, 4.0, 1.01]:
-                image = __generate_sample(pipe, prompt, cfg, resolution=resolution, gen=gen)
-                images.append(image)
-
-            width = 0
-            height = 0
-            for image in images:
-                width += image.width
-                height = max(height, image.height)
-
-            result = Image.new('RGB', (width, height))
-
-            x_offset = 0
-            for image in images:
-                result.paste(image, (x_offset, 0))
-                x_offset += image.width
-
-            clean_prompt = clean_filename(prompt)
-
-            result.save(f"{log_folder}/samples/gs{gs:05}-{i}-{clean_prompt[:100]}.jpg", format="JPEG", quality=95, optimize=True, progressive=False)
-            with open(f"{log_folder}/samples/gs{gs:05}-{i}-{clean_prompt[:100]}.txt", "w", encoding='utf-8') as f:
-                f.write(prompt)
-                f.write(f"\n seed: {seed}")
-
-            tfimage = transforms.ToTensor()(result)
-            if random_captions:
-                log_writer.add_image(tag=f"sample_{i}", img_tensor=tfimage, global_step=gs)
-            else:
-                log_writer.add_image(tag=f"sample_{i}_{clean_prompt[:100]}", img_tensor=tfimage, global_step=gs)
-            i += 1
-
-            del result
-            del tfimage
-            del images
-
     try:
 
         # check for a local file
@@ -545,7 +437,7 @@ def main(args):
         text_encoder = CLIPTextModel.from_pretrained(model_root_folder, subfolder="text_encoder")
         vae = AutoencoderKL.from_pretrained(model_root_folder, subfolder="vae")
         unet = UNet2DConditionModel.from_pretrained(model_root_folder, subfolder="unet")
-        sample_scheduler = DDIMScheduler.from_pretrained(model_root_folder, subfolder="scheduler")
+        reference_scheduler = DDIMScheduler.from_pretrained(model_root_folder, subfolder="scheduler")
         noise_scheduler = DDPMScheduler.from_pretrained(model_root_folder, subfolder="scheduler")
         tokenizer = CLIPTokenizer.from_pretrained(model_root_folder, subfolder="tokenizer", use_fast=False)
     except Exception as e:
@@ -679,6 +571,11 @@ def main(args):
     
     log_args(log_writer, args)
 
+    sample_generator = SampleGenerator(log_folder=log_folder, log_writer=log_writer,
+                                       default_resolution=args.resolution, default_seed=args.seed,
+                                       config_file_path=args.sample_prompts,
+                                       batch_size=args.batch_size,
+                                       use_xformers=is_xformers_available() and not args.disable_xformers)
 
     """
     Train the model
@@ -831,6 +728,7 @@ def main(args):
         # # discard the grads, just want to pin memory
         # optimizer.zero_grad(set_to_none=True)
 
+
         write_batch_schedule(args, log_folder, train_batch, 0)
         
         for epoch in range(args.max_epochs):
@@ -900,19 +798,18 @@ def main(args):
                     torch.cuda.empty_cache()
 
                 if (global_step + 1) % args.sample_steps == 0:
-                    pipe = __create_inference_pipe(unet=unet, text_encoder=text_encoder, tokenizer=tokenizer, scheduler=sample_scheduler, vae=vae)
-                    pipe = pipe.to(device)
 
-                    with torch.no_grad():
-                        sample_prompts = read_sample_prompts(args.sample_prompts)
-                        if sample_prompts is not None and len(sample_prompts) > 0 and len(sample_prompts[0]) > 1:
-                            __generate_test_samples(pipe=pipe, prompts=sample_prompts, log_writer=log_writer, log_folder=log_folder, gs=global_step, resolution=args.resolution)
-                        else:
-                            max_prompts = min(4,len(batch["captions"]))
-                            prompts=batch["captions"][:max_prompts]
-                            __generate_test_samples(pipe=pipe, prompts=prompts, log_writer=log_writer, log_folder=log_folder, gs=global_step, random_captions=True, resolution=args.resolution)
+                    sample_generator.reload_config()
+                    sample_generator.update_random_captions(batch["captions"])
+                    inference_pipe = sample_generator.create_inference_pipe(unet=unet,
+                                                                            text_encoder=text_encoder,
+                                                                            tokenizer=tokenizer,
+                                                                            vae=vae,
+                                                                            diffusers_scheduler_config=reference_scheduler.config
+                                                                            ).to(device)
+                    sample_generator.generate_samples(inference_pipe, global_step)
 
-                    del pipe
+                    del inference_pipe
                     gc.collect()
                     torch.cuda.empty_cache()
 
@@ -966,8 +863,9 @@ def main(args):
 
     except Exception as ex:
         logging.error(f"{Fore.LIGHTYELLOW_EX}Something went wrong, attempting to save model{Style.RESET_ALL}")
-        save_path = os.path.join(f"{log_folder}/ckpts/errored-{args.project_name}-ep{epoch:02}-gs{global_step:05}")
-        __save_model(save_path, unet, text_encoder, tokenizer, noise_scheduler, vae, args.save_ckpt_dir, yaml, args.save_full_precision)
+        logging.error(f"{Fore.LIGHTYELLOW_EX} ^^ NO not doing that.{Style.RESET_ALL}")
+        #save_path = os.path.join(f"{log_folder}/ckpts/errored-{args.project_name}-ep{epoch:02}-gs{global_step:05}")
+        #__save_model(save_path, unet, text_encoder, tokenizer, noise_scheduler, vae, args.save_ckpt_dir, yaml, args.save_full_precision)
         raise ex
 
     logging.info(f"{Fore.LIGHTWHITE_EX} ***************************{Style.RESET_ALL}")
@@ -1019,7 +917,7 @@ if __name__ == "__main__":
     argparser.add_argument("--project_name", type=str, default="myproj", help="Project name for logs and checkpoints, ex. 'tedbennett', 'superduperV1'")
     argparser.add_argument("--resolution", type=int, default=512, help="resolution to train", choices=supported_resolutions)
     argparser.add_argument("--resume_ckpt", type=str, required=not ('resume_ckpt' in args), default="sd_v1-5_vae.ckpt", help="The checkpoint to resume from, either a local .ckpt file, a converted Diffusers format folder, or a Huggingface.co repo id such as stabilityai/stable-diffusion-2-1 ")
-    argparser.add_argument("--sample_prompts", type=str, default="sample_prompts.txt", help="File with prompts to generate test samples from (def: sample_prompts.txt)")
+    argparser.add_argument("--sample_prompts", type=str, default="sample_prompts.txt", help="Text file with prompts to generate test samples from, or JSON file with sample generator settings (default: sample_prompts.txt)")
     argparser.add_argument("--sample_steps", type=int, default=250, help="Number of steps between samples (def: 250)")
     argparser.add_argument("--save_ckpt_dir", type=str, default=None, help="folder to save checkpoints to (def: root training folder)")
     argparser.add_argument("--save_every_n_epochs", type=int, default=None, help="Save checkpoint every n epochs, def: 0 (disabled)")
