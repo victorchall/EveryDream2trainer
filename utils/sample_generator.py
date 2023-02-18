@@ -1,7 +1,6 @@
 import json
 import logging
 import os.path
-import traceback
 from dataclasses import dataclass
 import random
 from typing import Generator, Callable, Any
