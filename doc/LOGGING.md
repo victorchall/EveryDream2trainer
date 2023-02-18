@@ -6,15 +6,48 @@ Everydream2 uses the Tensorboard library to log performance metrics.  (more opti
 
 You should launch tensorboard while your training is running and watch along.
 
-    tensorboard --logdir logs
+    tensorboard --logdir logs --samples_per_plugin images=100
 
 ## Sample images
 
-The trainer produces sample images from sample_prompts.txt with a fixed seed every so many steps as defined by your sample_steps argument. These are saved in the logs directory and can be viewed in tensorboard as well if you prefer.  If you have a ton of them, the slider bar in tensorboard may not select them all, but the actual files are still stored in your logs as well for review.
+By default, the trainer produces sample images from `sample_prompts.txt` with a fixed seed every so many steps as defined by your `sample_steps` argument. These are saved in the logs directory and can be viewed in tensorboard as well if you prefer. If you have a ton of them, the slider bar in tensorboard may not select them all (unless you launch tensorboard with the `--samples_per_plugin` argument as shown above), but the actual files are still stored in your logs as well for review.
 
-Samples are produced at CFG scales of 1, 4, and 7.  You may find this very useful to see how your model is progressing.
+Samples are produced at CFG scales of 1, 4, and 7. You may find this very useful to see how your model is progressing. 
 
-If your sample_prompts.txt is empty, the trainer will generate from prompts from the last batch of your training data, up to 4 sets of samples.
+If your `sample_prompts.txt` is empty, the trainer will generate from prompts from the last batch of your training data, up to 4 sets of samples.
+
+### More control
+
+In place of `sample_prompts.txt` you can provide a `sample_prompts.json` file, which offers more control over sample generation. Here is an example `sample_prompts.json` file:
+
+```json
+{
+  "batch_size": 3,
+  "seed": 555,
+  "cfgs": [7, 4],
+  "scheduler": "dpm++",
+  "num_inference_steps": 15,
+  "show_progress_bars": true,
+  "samples": [
+    {
+      "prompt": "ted bennet and a man sitting on a sofa with a kitchen in the background",
+      "negative_prompt": "distorted, deformed"
+    },
+    {
+      "prompt": "a photograph of ted bennet riding a bicycle",
+      "seed": -1
+    },
+    {
+      "random_caption": true,
+      "size": [640, 384]
+    }
+  ]
+}
+```
+
+At the top you can set a `batch_size` (subject to VRAM limits), a default `seed` and `cfgs` to generate with, as well as a `scheduler` and `num_inference_steps` to control the quality of the samples. Available schedulers are `ddim` (the default) and `dpm++`. Finally, you can set `show_progress_bars` to `true` if you want to see progress bars during the sample generation process. 
+
+Individual samples are defined under the `samples` key. Each sample can have a `prompt`, a `negative_prompt`, a `seed` (use `-1` to pick a different random seed each time), and a `size` (must be multiples of 64). Use `"random_caption": true` to pick a random caption from the training set each time.
 
 ## LR
 
