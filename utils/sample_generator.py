@@ -122,7 +122,7 @@ class SampleGenerator:
                 self.sample_requests = self._make_random_caption_sample_requests()
 
     def _make_random_caption_sample_requests(self):
-        num_random_captions = 4
+        num_random_captions = min(4, self.batch_size)
         return [SampleRequest(prompt='',
                               negative_prompt='',
                               seed=self.default_seed,

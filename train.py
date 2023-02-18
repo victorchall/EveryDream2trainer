@@ -574,7 +574,7 @@ def main(args):
     sample_generator = SampleGenerator(log_folder=log_folder, log_writer=log_writer,
                                        default_resolution=args.resolution, default_seed=args.seed,
                                        config_file_path=args.sample_prompts,
-                                       batch_size=args.batch_size,
+                                       batch_size=max(1,args.batch_size//2),
                                        use_xformers=is_xformers_available() and not args.disable_xformers)
 
     """
