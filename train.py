@@ -599,7 +599,7 @@ def main(args):
     betas = (0.9, 0.999)
     epsilon = 1e-8
     if args.amp:
-        epsilon = 2e-8
+        epsilon = 1e-8
     
     weight_decay = 0.01
     if args.useadam8bit:
@@ -774,9 +774,10 @@ def main(args):
             del pixel_values
             latents = latents[0].sample() * 0.18215
 
-            if zero_frequency_noise_ratio > 0.0:
+            if zero_frequency_noise_ratio > 0.0:            
+                # see https://www.crosslabs.org//blog/diffusion-with-offset-noise
                 zero_frequency_noise = zero_frequency_noise_ratio * torch.randn(latents.shape[0], latents.shape[1], 1, 1, device=latents.device)
-                noise = torch.randn_like(latents) + zero_frequency_noise
+                noise = torch.randn_like(latents) + zero_frequency_noise           
             else:
                 noise = torch.randn_like(latents)
             
@@ -924,7 +925,7 @@ def main(args):
                     save_path = os.path.join(f"{log_folder}/ckpts/{args.project_name}-ep{epoch:02}-gs{global_step:05}")
                     __save_model(save_path, unet, text_encoder, tokenizer, noise_scheduler, vae, args.save_ckpt_dir, yaml, args.save_full_precision)
 
-                if epoch > 0 and epoch % args.save_every_n_epochs == 0 and step == 1 and epoch < args.max_epochs - 1 and epoch >= args.save_ckpts_from_n_epochs:
+                if epoch > 0 and epoch % args.save_every_n_epochs == 0 and step == 0 and epoch < args.max_epochs - 1 and epoch >= args.save_ckpts_from_n_epochs:
                     logging.info(f" Saving model, {args.save_every_n_epochs} epochs at step {global_step}")
                     save_path = os.path.join(f"{log_folder}/ckpts/{args.project_name}-ep{epoch:02}-gs{global_step:05}")
                     __save_model(save_path, unet, text_encoder, tokenizer, noise_scheduler, vae, args.save_ckpt_dir, yaml, args.save_full_precision)
