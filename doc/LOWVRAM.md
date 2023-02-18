@@ -20,6 +20,6 @@ Keeping the batch_size low reduces VRAM use.  This is a more "fine dial" on VRAM
 
 The third is gradient accumulation, which does not reduce VRAM, but gives you a "virtual batch size multiplier" when you are not able to increase the batch_size directly.
 
-    --grad_accum 2
+    --grad_accum 4
 
 This will combine the loss from multiple batches before applying updates.  There is some small VRAM overhead to this but not as much as increasing the batch size.  Increasing it beyond 2 does not continue to increase VRAM, only going from 1 to 2 seems to affect VRAM use, and by a small amount.

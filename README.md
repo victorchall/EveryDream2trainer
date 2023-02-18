@@ -43,6 +43,8 @@ Make sure to check out the [tools repo](https://github.com/victorchall/EveryDrea
 
 [Validation](doc/VALIDATION.md) - Use a validation split on your data to see when you are overfitting and tune hyperparameters
 
+[Troubleshooting](doc/TROUBLESHOOTING.md)
+
 ## Cloud
 
 [Free tier Google Colab notebook](https://colab.research.google.com/github/victorchall/EveryDream2trainer/blob/main/Train_Colab.ipynb)
