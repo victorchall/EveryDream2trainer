@@ -76,6 +76,16 @@ If you are training a huge dataset (20k+) then saving every 1 epoch may not be v
 
 Diffusers copies of checkpoints are saved in your /logs/[project_name]/ckpts folder, and can be used to continue training if you want to pick up where you left off.  CKPT files are saved in the root training folder by default.  These folders can be changed. See [Advanced Tweaking](ATWEAKING.md) for more info.
 
+### _Delay saving checkpoints_
+
+You can skip saving checkpoints early on with this option:
+
+    --save_ckpts_from_n_epochs 20
+
+Regardless of other checkpointing options, this will now allow checkpoints to be saved until the designated epoch number.  
+
+An example of using this might be to have `max_epochs 100` of training, `save_every_n_epochs 20` and `save_ckpts_from_n_epochs 60` to only save the last few and skip saving them before the 60 epoch mark. 
+
 ## __Resuming training from previous runs__
 
 If you want to resume training from a previous run, you can do so by pointing to the diffusers copy in the logs folder from which you want to resume.  This is the same --resume_ckpt argument you would use to start training, just pointing to a different location.
