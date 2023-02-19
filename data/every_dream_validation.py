@@ -23,7 +23,7 @@ from utils.isolate_rng import isolate_rng
 
 def get_random_split(items: list[ImageTrainItem], split_proportion: float, batch_size: int) \
         -> tuple[list[ImageTrainItem], list[ImageTrainItem]]:
-    split_item_count = math.ceil(split_proportion * len(items) // batch_size) * batch_size
+    split_item_count = math.ceil(split_proportion * len(items) / batch_size) * batch_size
     # sort first, then shuffle, to ensure determinate outcome for the current random state
     items_copy = list(sorted(items, key=lambda i: i.pathname))
     random.shuffle(items_copy)
