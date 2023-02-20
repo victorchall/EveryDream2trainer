@@ -133,6 +133,16 @@ For those training booru tagged models, you can use this arg to randomly (but de
 
 This simply chops the captions in to parts based on the commas and shuffles the order. 
 
+## Zero frequency noise
+
+Based on [Nicholas Guttenberg's blog post](https://www.crosslabs.org//blog/diffusion-with-offset-noise) zero frequency noise offsets the noise added to the image during training/denoising, which can help improve contrast and the ability to render very dark or very bright scenes more accurately, and may help slightly with color saturation.
+
+    --zero_frequency_noise_ratio 0.05
+
+0.0 is off, old behavior.  Default is 0.02 which is very little to err on the safe side (for now?), but values from 0.05 to 0.10 seem to work well.
+
+Test results: https://huggingface.co/panopstor/ff7r-stable-diffusion/blob/main/zero_freq_test_biggs.webp
+
 # Stuff you probably don't need to mess with, but well here it is:
 
 
