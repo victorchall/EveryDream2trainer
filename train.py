@@ -711,6 +711,10 @@ def main(args):
 
         return model_pred, target
 
+    # Pre-train validation to establish a starting point on the loss graph
+    if validator:
+        validator.do_validation_if_appropriate(epoch=0, global_step=0,
+                                               get_model_prediction_and_target_callable=get_model_prediction_and_target)
 
     try:
         # # dummy batch to pin memory to avoid fragmentation in torch, uses square aspect which is maximum bytes size per aspects.py
@@ -849,7 +853,7 @@ def main(args):
             log_writer.add_scalar(tag="loss/epoch", scalar_value=loss_local, global_step=global_step)
 
             if validator:
-                validator.do_validation_if_appropriate(epoch, global_step, get_model_prediction_and_target)
+                validator.do_validation_if_appropriate(epoch+1, global_step, get_model_prediction_and_target)
             
             gc.collect()
             # end of epoch
