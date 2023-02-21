@@ -31,7 +31,7 @@ class SampleRequest:
     def __str__(self):
         rep = self.prompt
         if len(self.negative_prompt) > 0:
-            rep += "\n negative prompt: {self.negative_prompt}"
+            rep += f"\n negative prompt: {self.negative_prompt}"
         rep += f"\n seed: {self.seed}"
         return rep
 
