@@ -10,3 +10,5 @@
 **/.ipynb_checkpoints
 /wandb/**
 /mycfgs/**
+/.vscode/**
+.ssh_config
