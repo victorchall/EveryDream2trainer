@@ -45,6 +45,8 @@ Make sure to check out the [tools repo](https://github.com/victorchall/EveryDrea
 
 [Troubleshooting](doc/TROUBLESHOOTING.md)
 
+[Low VRAM guide)(doc/LOWVRAM.md) - Need help running on 12GB?  Read this.
+
 ## Cloud
 
 [Free tier Google Colab notebook](https://colab.research.google.com/github/victorchall/EveryDream2trainer/blob/main/Train_Colab.ipynb)
