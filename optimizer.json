@@ -1,0 +1,15 @@
+{
+    "doc": {
+        "optimizer": "adamw, adamw8bit, lion",
+        "optimizer_desc": "'adamw' in standard 32bit, 'adamw8bit' is bitsandbytes, 'lion' is lucidrains",
+        "lr": "learning rate, if null wil use CLI or main JSON config value",
+        "betas": "exponential decay rates for the moment estimates",
+        "epsilon": "value added to denominator for numerical stability, unused for lion",
+        "weight_decay": "weight decay (L2 penalty)"
+    },
+    "optimizer": "adamw8bit",
+    "lr:": null,
+    "betas": [0.9, 0.999],
+    "epsilon": 1e-8,
+    "weight_decay": 0.01
+}
