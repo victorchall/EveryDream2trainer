@@ -125,12 +125,12 @@ def setup_local_logger(args):
 
     return datetimestamp
 
-def log_optimizer(optimizer: torch.optim.Optimizer, betas, epsilon, weight_decay):
+def log_optimizer(optimizer: torch.optim.Optimizer, betas, epsilon, weight_decay, lr):
     """
     logs the optimizer settings
     """
     logging.info(f"{Fore.CYAN} * Optimizer: {optimizer.__class__.__name__} *{Style.RESET_ALL}")
-    logging.info(f"{Fore.CYAN}    betas: {betas}, epsilon: {epsilon}, weight_decay: {weight_decay} *{Style.RESET_ALL}")
+    logging.info(f"{Fore.CYAN}    lr: {lr}, betas: {betas}, epsilon: {epsilon}, weight_decay: {weight_decay} *{Style.RESET_ALL}")
 
 def save_optimizer(optimizer: torch.optim.Optimizer, path: str):
     """
@@ -537,7 +537,7 @@ def main(args):
             amsgrad=False,
         )
 
-    log_optimizer(optimizer, betas, epsilon, weight_decay)
+    log_optimizer(optimizer, betas, epsilon, weight_decay, curr_lr)
 
     image_train_items = resolve_image_train_items(args, log_folder)
 
