@@ -129,9 +129,11 @@ class EveryDreamBatch(Dataset):
 
         image_train_tmp = image_train_item.hydrate(crop=False, save=save, crop_jitter=self.crop_jitter)
 
-        example["image"] = image_train_tmp.image
+        example["image"] = image_train_tmp.image.copy()  # hack for now to avoid memory leak
+        image_train_tmp.image = None # hack for now to avoid memory leak
         example["caption"] = image_train_tmp.caption
         example["runt_size"] = image_train_tmp.runt_size
+       
         return example
 
     def __update_image_train_items(self, dropout_fraction: float):
