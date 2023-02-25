@@ -21,6 +21,7 @@ pip install pytorch-lightning==1.6.5
 pip install OmegaConf==2.2.3
 pip install numpy==1.23.5
 pip install keyboard
+pip install lion-pytorch
 python utils/patch_bnb.py
 python utils/get_yamls.py
 GOTO :eof
