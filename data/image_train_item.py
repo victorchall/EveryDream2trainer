@@ -37,7 +37,7 @@ class ImageCaption:
     Represents the various parts of an image caption
     """
 
-    def __init__(self, main_prompt: str, rating: float, tags: list[str], tag_weights: list[float], max_target_length: int, use_weights: bool):
+    def __init__(self, main_prompts: list[str], rating: float, tags: list[str], tag_weights: list[float], max_target_length: int, use_weights: bool):
         """
         :param main_prompt: The part of the caption which should always be included
         :param tags: list of tags to pick from to fill the caption
@@ -45,7 +45,7 @@ class ImageCaption:
         :param max_target_length: The desired maximum length of a generated caption
         :param use_weights: if ture, weights are considered when shuffling tags
         """
-        self.__main_prompt = main_prompt
+        self.__main_prompts = main_prompts
         self.__rating = rating
         self.__tags = tags
         self.__tag_weights = tag_weights
@@ -66,21 +66,25 @@ class ImageCaption:
         :param seed used to initialize the randomizer
         :return: generated caption string
         """
+        rng = random.Random(seed)
+        main_prompt = rng.choice(self.__main_prompts)
         if self.__tags:
-            max_target_tag_length = self.__max_target_length - len(self.__main_prompt)
+            max_target_tag_length = self.__max_target_length - len(main_prompt)
 
             if self.__use_weights:
                 tags_caption = self.__get_weighted_shuffled_tags(seed, self.__tags, self.__tag_weights, max_target_tag_length)
             else:
                 tags_caption = self.__get_shuffled_tags(seed, self.__tags)
 
-            return self.__main_prompt + ", " + tags_caption
-        return self.__main_prompt
+            return main_prompt + ", " + tags_caption
+        return main_prompt
 
-    def get_caption(self) -> str:
-        if self.__tags:
-            return self.__main_prompt + ", " + ", ".join(self.__tags)
-        return self.__main_prompt
+    def get_caption(self, seed) -> str:
+        rng = random.Random(seed)
+        main_prompt = rng.choice(self.__main_prompts)
+        if self.__tags:            
+            return main_prompt + ", " + ", ".join(self.__tags)
+        return main_prompt
 
     @staticmethod
     def __get_weighted_shuffled_tags(seed: int, tags: list[str], weights: list[float], max_target_tag_length: int) -> str:
@@ -114,19 +118,23 @@ class ImageCaption:
         return ", ".join(tags)
 
     @staticmethod
-    def parse(string: str) -> 'ImageCaption':
+    def parse(lines: list[str]) -> 'ImageCaption':
         """
         Parses a string to get the caption.
 
         :param string: String to parse.
         :return: `ImageCaption` object.
         """
-        split_caption = list(map(str.strip, string.split(",")))
-        main_prompt = split_caption[0]
-        tags = split_caption[1:]
+        main_prompts = []
+        tags = []
+        for line in lines:
+            split_caption = list(map(str.strip, line.split(",")))
+            main_prompts.append(split_caption[0])
+            tags.extend(split_caption[1:])
+        
         tag_weights = [1.0] * len(tags)
 
-        return ImageCaption(main_prompt, 1.0, tags, tag_weights, DEFAULT_MAX_CAPTION_LENGTH, False)
+        return ImageCaption(main_prompts, 1.0, tags, tag_weights, DEFAULT_MAX_CAPTION_LENGTH, False)
     
     @staticmethod
     def from_file_name(file_path: str) -> 'ImageCaption':
@@ -152,7 +160,7 @@ class ImageCaption:
         """
         try:
             with open(file_path, encoding='utf-8', mode='r') as caption_file:
-                caption_text = caption_file.read()
+                caption_text = [line.rstrip() for line in caption_file]
                 return ImageCaption.parse(caption_text)
         except:
             logging.error(f" *** Error reading {file_path} to get caption")
@@ -274,7 +282,7 @@ class ImageTrainItem:
         self.error = None
         self.__compute_target_width_height()
 
-    def hydrate(self, crop=False, save=False, crop_jitter=20):
+    def hydrate(self, crop=False, crop_jitter=20):
         """
         crop: hard center crop to 512x512
         save: save the cropped image to disk, for manual inspection of resize/crop
@@ -336,17 +344,7 @@ class ImageTrainItem:
             exit()
 
         if type(self.image) is not np.ndarray:
-            if save:
-                base_name = os.path.basename(self.pathname)
-                if not os.path.exists("test/output"):
-                    os.makedirs("test/output")
-                self.image.save(f"test/output/{base_name}")
-
             self.image = np.array(self.image).astype(np.uint8)
-
-            # self.image = (self.image / 127.5 - 1.0).astype(np.float32)
-
-        # print(self.image.shape)
 
         return self
     

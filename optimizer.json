@@ -8,8 +8,8 @@
         "weight_decay": "weight decay (L2 penalty)"
     },
     "optimizer": "adamw8bit",
-    "lr:": 1e-6,
+    "lr": 1e-6,
     "betas": [0.9, 0.999],
     "epsilon": 1e-8,
-    "weight_decay": 0.01
+    "weight_decay": 0.010
 }

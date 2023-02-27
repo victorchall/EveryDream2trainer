@@ -6,6 +6,8 @@ Please join us on Discord! https://discord.gg/uheqxU6sXN
 
 If you find this tool useful, please consider subscribing to the project on [Patreon](https://www.patreon.com/everydream) or a one-time donation at [Ko-fi](https://ko-fi.com/everydream).
 
+If you're coming from Dreambooth, please [read this](doc/NOTDREAMBOOTH.md) for an explanation of why EveryDream is not Dreambooth.
+
 ## Video tutorials
 
 ### [Basic setup and getting started](https://www.youtube.com/watch?v=OgpJK8SUW3c) 

@@ -344,11 +344,17 @@ def read_sample_prompts(sample_prompts_file_path: str):
             sample_prompts.append(line.strip())
     return sample_prompts
 
+def log_args(log_writer, args):
+    arglog = "args:\n"
+    for arg, value in sorted(vars(args).items()):
+        arglog += f"{arg}={value}, "
+    log_writer.add_text("config", arglog)
+
 
 def main(args):
     """
     Main entry point
-    """
+    """   
     log_time = setup_local_logger(args)
     args = setup_args(args)
 
@@ -481,34 +487,41 @@ def main(args):
         logging.info(f"{Fore.CYAN} * Training Text and Unet *{Style.RESET_ALL}")
         params_to_train = itertools.chain(unet.parameters(), text_encoder.parameters())
 
+    optimizer_config = None
+    optimizer_config_path  = args.optimizer_config if args.optimizer_config else "optimizer.json"
+    if os.path.exists(os.path.join(os.curdir, optimizer_config_path)):
+        with open(os.path.join(os.curdir, optimizer_config_path), "r") as f:
+            optimizer_config = json.load(f)
+
     if args.wandb is not None and args.wandb:
-        wandb.init(project=args.project_name, sync_tensorboard=True, dir=args.logdir, config=args, name=args.run_name)
+        wandb.init(project=args.project_name, 
+                   sync_tensorboard=True, 
+                   dir=args.logdir, 
+                   config={"main":args, "optimizer":optimizer_config}, 
+                   name=args.run_name,
+                   )
 
     log_writer = SummaryWriter(log_dir=log_folder,
-                               flush_secs=5,
+                               flush_secs=10,
                                comment=args.run_name if args.run_name is not None else "EveryDream2FineTunes",
                               )
 
     betas = [0.9, 0.999]
     epsilon = 1e-8
     weight_decay = 0.01
-    opt_class = torch.optim.AdamW
+    opt_class = None
     optimizer = None
 
     default_lr = 1e-6
     curr_lr = args.lr
 
-    # open optimizer.json and override optimizer args
-    optimizer_config_path  = args.optimizer_config if args.optimizer_config else "optimizer.json"
-    if os.path.exists(os.path.join(os.curdir, optimizer_config_path)):
-        with open(os.path.join(os.curdir, optimizer_config_path), "r") as f:
-            optimizer_config = json.load(f)
-            betas = optimizer_config["betas"]
-            epsilon = optimizer_config["epsilon"]
-            weight_decay = optimizer_config["weight_decay"]
-            optimizer_name = optimizer_config["optimizer"]
-            curr_lr = optimizer_config.get("lr", curr_lr)
-            logging.info(f" * Loaded optimizer args from {optimizer_config_path} *")
+    if optimizer_config is not None:
+        betas = optimizer_config["betas"]
+        epsilon = optimizer_config["epsilon"]
+        weight_decay = optimizer_config["weight_decay"]
+        optimizer_name = optimizer_config["optimizer"]
+        curr_lr = optimizer_config.get("lr", curr_lr)
+        logging.info(f" * Loaded optimizer args from {optimizer_config_path} *")
 
     if curr_lr is None:
         curr_lr = default_lr
@@ -523,7 +536,9 @@ def main(args):
                 betas=(betas[0], betas[1]),
                 weight_decay=weight_decay,
             )
-        elif optimizer_name in ["adam8bit","adamw8bit"]:
+        elif optimizer_name in ["adamw"]:            
+            opt_class = torch.optim.AdamW
+        else:
             import bitsandbytes as bnb
             opt_class = bnb.optim.AdamW8bit
 
@@ -583,12 +598,6 @@ def main(args):
         num_warmup_steps=lr_warmup_steps,
         num_training_steps=args.lr_decay_steps,
     )
-
-    def log_args(log_writer, args):
-        arglog = "args:\n"
-        for arg, value in sorted(vars(args).items()):
-            arglog += f"{arg}={value}, "
-        log_writer.add_text("config", arglog)
     
     log_args(log_writer, args)
 
@@ -706,7 +715,6 @@ def main(args):
 
             cuda_caption = tokens.to(text_encoder.device)
 
-        # with autocast(enabled=args.amp):
         encoder_hidden_states = text_encoder(cuda_caption, output_hidden_states=True)
 
         if args.clip_skip > 0:
@@ -736,26 +744,7 @@ def main(args):
                                                get_model_prediction_and_target_callable=get_model_prediction_and_target)
 
     try:
-        # # dummy batch to pin memory to avoid fragmentation in torch, uses square aspect which is maximum bytes size per aspects.py
-        # pixel_values = torch.randn_like(torch.zeros([args.batch_size, 3, args.resolution, args.resolution]))
-        # pixel_values = pixel_values.to(unet.device)
-        # with autocast(enabled=args.amp):
-        #     latents = vae.encode(pixel_values, return_dict=False)
-        # latents = latents[0].sample() * 0.18215
-        # noise = torch.randn_like(latents)
-        # bsz = latents.shape[0]
-        # timesteps = torch.randint(0, noise_scheduler.config.num_train_timesteps, (bsz,), device=latents.device)
-        # timesteps = timesteps.long()
-        # noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
-        # cuda_caption = torch.linspace(100,177, steps=77, dtype=int).to(text_encoder.device)
-        # encoder_hidden_states = text_encoder(cuda_caption, output_hidden_states=True).last_hidden_state
-        # with autocast(enabled=args.amp):
-        #     model_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
-        # # discard the grads, just want to pin memory
-        # optimizer.zero_grad(set_to_none=True)
-
-
-        write_batch_schedule(args, log_folder, train_batch, 0)
+        write_batch_schedule(args, log_folder, train_batch, epoch = 0)
         
         for epoch in range(args.max_epochs):
             loss_epoch = []
