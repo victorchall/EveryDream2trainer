@@ -24,7 +24,7 @@ ENV VIRTUAL_ENV=/workspace/venv
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
 
-ADD docker/requirements.txt /build
+ADD requirements.txt /build
 RUN --mount=type=cache,target=/root/.cache/pip \
     python3 -m venv ${VIRTUAL_ENV} && \
     pip install -U -I torch==1.13.1+cu117 torchvision==0.14.1+cu117 --extra-index-url "https://download.pytorch.org/whl/cu117" && \
@@ -71,16 +71,22 @@ RUN wget https://github.com/runpod/runpodctl/releases/download/v1.9.0/runpodctl-
 ENV VIRTUAL_ENV=/workspace/venv
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 COPY --from=builder ${VIRTUAL_ENV} ${VIRTUAL_ENV}
+RUN echo "source ${VIRTUAL_ENV}/bin/activate" >> /root/.bashrc
 
 # Workaround for:
 #   https://github.com/TimDettmers/bitsandbytes/issues/62
 #   https://github.com/TimDettmers/bitsandbytes/issues/73
 ENV LD_LIBRARY_PATH="/usr/local/cuda-11.7/targets/x86_64-linux/lib"
 RUN ln /usr/local/cuda-11.7/targets/x86_64-linux/lib/libcudart.so.11.0 /usr/local/cuda-11.7/targets/x86_64-linux/lib/libcudart.so
+RUN pip install bitsandbytes==0.37.0
 
 WORKDIR /workspace
+RUN git clone https://github.com/victorchall/EveryDream2trainer
+WORKDIR /workspace/EveryDream2trainer
+RUN python utils/get_yamls.py && \
+    mkdir -p logs && mkdir -p input
 
-ADD docker/welcome.txt /
-ADD docker/start.sh /
+ADD welcome.txt /
+ADD start.sh /
 RUN chmod +x /start.sh
 CMD [ "/start.sh" ]

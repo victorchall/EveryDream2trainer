@@ -1,0 +1,20 @@
+{
+    "name": "EveryDream2 Dev Container",
+	// This Dockerfile requires buildx to be enabled by default
+	// `docker buildx install`
+	"build": {
+		"dockerfile": "../../docker/Dockerfile",
+		"target": "runtime"
+	},
+
+	"postStartCommand": "/start.sh",
+	"forwardPorts": [8888, 6006],
+	
+	"containerEnv": {
+		"JUPYTER_PASSWORD": "EveryDream"
+	},
+	
+	// Mimic RunPod/Vast setup
+	"workspaceMount": "source=${localWorkspaceFolder},target=/workspace/EveryDream2trainer,type=bind",
+	"workspaceFolder": "/workspace/EveryDream2trainer"
+}
