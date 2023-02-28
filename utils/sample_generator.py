@@ -8,7 +8,7 @@ from typing import Generator, Callable, Any
 import torch
 from PIL import Image, ImageDraw, ImageFont
 from colorama import Fore, Style
-from diffusers import StableDiffusionPipeline, DDIMScheduler, DPMSolverMultistepScheduler
+from diffusers import StableDiffusionPipeline, DDIMScheduler, DPMSolverMultistepScheduler, DDPMScheduler, PNDMScheduler, EulerDiscreteScheduler, EulerAncestralDiscreteScheduler, LMSDiscreteScheduler, KDPM2AncestralDiscreteScheduler
 from torch.cuda.amp import autocast
 from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms
@@ -272,7 +272,7 @@ class SampleGenerator:
     @torch.no_grad()
     def _create_scheduler(self, scheduler_config: dict):
         scheduler = self.scheduler
-        if scheduler not in ['ddim', 'dpm++']:
+        if scheduler not in ['ddim', 'dpm++', 'pndm', 'ddpm', 'lms', 'euler', 'euler_a', 'kdpm2']:
             print(f"unsupported scheduler '{self.scheduler}', falling back to ddim")
             scheduler = 'ddim'
 
@@ -280,5 +280,17 @@ class SampleGenerator:
             return DDIMScheduler.from_config(scheduler_config)
         elif scheduler == 'dpm++':
             return DPMSolverMultistepScheduler.from_config(scheduler_config, algorithm_type="dpmsolver++")
+        elif scheduler == 'pndm':
+            return PNDMScheduler.from_config(scheduler_config)
+        elif scheduler == 'ddpm':
+            return DDPMScheduler.from_config(scheduler_config)
+        elif scheduler == 'lms':
+            return LMSDiscreteScheduler.from_config(scheduler_config)
+        elif scheduler == 'euler':
+            return EulerDiscreteScheduler.from_config(scheduler_config)
+        elif scheduler == 'euler_a':
+            return EulerAncestralDiscreteScheduler.from_config(scheduler_config)
+        elif scheduler == 'kdpm2':
+            return KDPM2AncestralDiscreteScheduler.from_config(scheduler_config)
         else:
             raise ValueError(f"unknown scheduler '{scheduler}'")
