@@ -1,10 +1,10 @@
 {
-  "batch_size": 3,		# if you get out of memory durring sample gnerations lower this
+  "batch_size": 3,		
   "seed": 555,
   "cfgs": [7, 4],
-  "scheduler": "dpm++",		# you can change this to ddim, dpm++,euler.euler_a, and kdpm2
-  "num_inference_steps": 15,	# the ideal number of steps change with samples a rule of thumb is 30 steps if not ++
-  "show_progress_bars": true, # place falce for cleaner logs
+  "scheduler": "dpm++",		
+  "num_inference_steps": 15,	
+  "show_progress_bars": true, 
   "samples": [
     {
       "prompt": "ted bennet and a man sitting on a sofa with a kitchen in the background",
@@ -17,8 +17,8 @@
     {
       "random_caption": true,		
       "seed": 555,
-	"cfgs": [1,11],      	# we can add any of the above arguments to our prompt just make sure all lines except the last have a comma
-	"size": [640, 384]
+      "cfgs": [1,11],      
+      "size": [640, 384]
     }
   ]
 }
