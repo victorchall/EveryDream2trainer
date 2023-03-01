@@ -8,7 +8,7 @@ or in train.json
 
     "optimizer_config": "optimizer.json"
 
-A default `optimizer.json` is supplied which you can modify
+A default `optimizer.json` is supplied which you can modify.
 
 This has expanded tweaking.  This doc is incomplete, but there is information on the web on betas and weight decay setting you can search for.
 
