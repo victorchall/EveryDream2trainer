@@ -12,3 +12,4 @@
 /mycfgs/**
 /.vscode/**
 .ssh_config
+*inference*.yaml

@@ -2,38 +2,6 @@
 cat /welcome.txt
 export PYTHONUNBUFFERED=1
 
-echo "source /workspace/venv/bin/activate" >> ~/.bashrc
-source ~/.bashrc
-
-# Workaround for:
-#   https://github.com/TimDettmers/bitsandbytes/issues/62
-#   https://github.com/TimDettmers/bitsandbytes/issues/73
-pip install bitsandbytes==0.37.0
-
-function clone_pull {
-  DIRECTORY=$(basename "$1" .git)
-  if [ -d "$DIRECTORY" ]; then
-    cd "$DIRECTORY"
-    git pull
-    cd ../
-  else
-    git clone "$1"
-  fi
-}
-
-
-# VSCode Dev Container
-if [[ $LOCAL_DEV ]]
-then
-  echo "Running in dev container, skipping git pull"
-else
-  clone_pull https://github.com/victorchall/EveryDream2trainer
-fi
-cd /workspace/EveryDream2trainer
-python utils/get_yamls.py
-mkdir -p /workspace/EveryDream2trainer/logs
-mkdir -p /workspace/EveryDream2trainer/input
-
 # RunPod SSH
 if [[ -v "PUBLIC_KEY" ]] && [[ ! -d "${HOME}/.ssh" ]]
 then
