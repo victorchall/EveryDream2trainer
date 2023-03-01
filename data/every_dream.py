@@ -26,6 +26,7 @@ import torch.nn.functional as F
 class EveryDreamBatch(Dataset):
     """
     data_loader: `DataLoaderMultiAspect` object
+    debug_level: 0=none, 1=print drops due to unfilled batches on aspect ratio buckets, 2=debug info per image, 3=save crops to disk for inspection
     conditional_dropout: probability of dropping the caption for a given image
     crop_jitter: number of pixels to jitter the crop by, only for non-square images
     seed: random seed
@@ -37,6 +38,7 @@ class EveryDreamBatch(Dataset):
                  crop_jitter=20,
                  seed=555,
                  tokenizer=None,
+                 retain_contrast=False,
                  shuffle_tags=False,
                  rated_dataset=False,
                  rated_dataset_dropout_target=0.5,
@@ -50,6 +52,7 @@ class EveryDreamBatch(Dataset):
         self.unloaded_to_idx = 0
         self.tokenizer = tokenizer
         self.max_token_length = self.tokenizer.model_max_length
+        self.retain_contrast = retain_contrast
         self.shuffle_tags = shuffle_tags
         self.seed = seed
         self.rated_dataset = rated_dataset
@@ -78,19 +81,26 @@ class EveryDreamBatch(Dataset):
     def __getitem__(self, i):
         example = {}
 
-        train_item = self.__get_image_for_trainer(self.image_train_items[i])
+        train_item = self.__get_image_for_trainer(self.image_train_items[i], self.debug_level)
+
+        if self.retain_contrast:
+            std_dev = 1.0
+            mean = 0.0
+        else:
+            std_dev = 0.5
+            mean = 0.5
 
         image_transforms = transforms.Compose(
             [
                 transforms.ToTensor(),
-                transforms.Normalize([0.5], [0.5]),
+                transforms.Normalize([mean], [std_dev]),
             ]
         )
 
         if self.shuffle_tags:
             example["caption"] = train_item["caption"].get_shuffled_caption(self.seed)
         else:
-            example["caption"] = train_item["caption"].get_caption(self.seed)
+            example["caption"] = train_item["caption"].get_caption()
 
         example["image"] = image_transforms(train_item["image"])
 
@@ -113,10 +123,11 @@ class EveryDreamBatch(Dataset):
 
         return example
 
-    def __get_image_for_trainer(self, image_train_item: ImageTrainItem):
+    def __get_image_for_trainer(self, image_train_item: ImageTrainItem, debug_level=0):
         example = {}
+        save = debug_level > 2
 
-        image_train_tmp = image_train_item.hydrate(crop=False, crop_jitter=self.crop_jitter)
+        image_train_tmp = image_train_item.hydrate(crop=False, save=save, crop_jitter=self.crop_jitter)
 
         example["image"] = image_train_tmp.image.copy()  # hack for now to avoid memory leak
         image_train_tmp.image = None # hack for now to avoid memory leak
