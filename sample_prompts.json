@@ -1,0 +1,24 @@
+{
+  "batch_size": 3,		
+  "seed": 555,
+  "cfgs": [7, 4],
+  "scheduler": "dpm++",		
+  "num_inference_steps": 15,	
+  "show_progress_bars": true, 
+  "samples": [
+    {
+      "prompt": "ted bennet and a man sitting on a sofa with a kitchen in the background",
+      "negative_prompt": "distorted, deformed"
+    },
+    {
+      "prompt": "a photograph of ted bennet riding a bicycle",
+      "seed": -1
+    },
+    {
+      "random_caption": true,		
+      "seed": 555,
+      "cfgs": [1,11],      
+      "size": [640, 384]
+    }
+  ]
+}
