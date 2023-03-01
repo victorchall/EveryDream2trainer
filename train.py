@@ -523,10 +523,12 @@ def main(args):
         curr_lr = optimizer_config.get("lr", curr_lr)
         if args.lr is not None:
             curr_lr = args.lr
+            logging.info(f"Overriding LR from optimizer config with main config/cli LR setting: {curr_lr}")
         logging.info(f" * Loaded optimizer args from {optimizer_config_path} *")
 
     if curr_lr is None:
         curr_lr = default_lr
+        logging.warning(f"No LR setting found, defaulting to {default_lr}")
 
     if optimizer_name:
         if optimizer_name == "lion":
