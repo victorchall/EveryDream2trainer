@@ -691,7 +691,7 @@ def main(args):
     )
     logging.info(f" Grad scaler enabled: {scaler.is_enabled()} (amp mode)")
 
-    epoch_pbar = tqdm(range(args.max_epochs), position=0, leave=True)
+    epoch_pbar = tqdm(range(args.max_epochs), position=0, leave=True, dynamic_ncols=True)
     epoch_pbar.set_description(f"{Fore.LIGHTCYAN_EX}Epochs{Style.RESET_ALL}")
     epoch_times = []
 
@@ -754,7 +754,12 @@ def main(args):
 
     def generate_samples(global_step: int, batch):
         with isolate_rng():
+            prev_sample_steps = sample_generator.sample_steps
             sample_generator.reload_config()
+            if prev_sample_steps != sample_generator.sample_steps:
+                next_sample_step = math.ceil((global_step + 1) / sample_generator.sample_steps) * sample_generator.sample_steps
+                print(f" * SampleGenerator config changed, now generating images samples every " +
+                      f"{sample_generator.sample_steps} training steps (next={next_sample_step})")
             sample_generator.update_random_captions(batch["captions"])
             inference_pipe = sample_generator.create_inference_pipe(unet=unet,
                                                                     text_encoder=text_encoder,
@@ -787,7 +792,7 @@ def main(args):
             images_per_sec_log_step = []
 
             epoch_len = math.ceil(len(train_batch) / args.batch_size)
-            steps_pbar = tqdm(range(epoch_len), position=1)
+            steps_pbar = tqdm(range(epoch_len), position=1, leave=False, dynamic_ncols=True)
             steps_pbar.set_description(f"{Fore.LIGHTCYAN_EX}Steps{Style.RESET_ALL}")
 
             for step, batch in enumerate(train_dataloader):
