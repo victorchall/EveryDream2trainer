@@ -363,7 +363,9 @@ def main(args):
     else:
         from tqdm.auto import tqdm
 
-    seed = args.seed if args.seed != -1 else random.randint(0, 2**30)
+    if args.seed == -1:
+        args.seed = random.randint(0, 2**30)
+    seed = args.seed
     logging.info(f" Seed: {seed}")
     set_seed(seed)
     if torch.cuda.is_available():
@@ -533,6 +535,9 @@ def main(args):
         params_to_train = itertools.chain(unet.parameters())
     elif args.disable_unet_training:
         logging.info(f"{Fore.CYAN} * Training Text Encoder Only *{Style.RESET_ALL}")
+        if text_encoder_lr_scale != 1:
+            logging.warning(f"{Fore.YELLOW} * Ignoring text_encoder_lr_scale {text_encoder_lr_scale} and using the "
+                            f"Unet LR {curr_lr} for the text encoder instead.")
         params_to_train = itertools.chain(text_encoder.parameters())
     else:
         logging.info(f"{Fore.CYAN} * Training Text and Unet *{Style.RESET_ALL}")
