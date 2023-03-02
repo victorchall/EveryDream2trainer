@@ -839,7 +839,7 @@ def main(args):
                     loss_local = sum(loss_log_step) / len(loss_log_step)
                     loss_log_step = []
                     logs = {"loss/log_step": loss_local, "lr": curr_lr, "img/s": images_per_sec}
-                    if args.disable_textenc_training or args.disable_unet_training:
+                    if args.disable_textenc_training or args.disable_unet_training or text_encoder_lr_scale == 1:
                         log_writer.add_scalar(tag="hyperparamater/lr", scalar_value=curr_lr, global_step=global_step)
                     else:
                         log_writer.add_scalar(tag="hyperparamater/lr unet", scalar_value=curr_lr, global_step=global_step)
