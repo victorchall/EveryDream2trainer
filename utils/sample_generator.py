@@ -155,10 +155,22 @@ class SampleGenerator:
             else:
                 default_seed = config.get('seed', self.default_seed)
                 default_size = (self.default_resolution, self.default_resolution)
+                #def make_size_from_aspect_ratio(aspect_ratio):
+                #    if aspect_ratio is None:
+                #        return None
+                #    target_pixel_count = self.default_resolution * self.default_resolution
+                #    w_ratio = aspect_ratio
+                #    h_ratio = 1/w_ratio
+                #    pixels_per_ratio_unit = target_pixel_count/(w_ratio + h_ratio)
+                #    w = round(w_ratio*pixels_per_ratio_unit / 64) * 64
+                #    h = round(h_ratio*pixels_per_ratio_unit / 64) * 64
+                #    return [w,h]
+
+
                 self.sample_requests = [SampleRequest(prompt=p.get('prompt', ''),
                                                       negative_prompt=p.get('negative_prompt', ''),
                                                       seed=p.get('seed', default_seed),
-                                                      size=tuple(p.get('size', default_size)),
+                                                      size=p.get('size', default_size),
                                                       wants_random_caption=p.get('random_caption', False)
                                                       ) for p in sample_requests_config]
             if len(self.sample_requests) == 0:
