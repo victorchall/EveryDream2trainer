@@ -12,6 +12,7 @@ from diffusers import StableDiffusionPipeline, DDIMScheduler, DPMSolverMultistep
 from torch.cuda.amp import autocast
 from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms
+from tqdm.auto import tqdm
 
 
 def clean_filename(filename):
@@ -89,7 +90,7 @@ class SampleGenerator:
 
         self.sample_requests = None
         self.reload_config()
-        print(f" * SampleGenerator initialized with {len(self.sample_requests)} prompts, using scheduler '{self.scheduler}', {self.num_inference_steps} steps")
+        print(f" * SampleGenerator initialized with {len(self.sample_requests)} prompts, generating samples every {self.sample_steps} training steps, using scheduler '{self.scheduler}' with {self.num_inference_steps} inference steps")
         if not os.path.exists(f"{log_folder}/samples/"):
             os.makedirs(f"{log_folder}/samples/")
 
@@ -181,9 +182,7 @@ class SampleGenerator:
         """
         generates samples at different cfg scales and saves them to disk
         """
-        logging.info(f"Generating samples gs:{global_step}, for {[p.prompt for p in self.sample_requests]}")
-
-        pipe.set_progress_bar_config(disable=(not self.show_progress_bars))
+        disable_progress_bars = not self.show_progress_bars
 
         try:
             font = ImageFont.truetype(font="arial.ttf", size=20)
@@ -195,10 +194,13 @@ class SampleGenerator:
             batch: list[SampleRequest]
             def sample_compatibility_test(a: SampleRequest, b: SampleRequest) -> bool:
                 return a.size == b.size
-            for batch in chunk_list(self.sample_requests, self.batch_size,
-                                    compatibility_test=sample_compatibility_test):
-                #print("batch: ", batch)
+            batches = list(chunk_list(self.sample_requests, self.batch_size,
+                                    compatibility_test=sample_compatibility_test))
+            pbar = tqdm(total=len(batches), disable=disable_progress_bars, position=1, leave=False,
+                              desc=f"{Fore.YELLOW}Image samples (batches of {self.batch_size}){Style.RESET_ALL}")
+            for batch in batches:
                 prompts = [p.prompt for p in batch]
+                pbar.set_postfix(postfix={'prompts': prompts})
                 negative_prompts = [p.negative_prompt for p in batch]
                 seeds = [(p.seed if p.seed != -1 else random.randint(0, 2 ** 30))
                          for p in batch]
@@ -208,6 +210,8 @@ class SampleGenerator:
 
                 batch_images = []
                 for cfg in self.cfgs:
+                    pipe.set_progress_bar_config(disable=disable_progress_bars, position=2, leave=False,
+                                                 desc=f"{Fore.LIGHTYELLOW_EX}CFG scale {cfg}{Style.RESET_ALL}")
                     images = pipe(prompt=prompts,
                                   negative_prompt=negative_prompts,
                                   num_inference_steps=self.num_inference_steps,
@@ -269,6 +273,7 @@ class SampleGenerator:
                     del tfimage
                 del batch_images
 
+                pbar.update(1)
 
     @torch.no_grad()
     def create_inference_pipe(self, unet, text_encoder, tokenizer, vae, diffusers_scheduler_config: dict):
