@@ -73,6 +73,7 @@ class SampleGenerator:
                  config_file_path: str,
                  batch_size: int,
                  default_seed: int,
+                 default_sample_steps: int,
                  use_xformers: bool):
         self.log_folder = log_folder
         self.log_writer = log_writer
@@ -80,10 +81,13 @@ class SampleGenerator:
         self.config_file_path = config_file_path
         self.use_xformers = use_xformers
         self.show_progress_bars = False
+        self.generate_pretrain_samples = False
 
         self.default_resolution = default_resolution
         self.default_seed = default_seed
+        self.sample_steps = default_sample_steps
 
+        self.sample_requests = None
         self.reload_config()
         print(f" * SampleGenerator initialized with {len(self.sample_requests)} prompts, using scheduler '{self.scheduler}', {self.num_inference_steps} steps")
         if not os.path.exists(f"{log_folder}/samples/"):
@@ -102,8 +106,12 @@ class SampleGenerator:
             logging.warning(
                 f" * {Fore.LIGHTYELLOW_EX}Error trying to read sample config from {self.config_file_path}: {Style.RESET_ALL}{e}")
             logging.warning(
-                f"   Using random caption samples until the problem is fixed. If you edit {self.config_file_path} to fix the problem, it will be automatically reloaded next time samples are due to be generated.")
-            self.sample_requests = self._make_random_caption_sample_requests()
+                f"    Edit {self.config_file_path} to fix the problem. It will be automatically reloaded next time samples are due to be generated."
+            )
+            if self.sample_requests == None:
+                logging.warning(
+                    f"    Will generate samples from random training image captions until the problem is fixed.")
+                self.sample_requests = self._make_random_caption_sample_requests()
 
     def update_random_captions(self, possible_captions: list[str]):
         random_prompt_sample_requests = [r for r in self.sample_requests if r.wants_random_caption]
@@ -139,9 +147,11 @@ class SampleGenerator:
             self.scheduler = config.get('scheduler', self.scheduler)
             self.num_inference_steps = config.get('num_inference_steps', self.num_inference_steps)
             self.show_progress_bars = config.get('show_progress_bars', self.show_progress_bars)
-            sample_requests_json = config.get('samples', None)
-            if sample_requests_json is None:
-                self.sample_requests = []
+            self.generate_pretrain_samples = config.get('generate_pretrain_samples', self.generate_pretrain_samples)
+            self.sample_steps = config.get('sample_steps', self.sample_steps)
+            sample_requests_config = config.get('samples', None)
+            if sample_requests_config is None:
+                self.sample_requests = self._make_random_caption_sample_requests()
             else:
                 default_seed = config.get('seed', self.default_seed)
                 default_size = (self.default_resolution, self.default_resolution)
@@ -150,7 +160,7 @@ class SampleGenerator:
                                                       seed=p.get('seed', default_seed),
                                                       size=tuple(p.get('size', default_size)),
                                                       wants_random_caption=p.get('random_caption', False)
-                                                      ) for p in sample_requests_json]
+                                                      ) for p in sample_requests_config]
             if len(self.sample_requests) == 0:
                 self._make_random_caption_sample_requests()
 
