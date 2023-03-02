@@ -158,7 +158,7 @@ class SampleGenerator:
             self.num_inference_steps = config.get('num_inference_steps', self.num_inference_steps)
             self.show_progress_bars = config.get('show_progress_bars', self.show_progress_bars)
             self.generate_pretrain_samples = config.get('generate_pretrain_samples', self.generate_pretrain_samples)
-            self.sample_steps = config.get('sample_steps', self.sample_steps)
+            self.sample_steps = config.get('generate_samples_every_n_steps', self.sample_steps)
             sample_requests_config = config.get('samples', None)
             if sample_requests_config is None:
                 self.sample_requests = self._make_random_caption_sample_requests()
