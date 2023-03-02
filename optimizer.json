@@ -6,7 +6,7 @@
         "betas": "exponential decay rates for the moment estimates",
         "epsilon": "value added to denominator for numerical stability, unused for lion",
         "weight_decay": "weight decay (L2 penalty)",
-        "text_encoder_lr_scale": "if set, scale the text encoder's LR by this much relative to the unet LR"
+        "text_encoder_lr_scale": "scale the text encoder LR relative to the Unet LR. for example, if `lr` is 2e-6 and `text_encoder_lr_scale` is 0.5, the text encoder's LR will be set to `1e-6`."
     },
     "optimizer": "adamw8bit",
     "lr": 1e-6,
