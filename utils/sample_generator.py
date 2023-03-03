@@ -186,6 +186,9 @@ class SampleGenerator:
         except:
             font = ImageFont.load_default()
 
+        if not self.show_progress_bars:
+            print(f" * Generating samples at gs:{global_step} for {len(self.sample_requests)} prompts")
+
         sample_index = 0
         with autocast():
             batch: list[SampleRequest]
