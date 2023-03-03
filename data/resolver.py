@@ -1,7 +1,6 @@
 import json
 import logging
 import os
-import random
 import typing
 import zipfile
 import argparse
@@ -18,8 +17,7 @@ class DataResolver:
         """
         self.aspects = args.aspects
         self.flip_p = args.flip_p
-        self.seed = args.seed
-        
+
     def image_train_items(self, data_root: str) -> list[ImageTrainItem]:
         """
         Get the list of `ImageTrainItem` for the given data root.
@@ -116,8 +114,7 @@ class DirectoryResolver(DataResolver):
         image_paths = list(DirectoryResolver.recurse_data_root(data_root))
         items = []
         multipliers = {}
-        randomizer = random.Random(self.seed)
-        
+
         for pathname in tqdm.tqdm(image_paths):
             current_dir = os.path.dirname(pathname)
             

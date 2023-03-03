@@ -125,12 +125,12 @@ def setup_local_logger(args):
 
     return datetimestamp
 
-def log_optimizer(optimizer: torch.optim.Optimizer, betas, epsilon, weight_decay, lr):
+def log_optimizer(optimizer: torch.optim.Optimizer, betas, epsilon, weight_decay, unet_lr, text_encoder_lr):
     """
     logs the optimizer settings
     """
     logging.info(f"{Fore.CYAN} * Optimizer: {optimizer.__class__.__name__} *{Style.RESET_ALL}")
-    logging.info(f"{Fore.CYAN}    lr: {lr}, betas: {betas}, epsilon: {epsilon}, weight_decay: {weight_decay} *{Style.RESET_ALL}")
+    logging.info(f"{Fore.CYAN}    unet lr: {unet_lr}, text encoder lr: {text_encoder_lr}, betas: {betas}, epsilon: {epsilon}, weight_decay: {weight_decay} *{Style.RESET_ALL}")
 
 def save_optimizer(optimizer: torch.optim.Optimizer, path: str):
     """
@@ -363,7 +363,9 @@ def main(args):
     else:
         from tqdm.auto import tqdm
 
-    seed = args.seed if args.seed != -1 else random.randint(0, 2**30)
+    if args.seed == -1:
+        args.seed = random.randint(0, 2**30)
+    seed = args.seed
     logging.info(f" Seed: {seed}")
     set_seed(seed)
     if torch.cuda.is_available():
@@ -477,16 +479,6 @@ def main(args):
     else:
         text_encoder = text_encoder.to(device, dtype=torch.float32)
 
-    if args.disable_textenc_training:
-        logging.info(f"{Fore.CYAN} * NOT Training Text Encoder, quality reduced *{Style.RESET_ALL}")
-        params_to_train = itertools.chain(unet.parameters())
-    elif args.disable_unet_training:
-        logging.info(f"{Fore.CYAN} * Training Text Encoder Only *{Style.RESET_ALL}")
-        params_to_train = itertools.chain(text_encoder.parameters())
-    else:
-        logging.info(f"{Fore.CYAN} * Training Text and Unet *{Style.RESET_ALL}")
-        params_to_train = itertools.chain(unet.parameters(), text_encoder.parameters())
-
     optimizer_config = None
     optimizer_config_path  = args.optimizer_config if args.optimizer_config else "optimizer.json"
     if os.path.exists(os.path.join(os.curdir, optimizer_config_path)):
@@ -514,6 +506,7 @@ def main(args):
 
     default_lr = 1e-6
     curr_lr = args.lr
+    text_encoder_lr_scale = 1.0
 
     if optimizer_config is not None:
         betas = optimizer_config["betas"]
@@ -524,11 +517,32 @@ def main(args):
         if args.lr is not None:
             curr_lr = args.lr
             logging.info(f"Overriding LR from optimizer config with main config/cli LR setting: {curr_lr}")
+
+        text_encoder_lr_scale = optimizer_config.get("text_encoder_lr_scale", text_encoder_lr_scale)
+        if text_encoder_lr_scale != 1.0:
+            logging.info(f" * Using text encoder LR scale {text_encoder_lr_scale}")
+
         logging.info(f" * Loaded optimizer args from {optimizer_config_path} *")
 
     if curr_lr is None:
         curr_lr = default_lr
         logging.warning(f"No LR setting found, defaulting to {default_lr}")
+
+    curr_text_encoder_lr = curr_lr * text_encoder_lr_scale
+
+    if args.disable_textenc_training:
+        logging.info(f"{Fore.CYAN} * NOT Training Text Encoder, quality reduced *{Style.RESET_ALL}")
+        params_to_train = itertools.chain(unet.parameters())
+    elif args.disable_unet_training:
+        logging.info(f"{Fore.CYAN} * Training Text Encoder Only *{Style.RESET_ALL}")
+        if text_encoder_lr_scale != 1:
+            logging.warning(f"{Fore.YELLOW} * Ignoring text_encoder_lr_scale {text_encoder_lr_scale} and using the "
+                            f"Unet LR {curr_lr} for the text encoder instead *{Style.RESET_ALL}")
+        params_to_train = itertools.chain(text_encoder.parameters())
+    else:
+        logging.info(f"{Fore.CYAN} * Training Text and Unet *{Style.RESET_ALL}")
+        params_to_train = [{'params': unet.parameters()},
+                           {'params': text_encoder.parameters(), 'lr': curr_text_encoder_lr}]
 
     if optimizer_name:
         if optimizer_name == "lion":
@@ -556,7 +570,7 @@ def main(args):
             amsgrad=False,
         )
 
-    log_optimizer(optimizer, betas, epsilon, weight_decay, curr_lr)
+    log_optimizer(optimizer, betas, epsilon, weight_decay, curr_lr, curr_text_encoder_lr)
 
     image_train_items = resolve_image_train_items(args, log_folder)
 
@@ -609,6 +623,7 @@ def main(args):
                                        default_resolution=args.resolution, default_seed=args.seed,
                                        config_file_path=args.sample_prompts,
                                        batch_size=max(1,args.batch_size//2),
+                                       default_sample_steps=args.sample_steps,
                                        use_xformers=is_xformers_available() and not args.disable_xformers)
 
     """
@@ -681,7 +696,7 @@ def main(args):
     )
     logging.info(f" Grad scaler enabled: {scaler.is_enabled()} (amp mode)")
 
-    epoch_pbar = tqdm(range(args.max_epochs), position=0, leave=True)
+    epoch_pbar = tqdm(range(args.max_epochs), position=0, leave=True, dynamic_ncols=True)
     epoch_pbar.set_description(f"{Fore.LIGHTCYAN_EX}Epochs{Style.RESET_ALL}")
     epoch_times = []
 
@@ -742,10 +757,36 @@ def main(args):
 
         return model_pred, target
 
+    def generate_samples(global_step: int, batch):
+        with isolate_rng():
+            prev_sample_steps = sample_generator.sample_steps
+            sample_generator.reload_config()
+            if prev_sample_steps != sample_generator.sample_steps:
+                next_sample_step = math.ceil((global_step + 1) / sample_generator.sample_steps) * sample_generator.sample_steps
+                print(f" * SampleGenerator config changed, now generating images samples every " +
+                      f"{sample_generator.sample_steps} training steps (next={next_sample_step})")
+            sample_generator.update_random_captions(batch["captions"])
+            inference_pipe = sample_generator.create_inference_pipe(unet=unet,
+                                                                    text_encoder=text_encoder,
+                                                                    tokenizer=tokenizer,
+                                                                    vae=vae,
+                                                                    diffusers_scheduler_config=reference_scheduler.config
+                                                                    ).to(device)
+            sample_generator.generate_samples(inference_pipe, global_step)
+
+            del inference_pipe
+        gc.collect()
+        torch.cuda.empty_cache()
+
     # Pre-train validation to establish a starting point on the loss graph
     if validator:
         validator.do_validation_if_appropriate(epoch=0, global_step=0,
                                                get_model_prediction_and_target_callable=get_model_prediction_and_target)
+
+    # the sample generator might be configured to generate samples before step 0
+    if sample_generator.generate_pretrain_samples:
+        _, batch = next(enumerate(train_dataloader))
+        generate_samples(global_step=0, batch=batch)
 
     try:
         write_batch_schedule(args, log_folder, train_batch, epoch = 0)
@@ -756,7 +797,7 @@ def main(args):
             images_per_sec_log_step = []
 
             epoch_len = math.ceil(len(train_batch) / args.batch_size)
-            steps_pbar = tqdm(range(epoch_len), position=1)
+            steps_pbar = tqdm(range(epoch_len), position=1, leave=False, dynamic_ncols=True)
             steps_pbar.set_description(f"{Fore.LIGHTCYAN_EX}Steps{Style.RESET_ALL}")
 
             for step, batch in enumerate(train_dataloader):
@@ -802,8 +843,13 @@ def main(args):
                     curr_lr = lr_scheduler.get_last_lr()[0]
                     loss_local = sum(loss_log_step) / len(loss_log_step)
                     loss_log_step = []
-                    logs = {"loss/log_step": loss_local, "lr": curr_lr, "img/s": images_per_sec}                    
-                    log_writer.add_scalar(tag="hyperparamater/lr", scalar_value=curr_lr, global_step=global_step)
+                    logs = {"loss/log_step": loss_local, "lr": curr_lr, "img/s": images_per_sec}
+                    if args.disable_textenc_training or args.disable_unet_training or text_encoder_lr_scale == 1:
+                        log_writer.add_scalar(tag="hyperparamater/lr", scalar_value=curr_lr, global_step=global_step)
+                    else:
+                        log_writer.add_scalar(tag="hyperparamater/lr unet", scalar_value=curr_lr, global_step=global_step)
+                        curr_text_encoder_lr = lr_scheduler.get_last_lr()[1]
+                        log_writer.add_scalar(tag="hyperparamater/lr text encoder", scalar_value=curr_text_encoder_lr, global_step=global_step)
                     log_writer.add_scalar(tag="loss/log_step", scalar_value=loss_local, global_step=global_step)
                     sum_img = sum(images_per_sec_log_step)
                     avg = sum_img / len(images_per_sec_log_step)
@@ -814,21 +860,8 @@ def main(args):
                     append_epoch_log(global_step=global_step, epoch_pbar=epoch_pbar, gpu=gpu, log_writer=log_writer, **logs)
                     torch.cuda.empty_cache()
 
-                if (global_step + 1) % args.sample_steps == 0:
-                    with isolate_rng():
-                        sample_generator.reload_config()
-                        sample_generator.update_random_captions(batch["captions"])
-                        inference_pipe = sample_generator.create_inference_pipe(unet=unet,
-                                                                                text_encoder=text_encoder,
-                                                                                tokenizer=tokenizer,
-                                                                                vae=vae,
-                                                                                diffusers_scheduler_config=reference_scheduler.config
-                                                                                ).to(device)
-                        sample_generator.generate_samples(inference_pipe, global_step)
-
-                        del inference_pipe
-                    gc.collect()
-                    torch.cuda.empty_cache()
+                if (global_step + 1) % sample_generator.sample_steps == 0:
+                    generate_samples(global_step=global_step, batch=batch)
 
                 min_since_last_ckpt =  (time.time() - last_epoch_saved_time) / 60
 
