@@ -520,7 +520,7 @@ def main(args):
 
         text_encoder_lr_scale = optimizer_config.get("text_encoder_lr_scale", text_encoder_lr_scale)
         if text_encoder_lr_scale != 1.0:
-            print(f" * Using text encoder LR scale {text_encoder_lr_scale}")
+            logging.info(f" * Using text encoder LR scale {text_encoder_lr_scale}")
 
         logging.info(f" * Loaded optimizer args from {optimizer_config_path} *")
 
