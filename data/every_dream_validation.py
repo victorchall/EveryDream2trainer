@@ -116,7 +116,7 @@ class EveryDreamValidator:
         [Any, Any], tuple[torch.Tensor, torch.Tensor]]):
         with torch.no_grad(), isolate_rng():
             loss_validation_epoch = []
-            steps_pbar = tqdm(range(len(dataloader)), position=1)
+            steps_pbar = tqdm(range(len(dataloader)), position=1, leave=False)
             steps_pbar.set_description(f"{Fore.LIGHTCYAN_EX}Validate ({tag}){Style.RESET_ALL}")
 
             for step, batch in enumerate(dataloader):
