@@ -104,7 +104,7 @@ class EveryDreamBatch(Dataset):
 
         example["image"] = image_transforms(train_item["image"])
 
-        if random.random() > self.conditional_dropout:
+        if random.random() > (train_item.cond_dropout or self.conditional_dropout):
             example["tokens"] = self.tokenizer(example["caption"],
                                                 truncation=True,
                                                 padding="max_length",

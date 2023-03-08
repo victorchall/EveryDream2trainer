@@ -10,6 +10,7 @@ ninja
 omegaconf==2.2.3
 piexif==1.1.3
 protobuf==3.20.3
+pyfakefs
 pynvml==11.5.0
 pyre-extensions==0.0.30
 pytorch-lightning==1.9.2
