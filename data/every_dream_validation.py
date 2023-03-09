@@ -97,34 +97,44 @@ class EveryDreamValidator:
                 remaining_train_items, tokenizer)
             return remaining_train_items
 
-    def do_validation_if_appropriate(self, epoch: int, global_step: int,
-                                     get_model_prediction_and_target_callable: Callable[
+    def get_validation_step_indices(self, epoch_length_steps: int) -> list[int]:
+        if self.every_n_epochs >= 1:
+            # last step only
+            return [epoch_length_steps-1]
+        # subdivide the epoch evenly, by rounding self.every_n_epochs to the nearest clean division of steps
+        num_divisions = min(epoch_length_steps, math.ceil(1/self.every_n_epochs))
+        # validation happens after training:
+        # if an epoch has eg 100 steps and num_divisions is 2, then validation should occur after steps 49 and 99
+        validate_every_n_steps = epoch_length_steps / num_divisions
+        return [math.ceil((i+1)*validate_every_n_steps) - 1 for i in range(num_divisions)]
+
+    def do_validation(self, global_step: int,
+                      get_model_prediction_and_target_callable: Callable[
                                          [Any, Any], tuple[torch.Tensor, torch.Tensor]]):
-        if (epoch % self.every_n_epochs) == 0:
-            if self.train_overlapping_dataloader is not None:
-                mean_loss = self._calculate_validation_loss('stabilize-train',
-                                                            self.train_overlapping_dataloader,
-                                                            get_model_prediction_and_target_callable)
-                if self.train_overlapping_dataloader_loss_offset is None:
-                    self.train_overlapping_dataloader_loss_offset = -mean_loss
-                self.log_writer.add_scalar(tag=f"loss/stabilize-train",
-                                           scalar_value=self.train_overlapping_dataloader_loss_offset + mean_loss,
-                                           global_step=global_step)
-            if self.val_dataloader is not None:
-                mean_loss = self._calculate_validation_loss('val',
-                                                            self.val_dataloader,
-                                                            get_model_prediction_and_target_callable)
-                if self.val_loss_offset is None:
-                    self.val_loss_offset = -mean_loss
-                self.log_writer.add_scalar(tag=f"loss/val",
-                                           scalar_value=self.val_loss_offset + mean_loss,
-                                           global_step=global_step)
-                self.loss_val_history.append(mean_loss)
-                if len(self.loss_val_history) > (self.val_loss_window_size * 2 + 1):
-                    dy = np.diff(self.loss_val_history[-self.val_loss_window_size:])
-                    if np.average(dy) > 0:
-                        logging.warning(f"Validation loss shows diverging")
-                        # todo: signal stop?
+        if self.train_overlapping_dataloader is not None:
+            mean_loss = self._calculate_validation_loss('stabilize-train',
+                                                        self.train_overlapping_dataloader,
+                                                        get_model_prediction_and_target_callable)
+            if self.train_overlapping_dataloader_loss_offset is None:
+                self.train_overlapping_dataloader_loss_offset = -mean_loss
+            self.log_writer.add_scalar(tag=f"loss/stabilize-train",
+                                       scalar_value=self.train_overlapping_dataloader_loss_offset + mean_loss,
+                                       global_step=global_step)
+        if self.val_dataloader is not None:
+            mean_loss = self._calculate_validation_loss('val',
+                                                        self.val_dataloader,
+                                                        get_model_prediction_and_target_callable)
+            if self.val_loss_offset is None:
+                self.val_loss_offset = -mean_loss
+            self.log_writer.add_scalar(tag=f"loss/val",
+                                       scalar_value=self.val_loss_offset + mean_loss,
+                                       global_step=global_step)
+            self.loss_val_history.append(mean_loss)
+            if len(self.loss_val_history) > (self.val_loss_window_size * 2 + 1):
+                dy = np.diff(self.loss_val_history[-self.val_loss_window_size:])
+                if np.average(dy) > 0:
+                    logging.warning(f"Validation loss shows diverging")
+                    # todo: signal stop?
 
     def _calculate_validation_loss(self, tag, dataloader, get_model_prediction_and_target: Callable[
         [Any, Any], tuple[torch.Tensor, torch.Tensor]]) -> float:
