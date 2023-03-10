@@ -46,9 +46,11 @@ The value is defaulted at 0.04, which means 4% conditional dropout.  You can set
 
 Learning rate adjustment is a very important part of training.  You can use the default settings, or you can tweak it.  You should consider increasing this further if you increase your batch size further (10+) using [gradient checkpointing](#gradient_checkpointing).
 
-    --lr 1.5e-6 ^
+    --lr 1.0e-6 ^
 
 By default, the learning rate is constant for the entire training session.  However, if you want it to change by itself during training, you can use cosine.
+
+General suggestion is 1e-6 for training SD1.5 at 512 resolution.  For SD2.1 at 768, try a much lower value, such as 2e-7.  [Validation](VALIDATION.md) can be helpful to tune learning rate. 
 
 ## Clip skip
 
