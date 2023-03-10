@@ -802,9 +802,8 @@ def main(args):
 
             validation_steps = (
                 [] if validator is None
-                else validator.get_validation_step_indices(len(train_dataloader))
+                else validator.get_validation_step_indices(epoch, len(train_dataloader))
             )
-            print(f"validation on steps {validation_steps}")
 
             for step, batch in enumerate(train_dataloader):
                 step_start_time = time.time()
