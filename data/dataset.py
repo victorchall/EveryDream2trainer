@@ -230,7 +230,7 @@ class Dataset:
             
             caption = ImageCaption(
                 main_prompt=next(iter(sorted(config.main_prompts))),
-                rating=config.rating,
+                rating=config.rating or 1.0,
                 tags=tags,
                 tag_weights=tag_weights,
                 max_target_length=config.max_caption_length,
