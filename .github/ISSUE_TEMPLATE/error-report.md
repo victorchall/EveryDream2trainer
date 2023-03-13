@@ -17,3 +17,6 @@ assignees: ''
 
 **Additional context**
 Add any other context about the problem here.
+
+Also consider posting your cfg and log to the Discord #help channel here instead, there are far more people there than will read your issue here on Github: 
+Have you joined discord?  You're far more likely to get a response there: https://discord.gg/uheqxU6sXN

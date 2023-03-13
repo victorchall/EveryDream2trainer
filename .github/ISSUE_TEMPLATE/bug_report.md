@@ -9,6 +9,8 @@ assignees: ''
 
 **If you are getting an error, use the ERROR template, not this BUG template. **
 
+Have you joined discord?  You're far more likely to get a response there: https://discord.gg/uheqxU6sXN
+
 **To Reproduce**
 Steps to reproduce the undesired behavior:
 1. Configure training in this way (please attach _cfg.json)
