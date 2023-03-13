@@ -4,6 +4,7 @@ import os
 import typing
 import zipfile
 import argparse
+from data.dataset import Dataset
 
 import tqdm
 from colorama import Fore, Style
@@ -27,16 +28,6 @@ class DataResolver:
         """
         raise NotImplementedError()
     
-    def image_train_item(self, image_path: str, caption: ImageCaption, multiplier: float=1) -> ImageTrainItem:
-        return ImageTrainItem(
-            image=None,
-            caption=caption,
-            aspects=self.aspects,
-            pathname=image_path,
-            flip_p=self.flip_p,
-            multiplier=multiplier
-        )
-
 class JSONResolver(DataResolver):
     def image_train_items(self, json_path: str) -> list[ImageTrainItem]:
         """
@@ -45,62 +36,8 @@ class JSONResolver(DataResolver):
 
         :param json_path: The path to the JSON file.
         """
-        items = []
-        with open(json_path, encoding='utf-8', mode='r') as f:
-            json_data = json.load(f)
-
-        for data in tqdm.tqdm(json_data):
-            caption = JSONResolver.image_caption(data)
-            if caption:
-                image_value = JSONResolver.get_image_value(data)
-                item = self.image_train_item(image_value, caption)
-                if item:
-                    items.append(item)
-
-        return items
+        return Dataset.from_json(json_path).image_train_items(self.aspects)
     
-    @staticmethod
-    def get_image_value(json_data: dict) -> typing.Optional[str]:
-        """
-        Get the image from the json data if possible.
-
-        :param json_data: The json data, a dict.
-        :return: The image, or None if not found.
-        """
-        image_value = json_data.get("image", None)
-        if isinstance(image_value, str):
-            image_value = image_value.strip()
-            if os.path.exists(image_value):
-                return image_value
-
-    @staticmethod
-    def get_caption_value(json_data: dict) -> typing.Optional[str]: 
-        """
-        Get the caption from the json data if possible.
-
-        :param json_data: The json data, a dict.
-        :return: The caption, or None if not found.
-        """
-        caption_value = json_data.get("caption", None)
-        if isinstance(caption_value, str):
-            return caption_value.strip()
-    
-    @staticmethod
-    def image_caption(json_data: dict) -> typing.Optional[ImageCaption]:
-        """
-        Get the caption from the json data if possible.
-        
-        :param json_data: The json data, a dict.
-        :return: The `ImageCaption`, or None if not found.
-        """
-        image_value = JSONResolver.get_image_value(json_data)
-        caption_value = JSONResolver.get_caption_value(json_data)
-        if image_value:
-            if caption_value:
-                return ImageCaption.resolve(caption_value)
-            return ImageCaption.from_file(image_value)
-
-
 class DirectoryResolver(DataResolver):    
     def image_train_items(self, data_root: str) -> list[ImageTrainItem]:
         """
@@ -111,32 +48,7 @@ class DirectoryResolver(DataResolver):
         :param data_root: The root directory to recurse through
         """
         DirectoryResolver.unzip_all(data_root)
-        image_paths = list(DirectoryResolver.recurse_data_root(data_root))
-        items = []
-        multipliers = {}
-
-        for pathname in tqdm.tqdm(image_paths):
-            current_dir = os.path.dirname(pathname)
-            
-            if current_dir not in multipliers:
-                multiply_txt_path = os.path.join(current_dir, "multiply.txt")
-                if os.path.exists(multiply_txt_path):
-                    try:
-                        with open(multiply_txt_path, 'r') as f:
-                            val = float(f.read().strip())
-                            multipliers[current_dir] = val
-                            logging.info(f" - multiply.txt in '{current_dir}' set to {val}")
-                    except Exception as e:
-                        logging.warning(f" * {Fore.LIGHTYELLOW_EX}Error trying to read multiply.txt for {current_dir}: {Style.RESET_ALL}{e}")
-                        multipliers[current_dir] = 1.0
-                else:
-                    multipliers[current_dir] = 1.0
-            
-            caption = ImageCaption.resolve(pathname)
-            item = self.image_train_item(pathname, caption, multiplier=multipliers[current_dir])
-            items.append(item)
-
-        return items
+        return Dataset.from_path(data_root).image_train_items(self.aspects)
         
     @staticmethod
     def unzip_all(path):
@@ -150,21 +62,6 @@ class DirectoryResolver(DataResolver):
         except Exception as e:
             logging.error(f"Error unzipping files {e}")
     
-    @staticmethod
-    def recurse_data_root(recurse_root):
-        for f in os.listdir(recurse_root):
-            current = os.path.join(recurse_root, f)
-
-            if os.path.isfile(current):
-                ext = os.path.splitext(f)[1].lower()
-                if ext in ['.jpg', '.jpeg', '.png', '.bmp', '.webp', '.jfif']:
-                    yield current
-
-        for d in os.listdir(recurse_root):
-            current = os.path.join(recurse_root, d)
-            if os.path.isdir(current):
-                yield from DirectoryResolver.recurse_data_root(current)
-        
 def strategy(data_root: str) -> typing.Type[DataResolver]:
     """
     Determine the strategy to use for resolving the data.
