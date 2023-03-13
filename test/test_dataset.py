@@ -274,6 +274,7 @@ class TestDataset(TestCase):
         self.assertEqual(actual[0].multiplier, 2.0)
         self.assertEqual(actual[0].flip.p, 0.1) 
         self.assertEqual(actual[0].cond_dropout, 0.01)
+        self.assertEqual(actual[0].caption.rating(), 1.1)
         self.assertEqual(actual[0].caption.get_caption(), "first caption, tag, tag_2")
         # Can't test this
         # self.assertTrue(actual[0].caption.__use_weights)
@@ -282,6 +283,7 @@ class TestDataset(TestCase):
         self.assertEqual(actual[1].multiplier, 1.0)
         self.assertEqual(actual[1].flip.p, 0.0)
         self.assertIsNone(actual[1].cond_dropout)
+        self.assertEqual(actual[1].caption.rating(), 1.0)
         self.assertEqual(actual[1].caption.get_caption(), "single caption")
         # Can't test this
         # self.assertFalse(actual[1].caption.__use_weights)
