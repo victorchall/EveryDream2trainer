@@ -113,136 +113,6 @@ class ImageCaption:
         random.Random(seed).shuffle(tags)
         return ", ".join(tags)
 
-    @staticmethod
-    def parse(string: str) -> 'ImageCaption':
-        """
-        Parses a string to get the caption.
-
-        :param string: String to parse.
-        :return: `ImageCaption` object.
-        """
-        split_caption = list(map(str.strip, string.split(",")))
-        main_prompt = split_caption[0]
-        tags = split_caption[1:]
-        tag_weights = [1.0] * len(tags)
-
-        return ImageCaption(main_prompt, 1.0, tags, tag_weights, DEFAULT_MAX_CAPTION_LENGTH, False)
-    
-    @staticmethod
-    def from_file_name(file_path: str) -> 'ImageCaption':
-        """
-        Parses the file name to get the caption.
-        
-        :param file_path: Path to the image file.
-        :return: `ImageCaption` object.
-        """
-        (file_name, _) = os.path.splitext(os.path.basename(file_path))
-        caption = file_name.split("_")[0]
-        return ImageCaption.parse(caption)
-    
-    @staticmethod
-    def from_text_file(file_path: str, default_caption: OptionalImageCaption=None) -> OptionalImageCaption:
-        """
-        Parses a text file to get the caption. Returns the default caption if
-        the file does not exist or is invalid.
-        
-        :param file_path: Path to the text file.
-        :param default_caption: Optional `ImageCaption` to return if the file does not exist or is invalid.
-        :return: `ImageCaption` object or `None`.
-        """
-        try:
-            with open(file_path, encoding='utf-8', mode='r') as caption_file:
-                caption_text = caption_file.read()
-                return ImageCaption.parse(caption_text)
-        except:
-            logging.error(f" *** Error reading {file_path} to get caption")
-            return default_caption
-        
-    @staticmethod
-    def from_yaml_file(file_path: str, default_caption: OptionalImageCaption=None) -> OptionalImageCaption:
-        """
-        Parses a yaml file to get the caption. Returns the default caption if
-        the file does not exist or is invalid.
-        
-        :param file_path: path to the yaml file
-        :param default_caption: caption to return if the file does not exist or is invalid
-        :return: `ImageCaption` object or `None`.
-        """
-        try:
-            with open(file_path, "r") as stream:
-                file_content = yaml.safe_load(stream)
-                main_prompt = file_content.get("main_prompt", "")
-                rating = file_content.get("rating", 1.0)
-                unparsed_tags = file_content.get("tags", [])
-
-                max_caption_length = file_content.get("max_caption_length", DEFAULT_MAX_CAPTION_LENGTH)
-
-                tags = []
-                tag_weights = []
-                last_weight = None
-                weights_differ = False
-                for unparsed_tag in unparsed_tags:
-                    tag = unparsed_tag.get("tag", "").strip()
-                    if len(tag) == 0:
-                        continue
-
-                    tags.append(tag)
-                    tag_weight = unparsed_tag.get("weight", 1.0)
-                    tag_weights.append(tag_weight)
-
-                    if last_weight is not None and weights_differ is False:
-                        weights_differ = last_weight != tag_weight
-
-                    last_weight = tag_weight
-
-                return ImageCaption(main_prompt, rating, tags, tag_weights, max_caption_length, weights_differ)
-        except:
-            logging.error(f" *** Error reading {file_path} to get caption")
-            return default_caption
-        
-    @staticmethod
-    def from_file(file_path: str, default_caption: OptionalImageCaption=None) -> OptionalImageCaption:
-        """
-        Try to resolve a caption from a file path or return `default_caption`.
-
-        :string: The path to the file to parse.
-        :default_caption: Optional `ImageCaption` to return if the file does not exist or is invalid.
-        :return: `ImageCaption` object or `None`.
-        """
-        if os.path.exists(file_path):
-            (file_path_without_ext, ext) = os.path.splitext(file_path) 
-            match ext:
-                case ".yaml" | ".yml":
-                    return ImageCaption.from_yaml_file(file_path, default_caption)
-                
-                case ".txt" | ".caption":
-                    return ImageCaption.from_text_file(file_path, default_caption)
-                
-                case '.jpg'| '.jpeg'| '.png'| '.bmp'| '.webp'| '.jfif':
-                    for ext in [".yaml", ".yml", ".txt", ".caption"]:
-                        file_path = file_path_without_ext + ext
-                        image_caption = ImageCaption.from_file(file_path)
-                        if image_caption is not None:
-                            return image_caption
-                    return ImageCaption.from_file_name(file_path)
-
-                case _:
-                    return default_caption
-        else:
-            return default_caption
-        
-    @staticmethod
-    def resolve(string: str) -> 'ImageCaption':
-        """
-        Try to resolve a caption from a string. If the string is a file path,
-        the caption will be read from the file, otherwise the string will be
-        parsed as a caption.
-
-        :string: The string to resolve.
-        :return: `ImageCaption` object.
-        """
-        return ImageCaption.from_file(string, None) or ImageCaption.parse(string)
-
 
 class ImageTrainItem:
     """
@@ -253,7 +123,7 @@ class ImageTrainItem:
     flip_p: probability of flipping image (0.0 to 1.0)
     rating: the relative rating of the images. The rating is measured in comparison to the other images.
     """
-    def __init__(self, image: PIL.Image, caption: ImageCaption, aspects: list[float], pathname: str, flip_p=0.0, multiplier: float=1.0):
+    def __init__(self, image: PIL.Image, caption: ImageCaption, aspects: list[float], pathname: str, flip_p=0.0, multiplier: float=1.0, cond_dropout=None):
         self.caption = caption
         self.aspects = aspects
         self.pathname = pathname
@@ -261,6 +131,7 @@ class ImageTrainItem:
         self.cropped_img = None
         self.runt_size = 0
         self.multiplier = multiplier
+        self.cond_dropout = cond_dropout
 
         self.image_size = None
         if image is None or len(image) == 0:

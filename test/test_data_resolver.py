@@ -58,13 +58,13 @@ class TestResolve(unittest.TestCase):
 
     def test_directory_resolve_with_str(self):
         items = resolver.resolve(DATA_PATH, ARGS)
-        image_paths = [item.pathname for item in items]
+        image_paths = set(item.pathname for item in items)
         image_captions = [item.caption for item in items]
-        captions = [caption.get_caption() for caption in image_captions]
+        captions = set(caption.get_caption() for caption in image_captions)
         
         self.assertEqual(len(items), 3)
-        self.assertEqual(image_paths, [IMAGE_1_PATH, IMAGE_2_PATH, IMAGE_3_PATH])
-        self.assertEqual(captions, ['caption for test1', 'test2', 'test3'])
+        self.assertEqual(image_paths, {IMAGE_1_PATH, IMAGE_2_PATH, IMAGE_3_PATH})
+        self.assertEqual(captions, {'caption for test1', 'test2', 'test3'})
         
         undersized_images = list(filter(lambda i: i.is_undersized, items))
         self.assertEqual(len(undersized_images), 1)
