@@ -811,12 +811,6 @@ def main(args):
 
                 model_pred, target = get_model_prediction_and_target(batch["image"], batch["tokens"], args.zero_frequency_noise_ratio)
 
-                # with torch.no_grad():
-                #     loss_l1 = F.l1_loss(model_pred.float(), target.float(), reduction="mean")
-                #     log_writer.add_scalar(tag="loss/l1", scalar_value=loss_l1, global_step=global_step)
-                #     loss_hinge = F.hinge_embedding_loss(model_pred.float(), target.float(), reduction="mean")
-                #     log_writer.add_scalar(tag="loss/hinge", scalar_value=loss_hinge, global_step=global_step)
-                
                 loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
 
                 del target, model_pred

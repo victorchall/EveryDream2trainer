@@ -9,6 +9,8 @@ from data.image_train_item import ImageCaption, ImageTrainItem
 from utils.fs_helpers import *
 from typing import TypeVar, Iterable
 
+from tqdm import tqdm
+
 
 def overlay(overlay, base):
     return overlay if overlay is not None else base
@@ -216,7 +218,7 @@ class Dataset:
     
     def image_train_items(self, aspects):
         items = []
-        for image in self.image_configs:
+        for image in tqdm(self.image_configs, desc="preloading", dynamic_ncols=True):
             config = self.image_configs[image]
             if len(config.main_prompts) > 1:
                 logging.warning(f" *** Found multiple multiple main_prompts for image {image}, but only one will be applied: {config.main_prompts}")
