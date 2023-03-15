@@ -1,5 +1,5 @@
 import os
-from data.dataset import Dataset, ImageConfig, Tag
+from data.dataset import Dataset, ImageConfig, Tag, DEFAULT_MAX_CAPTION_LENGTH
 
 from textwrap import dedent
 from pyfakefs.fake_filesystem_unittest import TestCase
@@ -276,8 +276,8 @@ class TestDataset(TestCase):
         self.assertEqual(actual[0].cond_dropout, 0.01)
         self.assertEqual(actual[0].caption.rating(), 1.1)
         self.assertEqual(actual[0].caption.get_caption(), "first caption, tag, tag_2")
-        # Can't test this
-        # self.assertTrue(actual[0].caption.__use_weights)
+        self.assertTrue(actual[0].caption._ImageCaption__use_weights)
+        self.assertEqual(actual[0].caption._ImageCaption__max_target_length, 1024)
 
         self.assertEqual(actual[1].pathname, os.path.abspath('2.jpg'))
         self.assertEqual(actual[1].multiplier, 1.0)
@@ -285,5 +285,5 @@ class TestDataset(TestCase):
         self.assertIsNone(actual[1].cond_dropout)
         self.assertEqual(actual[1].caption.rating(), 1.0)
         self.assertEqual(actual[1].caption.get_caption(), "single caption")
-        # Can't test this
-        # self.assertFalse(actual[1].caption.__use_weights)
+        self.assertFalse(actual[1].caption._ImageCaption__use_weights)
+        self.assertEqual(actual[1].caption._ImageCaption__max_target_length, DEFAULT_MAX_CAPTION_LENGTH)
