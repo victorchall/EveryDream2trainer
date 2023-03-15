@@ -29,7 +29,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     python3 -m venv ${VIRTUAL_ENV} && \
     pip install -U -I torch==1.13.1+cu117 torchvision==0.14.1+cu117 --extra-index-url "https://download.pytorch.org/whl/cu117" && \
     pip install -r requirements.txt && \
-    pip install --pre --no-deps xformers==0.0.17.dev451
+    pip install --pre -U --no-deps xformers
 #    In case of emergency, build xformers from scratch
 #    export FORCE_CUDA=1 && export TORCH_CUDA_ARCH_LIST="7.5;8.0;8.6" && export CUDA_VISIBLE_DEVICES=0 && \
 #    pip install --no-deps git+https://github.com/facebookresearch/xformers.git@48a77cc#egg=xformers
