@@ -29,7 +29,6 @@ from torchvision import transforms
 
 _RANDOM_TRIM = 0.04
 
-DEFAULT_MAX_CAPTION_LENGTH = 2048
 
 OptionalImageCaption = typing.Optional['ImageCaption']
 

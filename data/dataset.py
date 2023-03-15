@@ -12,6 +12,8 @@ from typing import TypeVar, Iterable
 from tqdm import tqdm
 
 
+DEFAULT_MAX_CAPTION_LENGTH = 2048
+
 def overlay(overlay, base):
     return overlay if overlay is not None else base
 
@@ -235,7 +237,7 @@ class Dataset:
                 rating=config.rating or 1.0,
                 tags=tags,
                 tag_weights=tag_weights,
-                max_target_length=config.max_caption_length,
+                max_target_length=config.max_caption_length or DEFAULT_MAX_CAPTION_LENGTH,
                 use_weights=use_weights)
 
             item = ImageTrainItem(
