@@ -1,18 +1,16 @@
 # WTF is a CUDA out of memory error?
 
-Training models is very intense on GPU resources, and CUDA out of memory error is quite common and to be expected as you figure out what you can get away with.
+Training models is very intense on GPU resources, and `CUDA out of memory error` is quite common and to be expected as you figure out what you can get away with inside the constraints of your GPU VRAM limit.
 
-## Stuff you want on
+VRAM use depends on the model being trained (SD1.5 vs SD2.1 base), batch size, resolution, and a number of other settings.
 
-Make sure you use the following settings in your json config or command line:
+## Stuff you want on for 12GB cards
 
-`--amp` on CLI, or in json `"amp": true`
+AMP and AdamW8bit are now defaulted to on.  These are VRAM efficient and should be on for all training.
 
-AMP is a significant VRAM savings (and performance increase as well).  It saves several GB and increases performance by 80-100% on Ampere class GPUs.
+If you are using a customized optimizer.json, make sure `adamw8bit` is set as the optimizer.  `AdamW` is significantly more VRAM intensive. "lion" is another option that is VRAM efficient, but is still fairly experimental in terms of understanding the best LR, betas, and weight decay settings.  See [Optimizer docs](OPTIMIZER.md) for more information on advanced optimizer config if you want to try `lion` optimizer. `adamw8bit` is the recommended and also the default.
 
-`--useadam8bit` in CLI or in json `"useadam8bit": true`
-
-Tim Dettmers'  AdamW 8bit optimizer (aka "bitsandbytes") is a significant VRAM savings (and performance increase as well).  Highly recommended, even for high VRAM GPUs.  It saves about 1.5GB and  offers a performance boost.
+Gradient checkpointing can still be turned on and off, and is not on by default.  Turning it on will greatly reduce VRAM use at the expense of some performance.  It is suggested to turn it on for any GPU with less than 16GB VRAM.
 
 ## I really want to train higher resolution, what do I do?
 
