@@ -23,6 +23,7 @@ import yaml
 
 import PIL
 import PIL.Image as Image
+import PIL.ImageOps as ImageOps
 import numpy as np
 from torchvision import transforms
 
@@ -154,8 +155,8 @@ class ImageCaption:
             with open(file_path, encoding='utf-8', mode='r') as caption_file:
                 caption_text = caption_file.read()
                 return ImageCaption.parse(caption_text)
-        except:
-            logging.error(f" *** Error reading {file_path} to get caption")
+        except Exception as e:
+            logging.error(f" *** Error reading {file_path} to get caption {e}")
             return default_caption
         
     @staticmethod
@@ -284,6 +285,7 @@ class ImageTrainItem:
         try:
             # if not hasattr(self, 'image'):
             self.image = PIL.Image.open(self.pathname).convert('RGB')
+            self.image = ImageOps.exif_transpose(self.image)
 
             width, height = self.image.size
             if crop:
