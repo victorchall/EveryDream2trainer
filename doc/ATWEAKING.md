@@ -145,6 +145,8 @@ Based on [Nicholas Guttenberg's blog post](https://www.crosslabs.org//blog/diffu
 
 Test results: https://huggingface.co/panopstor/ff7r-stable-diffusion/blob/main/zero_freq_test_biggs.webp
 
+Very tentatively, I suggest closer to 0.10 for short term training, and lower values of around 0.02 to 0.03 for longer runs (50k+ steps).  Early indications seem to suggest values like 0.10 can cause divergance over time. 
+
 # Stuff you probably don't need to mess with, but well here it is:
 
 
