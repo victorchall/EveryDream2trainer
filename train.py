@@ -312,7 +312,7 @@ def report_image_train_item_problems(log_folder: str, items: list[ImageTrainItem
         underized_log_path = os.path.join(log_folder, "undersized_images.txt")
         logging.warning(f"{Fore.LIGHTRED_EX} ** Some images are smaller than the target size, consider using larger images{Style.RESET_ALL}")
         logging.warning(f"{Fore.LIGHTRED_EX} ** Check {underized_log_path} for more information.{Style.RESET_ALL}")
-        with open(underized_log_path, "w") as undersized_images_file:
+        with open(underized_log_path, "w", encoding='utf-8') as undersized_images_file:
             undersized_images_file.write(f" The following images are smaller than the target size, consider removing or sourcing a larger copy:")
             for undersized_item in undersized_items:
                 message = f" *** {undersized_item.pathname} with size: {undersized_item.image_size} is smaller than target size: {undersized_item.target_wh}\n"
