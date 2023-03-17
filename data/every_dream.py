@@ -42,7 +42,8 @@ class EveryDreamBatch(Dataset):
                  shuffle_tags=False,
                  rated_dataset=False,
                  rated_dataset_dropout_target=0.5,
-                 name='train'
+                 name='train',
+                 attention_mask='none'
                  ):
         self.data_loader = data_loader
         self.batch_size = data_loader.batch_size
@@ -61,9 +62,11 @@ class EveryDreamBatch(Dataset):
         self.image_train_items  = []
         self.__update_image_train_items(1.0)
         self.name = name
+        self.attention_mask = attention_mask
             
         num_images = len(self.image_train_items)
-        logging.info(f" ** Dataset '{name}': {num_images / self.batch_size:.0f} batches, num_images: {num_images}, batch_size: {self.batch_size}")
+        logging.info(f" ** Dataset '{name}': {num_images / self.batch_size:.0f} batches, num_images: {num_images}, "
+                     f"batch_size: {self.batch_size}, attention_mask: {self.attention_mask}")
 
     def shuffle(self, epoch_n: int, max_epochs: int):
         self.seed += 1
@@ -105,19 +108,36 @@ class EveryDreamBatch(Dataset):
         example["image"] = image_transforms(train_item["image"])
 
         if random.random() > (train_item.get("cond_dropout", self.conditional_dropout)):
-            example["tokens"] = self.tokenizer(example["caption"],
-                                                truncation=True,
-                                                padding="max_length",
-                                                max_length=self.tokenizer.model_max_length,
-                                              ).input_ids
+            tokens = self.tokenizer(example["caption"],
+                                    truncation=True,
+                                    padding="do_not_pad",
+                                    max_length=self.tokenizer.model_max_length,
+                                    ).input_ids
+            # make mask and manually pad
+            num_tokens_without_padding = len(tokens)
+            padding_length = self.tokenizer.model_max_length - num_tokens_without_padding
+            tokens += [self.tokenizer.pad_token_id] * padding_length
+            if self.attention_mask == "none":
+                attention_mask = [1] * self.tokenizer.model_max_length
+            elif self.attention_mask == "pad":
+                attention_mask = [1] * num_tokens_without_padding + [0] * padding_length
+            elif self.attention_mask == "pad_and_bos_eos":
+                attention_mask = [0] + [1] * (num_tokens_without_padding - 2) + [0] + [0] * padding_length
+            else:
+                raise ValueError(f"Unrecognized attention mask type: {self.attention_mask}")
         else:
-            example["tokens"] = self.tokenizer(" ",
-                                                truncation=True,
-                                                padding="max_length",
-                                                max_length=self.tokenizer.model_max_length,
-                                              ).input_ids
+            # conditional dropout is in effect
+            tokens = self.tokenizer(" ",
+                                    truncation=True,
+                                    padding="max_length",
+                                    max_length=self.tokenizer.model_max_length,
+                                    ).input_ids
+            # train all those pad tokens too
+            attention_mask = [1] * self.tokenizer.model_max_length
 
-        example["tokens"] = torch.tensor(example["tokens"])
+
+        example["tokens"] = torch.tensor(tokens)
+        example["attention_mask"] = torch.tensor(attention_mask)
 
         example["runt_size"] = train_item["runt_size"]
 
@@ -159,6 +179,7 @@ def collate_fn(batch):
     images = [example["image"] for example in batch]
     captions = [example["caption"] for example in batch]
     tokens = [example["tokens"] for example in batch]
+    attention_mask = [example["attention_mask"] for example in batch]
     runt_size = batch[0]["runt_size"]
 
     images = torch.stack(images)
@@ -166,6 +187,7 @@ def collate_fn(batch):
 
     ret = {
         "tokens": torch.stack(tuple(tokens)),
+        "attention_mask": torch.stack(tuple(attention_mask)),
         "image": images,
         "captions": captions,
         "runt_size": runt_size,

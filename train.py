@@ -513,6 +513,7 @@ def main(args):
     default_lr = 1e-6
     curr_lr = args.lr
     text_encoder_lr_scale = 1.0
+    text_encoder_attention_masking_type = "none"
 
     if optimizer_config is not None:
         betas = optimizer_config["betas"]
@@ -527,6 +528,12 @@ def main(args):
         text_encoder_lr_scale = optimizer_config.get("text_encoder_lr_scale", text_encoder_lr_scale)
         if text_encoder_lr_scale != 1.0:
             logging.info(f" * Using text encoder LR scale {text_encoder_lr_scale}")
+
+        text_encoder_attention_masking_type = optimizer_config.get("attention_mask", text_encoder_attention_masking_type)
+        if text_encoder_attention_masking_type == "pad":
+            logging.info(" * Masking out padding tokens")
+        elif text_encoder_attention_masking_type == "pad_and_bos_eos":
+            logging.info(" * Masking out padding tokens and eos/bos markers")
 
         logging.info(f" * Loaded optimizer args from {optimizer_config_path} *")
 
@@ -604,7 +611,8 @@ def main(args):
         seed = seed,
         shuffle_tags=args.shuffle_tags,
         rated_dataset=args.rated_dataset,
-        rated_dataset_dropout_target=(1.0 - (args.rated_dataset_target_dropout_percent / 100.0))
+        rated_dataset_dropout_target=(1.0 - (args.rated_dataset_target_dropout_percent / 100.0)),
+        attention_mask=text_encoder_attention_masking_type
     )
     
     torch.cuda.benchmark = False
@@ -718,7 +726,7 @@ def main(args):
     assert len(train_batch) > 0, "train_batch is empty, check that your data_root is correct"
 
     # actual prediction function - shared between train and validate
-    def get_model_prediction_and_target(image, tokens, zero_frequency_noise_ratio=0.0):
+    def get_model_prediction_and_target(image, tokens, attention_mask=None, zero_frequency_noise_ratio=0.0):
         with torch.no_grad():
             with autocast(enabled=args.amp):
                 pixel_values = image.to(memory_format=torch.contiguous_format).to(unet.device)
@@ -739,8 +747,12 @@ def main(args):
             timesteps = timesteps.long()
 
             cuda_caption = tokens.to(text_encoder.device)
+            cuda_attention_mask = (
+                None if attention_mask is None
+                else attention_mask.to(text_encoder.device)
+                )
 
-        encoder_hidden_states = text_encoder(cuda_caption, output_hidden_states=True)
+        encoder_hidden_states = text_encoder(cuda_caption, attention_mask=cuda_attention_mask, output_hidden_states=True)
 
         if args.clip_skip > 0:
             encoder_hidden_states = text_encoder.text_model.final_layer_norm(
@@ -809,7 +821,8 @@ def main(args):
             for step, batch in enumerate(train_dataloader):
                 step_start_time = time.time()
 
-                model_pred, target = get_model_prediction_and_target(batch["image"], batch["tokens"], args.zero_frequency_noise_ratio)
+                model_pred, target = get_model_prediction_and_target(batch["image"], batch["tokens"], batch["attention_mask"],
+                                                                     args.zero_frequency_noise_ratio)
 
                 loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
 

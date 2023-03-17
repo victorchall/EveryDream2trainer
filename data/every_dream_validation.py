@@ -127,7 +127,7 @@ class EveryDreamValidator:
                         # todo: signal stop?
 
     def _calculate_validation_loss(self, tag, dataloader, get_model_prediction_and_target: Callable[
-        [Any, Any], tuple[torch.Tensor, torch.Tensor]]) -> float:
+        [Any, Any, Any], tuple[torch.Tensor, torch.Tensor]]) -> float:
         with torch.no_grad(), isolate_rng():
             # ok to override seed here because we are in a `with isolate_rng():` block
             random.seed(self.seed)
@@ -138,7 +138,7 @@ class EveryDreamValidator:
             steps_pbar.set_description(f"{Fore.LIGHTCYAN_EX}Validate ({tag}){Style.RESET_ALL}")
 
             for step, batch in enumerate(dataloader):
-                model_pred, target = get_model_prediction_and_target(batch["image"], batch["tokens"])
+                model_pred, target = get_model_prediction_and_target(batch["image"], batch["tokens"], None)
 
                 loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
 
@@ -174,7 +174,7 @@ class EveryDreamValidator:
             logging.info(f" * Loaded {len(val_items)} validation images from {val_data_root}")
         else:
             raise ValueError(f"Unrecognized validation split mode '{val_split_mode}'")
-        val_ed_batch = self._build_ed_batch(val_items, batch_size=self.batch_size, tokenizer=tokenizer, name='val')
+        val_ed_batch = self._build_ed_batch(val_items, tokenizer=tokenizer, name='val')
         val_dataloader = build_torch_dataloader(val_ed_batch, batch_size=self.batch_size)
         return val_dataloader, remaining_train_items
 
@@ -187,7 +187,7 @@ class EveryDreamValidator:
         stabilize_split_proportion = self.config['stabilize_split_proportion']
         stabilize_items, _ = get_random_split(image_train_items, stabilize_split_proportion, batch_size=self.batch_size)
         stabilize_items = list(disable_multiplier_and_flip(stabilize_items))
-        stabilize_ed_batch = self._build_ed_batch(stabilize_items, batch_size=self.batch_size, tokenizer=tokenizer,
+        stabilize_ed_batch = self._build_ed_batch(stabilize_items, tokenizer=tokenizer,
                                                   name='stabilize-train')
         stabilize_dataloader = build_torch_dataloader(stabilize_ed_batch, batch_size=self.batch_size)
         return stabilize_dataloader
@@ -203,7 +203,7 @@ class EveryDreamValidator:
         random.shuffle(val_items)
         return val_items
 
-    def _build_ed_batch(self, items: list[ImageTrainItem], batch_size: int, tokenizer, name='val'):
+    def _build_ed_batch(self, items: list[ImageTrainItem], tokenizer, name='val'):
         batch_size = self.batch_size
         seed = self.seed
         data_loader = DataLoaderMultiAspect(
@@ -218,6 +218,7 @@ class EveryDreamValidator:
             tokenizer=tokenizer,
             seed=seed,
             name=name,
-            crop_jitter=0
+            crop_jitter=0,
+            attention_mask="none"
         )
         return ed_batch
