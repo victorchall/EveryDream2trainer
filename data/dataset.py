@@ -231,23 +231,27 @@ class Dataset:
                 tags.append(tag.value)
                 tag_weights.append(tag.weight)
             use_weights = len(set(tag_weights)) > 1 
-            
-            caption = ImageCaption(
-                main_prompt=next(iter(sorted(config.main_prompts))),
-                rating=config.rating or 1.0,
-                tags=tags,
-                tag_weights=tag_weights,
-                max_target_length=config.max_caption_length or DEFAULT_MAX_CAPTION_LENGTH,
-                use_weights=use_weights)
 
-            item = ImageTrainItem(
-                image=None,
-                caption=caption,
-                aspects=aspects,
-                pathname=os.path.abspath(image),
-                flip_p=config.flip_p or 0.0,
-                multiplier=config.multiply or 1.0,
-                cond_dropout=config.cond_dropout
-            )
-            items.append(item)
+            try:            
+                caption = ImageCaption(
+                    main_prompt=next(iter(sorted(config.main_prompts))),
+                    rating=config.rating or 1.0,
+                    tags=tags,
+                    tag_weights=tag_weights,
+                    max_target_length=config.max_caption_length or DEFAULT_MAX_CAPTION_LENGTH,
+                    use_weights=use_weights)
+
+                item = ImageTrainItem(
+                    image=None,
+                    caption=caption,
+                    aspects=aspects,
+                    pathname=os.path.abspath(image),
+                    flip_p=config.flip_p or 0.0,
+                    multiplier=config.multiply or 1.0,
+                    cond_dropout=config.cond_dropout
+                )
+                items.append(item)
+            except Exception as e:
+                logging.error(f" *** Error preloading image or caption for: {image}, error: {e}")
+                raise e
         return items
