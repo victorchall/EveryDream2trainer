@@ -2,9 +2,13 @@
 
 Welcome to v2.0 of EveryDream trainer! Now with more Diffusers, faster, and even more features!
 
-Please join us on Discord! https://discord.gg/uheqxU6sXN
+For the most up to date news and community discussions, please join us on Discord!
 
-If you find this tool useful, please consider subscribing to the project on [Patreon](https://www.patreon.com/everydream) or a one-time donation at [Ko-fi](https://ko-fi.com/everydream).
+[![Discord!](.github/discord_sm.png)](https://discord.gg/uheqxU6sXN)
+
+If you find this tool useful, please consider subscribing to the project on Patreon or a one-time donation on Ko-fi.  Your donations keep this project alive as a free open source tool with ongoing enhancements.
+
+[![Patreon](.github/patreon-medium-button.png)](https://www.patreon.com/everydream) or  [![Kofi](.github/kofibutton_sm.png)](https://ko-fi.com/everydream).
 
 If you're coming from Dreambooth, please [read this](doc/NOTDREAMBOOTH.md) for an explanation of why EveryDream is not Dreambooth.
 
@@ -22,9 +26,9 @@ Single GPU is currently supported
 
 32GB of system RAM recommended for 50k+ training images, but may get away with sufficient swap file and 16GB
 
-Ampere or newer 24GB+ (3090/A5000/4090, etc) recommended for 10k+ images unless you want to wait a long time
+Ampere or newer 24GB+ (3090/A5000/4090, etc) recommended for 10k+ images
 
-...Or use any computer with a web browser and run on Vast/Runpod/Colab.  See [Cloud](#cloud) section below.
+...Or use any computer with a web browser and run on Vast/Colab.  See [Cloud](#cloud) section below.
 
 ## Video tutorials
 
