@@ -249,6 +249,19 @@ class TestDataset(TestCase):
         }
         self.assertEqual(expected, actual)
 
+    def test_tag_order_is_retained(self):
+        import uuid
+        tags=[str(uuid.uuid4()) for _ in range(10000)]
+        caption='main_prompt,'+", ".join(tags)
+        self.fs.create_file("image.png")
+        self.fs.create_file("image.txt", contents=caption)
+
+        actual = Dataset.from_path(".").image_configs
+
+        expected = { "./image.png": ImageConfig( main_prompts="main_prompt", tags=map(Tag.parse, tags)) }
+
+        self.assertEqual(actual, expected)
+
     def test_dataset_can_produce_train_items(self):
         dataset = Dataset({
             "1.jpg": ImageConfig(
