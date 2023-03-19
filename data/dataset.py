@@ -250,4 +250,4 @@ class Dataset:
                 cond_dropout=config.cond_dropout
             )
             items.append(item)
-        return list(sorted(items, key=lambda ti: ti.pathname))
+        return items

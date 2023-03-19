@@ -492,10 +492,10 @@ def main(args):
             optimizer_config = json.load(f)
 
     if args.wandb is not None and args.wandb:
-        wandb.init(project=args.project_name, 
-                   sync_tensorboard=True, 
-                   dir=args.logdir, 
-                   config={"main":args, "optimizer":optimizer_config}, 
+        wandb.init(project=args.project_name,
+                   sync_tensorboard=True,
+                   dir=args.logdir,
+                   config=args,
                    name=args.run_name,
                    )
 

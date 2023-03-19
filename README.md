@@ -1,6 +1,6 @@
 # EveryDream Trainer 2.0
 
-Welcome to v2.0 of EveryDream trainer! Now with more diffusers and even more features!
+Welcome to v2.0 of EveryDream trainer! Now with more Diffusers, faster, and even more features!
 
 Please join us on Discord! https://discord.gg/uheqxU6sXN
 
@@ -49,23 +49,23 @@ Make sure to check out the [tools repo](https://github.com/victorchall/EveryDrea
 
 [Training](doc/TRAINING.md) - How to start training
 
+[Troubleshooting](doc/TROUBLESHOOTING.md)
+
 [Basic Tweaking](doc/TWEAKING.md) - Important args to understand to get started
 
-[Logging](doc/LOGGING.md) 
-
-[Advanced Tweaking](doc/ATWEAKING.md) - More stuff to tweak once you are comfortable
-
-[Advanced Optimizer Tweaking](/doc/OPTIMIZER.md) - Even more stuff to tweak if you are *very adventurous*
+[Advanced Tweaking](doc/ATWEAKING.md) and [Advanced Optimizer Tweaking](/doc/OPTIMIZER.md)
 
 [Chaining training sessions](doc/CHAINING.md) - Modify training parameters by chaining training sessions together end to end
 
 [Shuffling Tags](doc/SHUFFLING_TAGS.md)
 
-[Data Balancing](doc/BALANCING.md) - Includes my small treatise on model preservation with ground truth data
+[Data Balancing](doc/BALANCING.md) - Includes my small treatise on model "preservation" with additional ground truth data
+
+[Logging](doc/LOGGING.md) 
 
 [Validation](doc/VALIDATION.md) - Use a validation split on your data to see when you are overfitting and tune hyperparameters
 
-[Troubleshooting](doc/TROUBLESHOOTING.md)
+[Contributing](doc/CONTRIBUTING.md)
 
 ## Cloud
 
