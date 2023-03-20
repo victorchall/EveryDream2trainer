@@ -27,7 +27,6 @@ def safe_set(val):
     return val or dict() 
 
 @define(frozen=True)
-@total_ordering
 class Tag:
     value: str
     weight: float = field(default=1.0, converter=lambda x: x if x is not None else 1.0)
@@ -45,9 +44,6 @@ class Tag:
 
         return None
 
-    def __lt__(self, other):
-        return self.weight < other.weight and self.value < other.value
-    
 @define
 class ImageConfig:
     # Captions
@@ -66,10 +62,10 @@ class ImageConfig:
             return self
 
         return ImageConfig(
-            main_prompts=self.main_prompts | other.main_prompts,
+            main_prompts=other.main_prompts | self.main_prompts,
             rating=overlay(other.rating, self.rating),
             max_caption_length=overlay(other.max_caption_length, self.max_caption_length),
-            tags= self.tags | other.tags,
+            tags= other.tags | self.tags,
             multiply=overlay(other.multiply, self.multiply),
             cond_dropout=overlay(other.cond_dropout, self.cond_dropout),
             flip_p=overlay(other.flip_p, self.flip_p),
@@ -227,14 +223,14 @@ class Dataset:
 
             tags = []
             tag_weights = []
-            for tag in sorted(config.tags):
+            for tag in sorted(config.tags, key=lambda x: x.weight or 1.0, reverse=True):
                 tags.append(tag.value)
                 tag_weights.append(tag.weight)
             use_weights = len(set(tag_weights)) > 1 
 
             try:            
                 caption = ImageCaption(
-                    main_prompt=next(iter(sorted(config.main_prompts))),
+                    main_prompt=next(iter(config.main_prompts)),
                     rating=config.rating or 1.0,
                     tags=tags,
                     tag_weights=tag_weights,
