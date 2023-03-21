@@ -1,3 +1,4 @@
+import logging 
 
 def barename(file):
     (val, _) = os.path.splitext(os.path.basename(file)) 

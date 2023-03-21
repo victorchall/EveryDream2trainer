@@ -11,7 +11,6 @@ from typing import Iterable
 
 from tqdm import tqdm
 
-
 DEFAULT_MAX_CAPTION_LENGTH = 2048
 
 def overlay(overlay, base):
@@ -142,35 +141,34 @@ class ImageConfig:
 class Dataset:
     image_configs: dict[str, ImageConfig]
 
-    def __global_cfg(files):
+    def __global_cfg(fileset):
         cfgs = []
-        for file in files:
-            match os.path.basename(file):
-                case 'global.yaml' | 'global.yml':
-                    cfgs.append(ImageConfig.from_file(file))
+        
+        for cfgfile in ['global.yaml', 'global.yml']:
+            if cfgfile in fileset:
+                cfgs.append(ImageConfig.from_file(fileset[cfgfile]))
         return ImageConfig.fold(cfgs)
 
-    def __local_cfg(files):
+    def __local_cfg(fileset):
         cfgs = []
-        for file in files:
-            match os.path.basename(file):
-                case 'multiply.txt':
-                    cfgs.append(ImageConfig(multiply=read_float(file)))
-                case 'cond_dropout.txt':
-                    cfgs.append(ImageConfig(cond_dropout=read_float(file)))
-                case 'flip_p.txt':
-                    cfgs.append(ImageConfig(flip_p=read_float(file)))
-                case 'local.yaml' | 'local.yml':
-                    cfgs.append(ImageConfig.from_file(file))
+        if 'multiply.txt' in fileset:
+            cfgs.append(ImageConfig(multiply=read_float(fileset['multiply.txt'])))
+        if 'cond_dropout.txt' in fileset:
+            cfgs.append(ImageConfig(cond_dropout=read_float(fileset['cond_dropout.txt'])))
+        if 'flip_p.txt' in fileset:
+            cfgs.append(ImageConfig(flip_p=read_float(fileset['flip_p.txt'])))
+        if 'local.yaml' in fileset:
+            cfgs.append(ImageConfig.from_file(fileset['local.yaml']))
+        if 'local.yml' in fileset:
+            cfgs.append(ImageConfig.from_file(fileset['local.yml']))
         return ImageConfig.fold(cfgs)
 
-    def __sidecar_cfg(imagepath, files):
+    def __sidecar_cfg(imagepath, fileset):
         cfgs = []
-        for file in files:
-            if same_barename(imagepath, file):
-                match ext(file):
-                    case '.txt' | '.caption' | '.yml' | '.yaml':
-                        cfgs.append(ImageConfig.from_file(file))
+        for cfgext in ['.txt', '.caption', '.yml', '.yaml']:
+            cfgfile = barename(imagepath) + cfgext
+            if cfgfile in fileset:
+                cfgs.append(ImageConfig.from_file(fileset[cfgfile]))
         return ImageConfig.fold(cfgs)
 
     # Use file name for caption only as a last resort
@@ -187,10 +185,11 @@ class Dataset:
         # and accumulates image configs as it traverses dataset
         image_configs = {}
         def process_dir(files, parent_globals):
-            global_cfg = parent_globals.merge(Dataset.__global_cfg(files))
-            local_cfg = Dataset.__local_cfg(files)
+            fileset = {os.path.basename(f): f for f in files}
+            global_cfg = parent_globals.merge(Dataset.__global_cfg(fileset))
+            local_cfg = Dataset.__local_cfg(fileset)
             for img in filter(is_image, files):
-                img_cfg = Dataset.__sidecar_cfg(img, files)
+                img_cfg = Dataset.__sidecar_cfg(img, fileset)
                 resolved_cfg = ImageConfig.fold([global_cfg, local_cfg, img_cfg])
                 image_configs[img] = Dataset.__ensure_caption(resolved_cfg, img)
             return global_cfg
