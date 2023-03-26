@@ -40,12 +40,12 @@ class EveryDreamValidator:
                  val_config_path: Optional[str],
                  default_batch_size: int,
                  resolution: int,
-                 log_writer: SummaryWriter):
+                 log_writer: SummaryWriter,
+    ):
         self.val_dataloader = None
         self.train_overlapping_dataloader = None
-
-        self.log_writer = log_writer
         self.resolution = resolution
+        self.log_writer = log_writer
 
         self.config = {
             'batch_size': default_batch_size,
@@ -57,7 +57,9 @@ class EveryDreamValidator:
             'val_split_proportion': 0.15,
 
             'stabilize_training_loss': False,
-            'stabilize_split_proportion': 0.15
+            'stabilize_split_proportion': 0.15,
+
+            'use_relative_loss': False,
         }
         if val_config_path is not None:
             with open(val_config_path, 'rt') as f:
@@ -67,7 +69,7 @@ class EveryDreamValidator:
         self.val_loss_offset = None
 
         self.loss_val_history = []
-        self.val_loss_window_size = 4 # todo: arg for this?
+        self.val_loss_window_size = 5 # todo: arg for this?
 
     @property
     def batch_size(self):
@@ -80,6 +82,10 @@ class EveryDreamValidator:
     @property
     def seed(self):
         return self.config['seed']
+    
+    @property
+    def use_relative_loss(self):
+        return self.config['use_relative_loss']
 
     def prepare_validation_splits(self, train_items: list[ImageTrainItem], tokenizer: Any) -> list[ImageTrainItem]:
         """
@@ -117,14 +123,19 @@ class EveryDreamValidator:
                 if self.val_loss_offset is None:
                     self.val_loss_offset = -mean_loss
                 self.log_writer.add_scalar(tag=f"loss/val",
-                                           scalar_value=self.val_loss_offset + mean_loss,
+                                           scalar_value=mean_loss if not self.use_relative_loss else self.val_loss_offset + mean_loss,
                                            global_step=global_step)
-                self.loss_val_history.append(mean_loss)
-                if len(self.loss_val_history) > (self.val_loss_window_size * 2 + 1):
-                    dy = np.diff(self.loss_val_history[-self.val_loss_window_size:])
-                    if np.average(dy) > 0:
-                        logging.warning(f"Validation loss shows diverging")
-                        # todo: signal stop?
+                
+
+                self.track_loss_trend(mean_loss)
+
+    def track_loss_trend(self, mean_loss):
+        self.loss_val_history.append(mean_loss)
+
+        if len(self.loss_val_history) > ((self.val_loss_window_size * 2) + 1):
+            dy = np.diff(self.loss_val_history[-self.val_loss_window_size:])
+            if np.average(dy) > 0:
+                logging.warning(f"Validation loss shows diverging.  Check your val/loss graph.")
 
     def _calculate_validation_loss(self, tag, dataloader, get_model_prediction_and_target: Callable[
         [Any, Any], tuple[torch.Tensor, torch.Tensor]]) -> float:

@@ -1,6 +1,6 @@
 aiohttp==3.8.4
 colorama==0.4.6
-diffusers[torch]>=0.13.0
+diffusers[torch]>=0.14.0
 ftfy==6.1.1
 ipyevents
 ipywidgets
@@ -14,7 +14,7 @@ pyfakefs
 pynvml==11.5.0
 pyre-extensions==0.0.30
 pytorch-lightning==1.9.2
-tensorboard==2.11.0
+tensorboard==2.12.0
 transformers==4.25.1
 triton>=2.0.0a2
 wandb

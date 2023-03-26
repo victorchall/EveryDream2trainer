@@ -13,5 +13,5 @@
     "betas": [0.9, 0.999],
     "epsilon": 1e-8,
     "weight_decay": 0.010,
-    "text_encoder_lr_scale": 1.0
+    "text_encoder_lr_scale": 0.50
 }

@@ -49,6 +49,7 @@ from transformers import CLIPTextModel, CLIPTokenizer
 from accelerate.utils import set_seed
 
 import wandb
+import webbrowser
 from torch.utils.tensorboard import SummaryWriter
 from data.data_loader import DataLoaderMultiAspect
 
@@ -120,8 +121,12 @@ def setup_local_logger(args):
                         format="%(asctime)s %(message)s",
                         datefmt="%m/%d/%Y %I:%M:%S %p",
                        )
-
-    logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.addFilter(lambda msg: "Palette images with Transparency expressed in bytes" in msg.getMessage())
+    logging.getLogger().addHandler(console_handler)
+    import warnings
+    warnings.filterwarnings("ignore", message="UserWarning: Palette images with Transparency expressed in bytes should be converted to RGBA images")
+    #from PIL import Image
 
     return datetimestamp
 
@@ -138,7 +143,7 @@ def save_optimizer(optimizer: torch.optim.Optimizer, path: str):
     """
     torch.save(optimizer.state_dict(), path)
 
-def load_optimizer(optimizer, path: str):
+def load_optimizer(optimizer: torch.optim.Optimizer, path: str):
     """
     Loads the optimizer state
     """
@@ -491,17 +496,24 @@ def main(args):
         with open(os.path.join(os.curdir, optimizer_config_path), "r") as f:
             optimizer_config = json.load(f)
 
-    if args.wandb is not None and args.wandb:
-        wandb.init(project=args.project_name,
-                   sync_tensorboard=True,
-                   dir=args.logdir,
-                   config=args,
-                   name=args.run_name,
-                   )
+    if args.wandb:
+        wandb.tensorboard.patch(root_logdir=log_folder, pytorch=False, tensorboard_x=False, save=False)
+        wandb_run = wandb.init(
+            project=args.project_name,
+            config={"main_cfg": vars(args), "optimizer_cfg": optimizer_config},
+            name=args.run_name,
+            #sync_tensorboard=True, # broken?
+            #dir=log_folder, # only for save, just duplicates the TB log to /{log_folder}/wandb ...
+            )
+        try:
+            if webbrowser.get():
+                webbrowser.open(wandb_run.url, new=2)
+        except Exception:
+            pass
 
     log_writer = SummaryWriter(log_dir=log_folder,
-                               flush_secs=10,
-                               comment=args.run_name if args.run_name is not None else "EveryDream2FineTunes",
+                               flush_secs=20,
+                               comment=args.run_name if args.run_name is not None else log_time,
                               )
 
     betas = [0.9, 0.999]
@@ -929,8 +941,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    supported_resolutions = [256, 384, 448, 512, 576, 640, 704, 768, 832, 896, 960, 1024, 1088, 1152]
-    supported_precisions = ['fp16', 'fp32']
+    supported_resolutions = aspects.get_supported_resolutions()
     argparser = argparse.ArgumentParser(description="EveryDream2 Training options")
     argparser.add_argument("--config", type=str, required=False, default=None, help="JSON config file to load options from")
     args, argv = argparser.parse_known_args()

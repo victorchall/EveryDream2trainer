@@ -13,6 +13,48 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 """
+
+"""
+Notes:
+this is generated from an excel sheet and actual ratios are hand picked to 
+spread out the ratios evenly to avoid having super-finely defined buckets
+Too many buckets means more "runt" steps with repeated images to fill batch than necessary
+ex. we do not need both 1.0:1 and 1.125:1, they're almost identical ratios
+Try to keep around <20 ratio buckets per resolution, should be plenty coverage everything between 1:1 and 4:1
+More finely defined buckets will reduce cropping at the expense of more runt steps
+"""
+
+ASPECTS_1536 = [[1536,1536],   # 2359296 1:1
+    [1728,1344],[1344,1728],   # 2322432 1.286:1
+    [1792,1280],[1280,1792],   # 2293760 1.4:1
+    [2048,1152],[1152,2048],   # 2359296 1.778:1
+    [2304,1024],[1024,2304],   # 2359296 2.25:1
+    [2432,960],[960,2432],     # 2334720 2.53:1
+    [2624,896],[896,2624],     # 2351104 2.929:1
+    [2816,832],[832,2816],     # 2342912 3.385:1
+    [3072,768],[768,3072],     # 2359296 4:1
+]
+
+ASPECTS_1408 = [[1408,1408],   # 1982464 1:1
+    [1536,1280],[1280,1536],   # 1966080 1.2:1
+    [1664,1152],[1152,1664],   # 1916928 1.444:1
+    [1920,1024],[1024,1920],   # 1966080 1.875:1
+    [2048,960],[960,2048],     # 1966080 2.133:1
+    [2368,832],[832,2368],     # 1970176 2.846:1
+    [2560,768],[768,2560],     # 1966080 3.333:1
+    [2816,704],[704,3072],     # 1982464 4:1
+]
+
+ASPECTS_1280 = [[1280,1280],   # 1638400 1:1
+    [1408,1152],[1408,1344],   # 1622016 1.222:1
+    [1600,1024],[1024,1600],   # 1638400 1.563:1
+    [1792,896],[896,1792],   # 1605632 2:1
+    [1920,832],[832,1920],   # 1597440 2.308:1
+    [2112,768],[768,2112],   # 1585152 2.75:1
+    [2304,704],[704,2304],   # 1622016 3.27:1
+    [2560,640],[640,2560],   # 1638400 4:1
+]
+
 ASPECTS_1152 = [[1152,1152],    # 1327104 1:1
     #[1216,1088],[1088,1216], # 1323008 1.118:1
     [1280,1024],[1024,1280], # 1310720 1.25:1
@@ -48,7 +90,7 @@ ASPECTS_1024 = [[1024,1024],   # 1048576 1:1
 ]
 
 ASPECTS_960 = [[960,960],     # 921600 1:1
-    [1024,896],[896,1024], # 917504 1.143:1
+    #[1024,896],[896,1024], # 917504 1.143:1
     [1088,832],[832,1088], # 905216 1.308:1
     [1152,768],[768,1152], # 884736 1.5:1
     [1280,704],[704,1280], # 901120 1.818:1
@@ -56,11 +98,11 @@ ASPECTS_960 = [[960,960],     # 921600 1:1
     [1680,576],[576,1680], # 921600 2.778:1
     #[1728,512],[512,1728], # 884736 3.375:1
     [1792,512],[512,1792], # 917504 3.5:1
-    [2048,448],[448,2048], # 917504 4.714:1
+    [2048,448],[448,2048], # 917504 4.57:1
 ]
 
 ASPECTS_896 = [[896,896],     # 802816 1:1
-    [960,832],[832,960],   # 798720 1.153:1
+    #[960,832],[832,960],   # 798720 1.153:1
     [1024,768],[768,1024], # 786432 1.333:1
     [1088,704],[704,1088], # 765952 1.545:1
     [1216,640],[640,1216], # 778240 1.9:1
@@ -155,7 +197,7 @@ ASPECTS_384 = [[384,384],      # 147456 1:1
 ASPECTS_256 = [[256,256],  # 65536 1:1
     [384,192],[192,384],   # 73728 2:1
     [512,128],[128,512],   # 65536 4:1
-]
+] # very few buckets available for 256 with 64 pixel increments
 
 def get_aspect_buckets(resolution, square_only=False, reduced_buckets=False):
     if resolution < 256:
@@ -173,6 +215,10 @@ def get_aspect_buckets(resolution, square_only=False, reduced_buckets=False):
         print(f" *** Unsupported resolution of {resolution}, check your resolution config")
         print(f" *** Value must be between 512 and 1024")
         raise e
+    
+def get_supported_resolutions():
+    all_image_sizes = __get_all_aspects()
+    return list(map(lambda sizes: sizes[0][0], all_image_sizes))
 
 def __get_all_aspects():
     return [ASPECTS_256,
@@ -188,5 +234,7 @@ def __get_all_aspects():
             ASPECTS_960,
             ASPECTS_1024,
             ASPECTS_1088,
-            ASPECTS_1152
+            ASPECTS_1152,
+            ASPECTS_1280,
+            ASPECTS_1536,
            ]
