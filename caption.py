@@ -76,7 +76,6 @@ def main(args):
     device = "cuda" if torch.cuda.is_available() and not args.force_cpu else "cpu"
     dtype = torch.float32 if args.force_cpu else torch.float16
 
-    # automodel doesn't work with git/blip
     if "salesforce/blip2-" in args.model.lower():
         print(f"Using BLIP2 model: {args.model}")
         processor, model = create_blip2_processor(args.model, device, dtype)
