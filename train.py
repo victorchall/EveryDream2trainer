@@ -122,7 +122,23 @@ def setup_local_logger(args):
                         datefmt="%m/%d/%Y %I:%M:%S %p",
                        )
     console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.addFilter(lambda msg: "Palette images with Transparency expressed in bytes" in msg.getMessage())
+    #A matching Triton is not available
+    console_handler.addFilter(lambda msg: "Palette images with Transparency expressed in bytes" not in msg.getMessage())
+    console_handler.addFilter(lambda msg: "No module named 'triton'" not in msg.getMessage())
+    console_handler.addFilter(lambda msg: "A matching Triton is not available" not in msg.getMessage())
+    console_handler.addFilter(lambda msg: "None of the inputs have requires_grad=True" not in msg.getMessage())
+    logging.getLogger("xformers").addFilter(lambda record: 'A matching Triton is not available' not in record.getMessage())
+    logging.getLogger("pytorch").addFilter(lambda record: 'A matching Triton is not available' not in record.getMessage())
+    logging.getLogger("torch").addFilter(lambda record: 'A matching Triton is not available' not in record.getMessage())
+    logging.getLogger().addFilter(lambda record: 'A matching Triton is not available' not in record.getMessage())
+
+    logging.getLogger("PIL.Image").addFilter(lambda msg: "Palette images with Transparency expressed in bytes" not in msg.getMessage())
+    logging.getLogger("PIL").addFilter(lambda msg: "Palette images with Transparency expressed in bytes" not in msg.getMessage())
+    logging.getLogger("pil").addFilter(lambda msg: "Palette images with Transparency expressed in bytes" not in msg.getMessage())
+    logging.getLogger("pillow").addFilter(lambda msg: "Palette images with Transparency expressed in bytes" not in msg.getMessage())
+    #logging.getLogger().addFilter(lambda msg: "No module named 'triton'" not in msg.getMessage())
+    #logging.getLogger().addFilter(lambda msg: "A matching Triton is not available" not in msg.getMessage())
+    logging.getLogger().addFilter(lambda msg: "None of the inputs have requires_grad=True" not in msg.getMessage())
     logging.getLogger().addHandler(console_handler)
     import warnings
     warnings.filterwarnings("ignore", message="UserWarning: Palette images with Transparency expressed in bytes should be converted to RGBA images")
@@ -476,12 +492,16 @@ def main(args):
                 unet.enable_xformers_memory_efficient_attention()
                 logging.info("Enabled xformers")
             except Exception as ex:
-                logging.warning("failed to load xformers, using attention slicing instead")
+                logging.warning("failed to load xformers, falling back to attention slicing instead")
                 unet.set_attention_slice("auto")
                 pass
+        else:
+            logging.info("xformers cannot be enabled, using attention slicing instead")
+            unet.set_attention_slice("auto")
     else:
         logging.info("xformers disabled, using attention slicing instead")
         unet.set_attention_slice("auto")
+    #exit()
 
     vae = vae.to(device, dtype=torch.float16 if args.amp else torch.float32)
     unet = unet.to(device, dtype=torch.float32)
@@ -794,7 +814,7 @@ def main(args):
 
             del inference_pipe
         gc.collect()
-        torch.cuda.empty_cache()
+        #torch.cuda.empty_cache()
 
     # Pre-train validation to establish a starting point on the loss graph
     if validator:
@@ -876,7 +896,7 @@ def main(args):
                         log_writer.add_scalar(tag="hyperparamater/grad scale", scalar_value=scaler.get_scale(), global_step=global_step)
                     log_writer.add_scalar(tag="performance/images per second", scalar_value=avg, global_step=global_step)
                     append_epoch_log(global_step=global_step, epoch_pbar=epoch_pbar, gpu=gpu, log_writer=log_writer, **logs)
-                    torch.cuda.empty_cache()
+                    #torch.cuda.empty_cache()
 
                 if (global_step + 1) % sample_generator.sample_steps == 0:
                     generate_samples(global_step=global_step, batch=batch)
