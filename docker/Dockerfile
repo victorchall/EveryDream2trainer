@@ -24,11 +24,11 @@ ENV VIRTUAL_ENV=/workspace/venv
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
 
-ADD requirements.txt /build
+ADD requirements-build.txt /build
 RUN --mount=type=cache,target=/root/.cache/pip \
     python3 -m venv ${VIRTUAL_ENV} && \
     pip install -U -I torch==1.13.1+cu117 torchvision==0.14.1+cu117 --extra-index-url "https://download.pytorch.org/whl/cu117" && \
-    pip install -r requirements.txt && \
+    pip install -r requirements-build.txt && \
     export FORCE_CUDA=1 && export TORCH_CUDA_ARCH_LIST="7.5;8.0;8.6" && export CUDA_VISIBLE_DEVICES=0 && \
     pip install --no-deps git+https://github.com/facebookresearch/xformers.git@e14dba4#egg=xformers
 
@@ -76,7 +76,8 @@ RUN echo "source ${VIRTUAL_ENV}/bin/activate" >> /root/.bashrc
 #   https://github.com/TimDettmers/bitsandbytes/issues/73
 ENV LD_LIBRARY_PATH="/usr/local/cuda-11.7/targets/x86_64-linux/lib"
 RUN ln /usr/local/cuda-11.7/targets/x86_64-linux/lib/libcudart.so.11.0 /usr/local/cuda-11.7/targets/x86_64-linux/lib/libcudart.so
-RUN pip install bitsandbytes==0.37.0
+ADD requirements-runtime.txt /
+RUN pip install --no-cache-dir -r requirements-runtime.txt
 
 WORKDIR /workspace
 RUN git clone https://github.com/victorchall/EveryDream2trainer
