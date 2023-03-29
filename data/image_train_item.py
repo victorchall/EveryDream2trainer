@@ -149,6 +149,14 @@ class ImageTrainItem:
         self.error = None
         self.__compute_target_width_height()
 
+    def load_image(self):
+        image = PIL.Image.open(self.pathname).convert('RGB')
+        try:
+            image = ImageOps.exif_transpose(image)
+        except SyntaxError as e:
+            pass
+        return image
+
     def hydrate(self, crop=False, save=False, crop_jitter=20):
         """
         crop: hard center crop to 512x512
@@ -158,8 +166,7 @@ class ImageTrainItem:
         # print(self.pathname, self.image)
         try:
             # if not hasattr(self, 'image'):
-            self.image = PIL.Image.open(self.pathname).convert('RGB')
-            self.image = ImageOps.exif_transpose(self.image)
+            self.image = self.load_image()
 
             width, height = self.image.size
             if crop:
@@ -229,7 +236,7 @@ class ImageTrainItem:
     def __compute_target_width_height(self):
         self.target_wh = None
         try:
-            with Image.open(self.pathname) as image:
+            with self.load_image() as image:
                 width, height = image.size
                 image_aspect = width / height
                 target_wh = min(self.aspects, key=lambda aspects:abs(aspects[0]/aspects[1] - image_aspect))
