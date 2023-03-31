@@ -48,7 +48,3 @@ Double check your python version again after setup by running these two commands
 
 Again, this should show 3.10.x
 
-## Linux, Linux containers, WSL, Runpod, etc
-
-TBD
-
