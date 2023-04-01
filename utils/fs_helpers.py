@@ -36,7 +36,11 @@ def walk_and_visit(path, visit_fn, context=None):
     files = []
     for name in names:
         fullname = os.path.join(path, name)
-        if os.path.isdir(fullname) and not str(name).startswith('.'):
+
+        if str(name).startswith('.'):
+            continue
+
+        if os.path.isdir(fullname):
             dirs.append(fullname)
         else:
             files.append(fullname)

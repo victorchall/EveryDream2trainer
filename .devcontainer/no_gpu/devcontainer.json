@@ -16,5 +16,12 @@
 	
 	// Mimic RunPod/Vast setup
 	"workspaceMount": "source=${localWorkspaceFolder},target=/workspace/EveryDream2trainer,type=bind",
-	"workspaceFolder": "/workspace/EveryDream2trainer"
+	"workspaceFolder": "/workspace/EveryDream2trainer",
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"ms-python.python"
+			]
+		}
+	}
 }
