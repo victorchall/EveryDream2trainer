@@ -1,5 +1,5 @@
 # RunPod
-The simplest approach for RunPod is to use the [EveryDream2 template](https://runpod.io/gsc?template=d1v63jb36t&ref=bbp9dh8x) to load a fully configured docker image.
+The simplest approach for RunPod is to use the [EveryDream2 template](https://runpod.io/gsc?template=d1v63jb36t&ref=bbp9dh8x) to load a fully configured docker image.  If you wish to sign up for Runpod, please consider using this [referral link](https://runpod.io?ref=oko38cd0) to help support the project.
 
 ## JupyterLab
 JupterLab will run on the pod by default. When opening JupyterLab `[Port 8888]` you will be prompted for a password. The default password is `EveryDream`. This can be changed by editing the pod's environment variables.
