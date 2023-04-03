@@ -30,11 +30,13 @@ The most important thing to do when contributing is to make sure to *run trainin
 
 **If you cannot test every possible platform, your contribution is still welcome.**  Please note waht you can and did test in your PR and we can work together to ensure it works across platforms, either by analysis for trivial changes, or help with testing.  Some changes are small isolated and may not require full testing across all platforms, but noting how you tested will help us ensure it works for everyone. 
 
-**WIP** *link to a test data set will go here* **WIP**
-
 ## Code style and linting
 
 **WIP** (there's a .pylint at least...)
+
+### Running tests
+
+**WIP** There is a small suite of automated unit tests. **WIP**
 
 ## Documentation
 
@@ -54,6 +56,4 @@ There is no formation process for contributing to EveryDream, but please conside
 
 * Please consider checking in on the Discord #help channel after release to spot possible bugs encountered by users after your PR is merged.
 
-### Running tests
 
-**WIP** There is a small suite of automated unit tests. **WIP**

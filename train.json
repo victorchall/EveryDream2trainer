@@ -1,5 +1,4 @@
 {
-  "amp": true,
   "batch_size": 10,
   "ckpt_every_n_minutes": null,
   "clip_grad_norm": null,
@@ -35,7 +34,7 @@
   "scale_lr": false,
   "seed": 555,
   "shuffle_tags": false,
-  "validation_config": null,
+  "validation_config": "validation_default.json",
   "wandb": false,
   "write_schedule": false,
   "rated_dataset": false,
