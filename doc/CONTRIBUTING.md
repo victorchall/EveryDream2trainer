@@ -2,6 +2,20 @@
 
 Thank you for your interest in contributing to EveryDream! 
 
+## Way to contribute without code
+
+* Report bugs.  Use the github template or report on discord in #help along with your logs.
+
+* Documentation.  Is something confusing or missing?  Contibute an update to documentation. 
+
+* Spread the word.  Share your experience with others.  Tell your friends.  Write a blog post.  Make a video.  Post on social media.  Every little bit helps! 
+
+* Share that you used EveryDream2 to make your model.  Have a popular model on civitai or other sites?  Leave a mention that you use EveryDream2 to train it. 
+
+* Share your training settings.  Did you find a good set of settings for a particular dataset?  Share it with others. 
+
+* Run A/B experiments.  Try different hyperparameters and share your results.
+
 ## Contributor License Agreement
 
 Please review the [CLA](EveryDream_CLA.txt) before issuing a PR.  You will be asked on your first submission to post your agreement for any code changes. 
