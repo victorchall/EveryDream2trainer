@@ -4,6 +4,8 @@ Thank you for your interest in contributing to EveryDream!
 
 ## Way to contribute without code
 
+* Join Discord and help other users with advice and troubleshooting.
+
 * Report bugs.  Use the github template or report on discord in #help along with your logs.
 
 * Documentation.  Is something confusing or missing?  Contibute an update to documentation. 
@@ -14,13 +16,13 @@ Thank you for your interest in contributing to EveryDream!
 
 * Share your training settings.  Did you find a good set of settings for a particular dataset?  Share it with others. 
 
-* Run A/B experiments.  Try different hyperparameters and share your results.
+* Run A/B experiments.  Try different hyperparameters and share your results on socials or Discord.
 
 ## Contributor License Agreement
 
 Please review the [CLA](EveryDream_CLA.txt) before issuing a PR.  You will be asked on your first submission to post your agreement for any code changes. 
 
-This is not required for simple documentation changes (i.e. spelling mistakes, etc.)
+This is not required for simple documentation changes.
 
 ## Contributing code
 
@@ -44,7 +46,7 @@ Please update the appropriate document file in `/doc` for your changes.  If you 
 
 ## A few questions to ask yourself before working on enhancements
 
-There is no formation process for contributing to EveryDream, but please consider the following before submitting a PR:
+There is no formal process for contributing to EveryDream, but please consider the following before submitting a PR:
 
 * Consider if the change is general enough to be useful to others, or is more specific to your project.  Changes should provide value to a broad audience.  Sometimes specific project needs can be served by a script for your specific data instead of a change to the trainer behavior, for instance.
 

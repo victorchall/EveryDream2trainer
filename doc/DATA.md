@@ -2,15 +2,14 @@
 
 ## Number of images
 
-You should probably start with less than 100 images, until you get a feel for training. When you are ready, ED2 supports up to tens of thousands of images.
+You should probably start with less than 100 images, until you get a feel for training. When you are ready, ED2 supports up to hundreds of thousands of images.
 
 ## Image size and quality
 ED2 supports `.jpg`, `.jpeg`, `.png`, `.bmp`, `.webp`, and `.jfif` image formats.
 
 Current recommendation is _at least_ 1 megapixel (ex 1024x1024, 1100x900, 1300x800, etc). That being said, technology continues to advance rapidly. ED2 has no problem handling 4K images, so it's up to you to pick the appropriate trade-off with disk and network costs. 
 
-
-Scaling images up is not a great idea though, though it may be tolerable as a very small percentage of your data set. If you only have 512x512 images, don't try training at 768.
+Bare minimum recommended size is 512x512.  Scaling images up is not a great idea though, though it may be tolerable as a very small percentage of your data set. If you only have 512x512 images, don't try to train at 768. 
 
 Use high quality, in-focus, low-noise, images, capturing the concept(s) under training with high fidelity wherever possible. 
 
@@ -18,12 +17,11 @@ Use high quality, in-focus, low-noise, images, capturing the concept(s) under tr
 
 You can crop your images in an image editor __if it highlights the concept under training__, e.g. to get good close ups of things like faces, or to split images up that contain multiple characters.  
 
-**You do not need to crop to a square image**
+**You do not need to crop to square**
 
 Aspect ratios between 4:1 and 1:4 are supported; the trainer will handle bucketing and resizing your images as needed. 
 
 It is ok to use a full shot of two characters in one image and also a cropped version of each character separately, but make sure every image is captioned appropriately for what is actually present in each image.
-
 
 ## Caption Design
 
@@ -31,7 +29,9 @@ A caption consists of a main prompt, followed by one or more comma-separated tag
 
 For most use cases, use a sane English sentence to describe the image.  Try to put your character or main object name close to the start.
 
-**If you are training on images of humans, there is little benefit in using "unique" names most of the time**. Don't worry so much about using a "rare" toking, or making up gibberish words. Just try generating a few images using your concept names, and make sure there are no serious conflicts.
+**If you are training on images of humans, there is little benefit in using "unique" names most of the time**. Don't worry so much about using a "rare" toking, or making up gibberish words. Just try generating a few images using your concept names, and make sure there are no serious conflicts.  
+
+**Use normal names for people and characters, such as "cloud strife" or "john david washington" instead of making up weird names like "cldstrf" or "jhndvdwshtn".  There's no need for this and it just makes inference less natural and shifts a burden on the user to remember magic names.**
 
 Those training anime models can use booru tags as well using other utilities to generate the captions.
 
