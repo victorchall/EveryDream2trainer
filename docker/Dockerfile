@@ -74,6 +74,7 @@ RUN echo "source ${VIRTUAL_ENV}/bin/activate" >> /root/.bashrc
 ENV LD_LIBRARY_PATH="/usr/local/cuda-11.8/targets/x86_64-linux/lib/"
 RUN ln /usr/local/cuda/targets/x86_64-linux/lib/libcudart.so.11.8.89 /usr/local/cuda-11.8/targets/x86_64-linux/lib/libcudart.so
 RUN ln /usr/local/cuda/targets/x86_64-linux/lib/libnvrtc.so.11.8.89 /usr/local/cuda-11.8/targets/x86_64-linux/lib/libnvrtc.so
+
 ADD requirements-runtime.txt /
 RUN pip install --no-cache-dir -r requirements-runtime.txt
 
@@ -81,7 +82,6 @@ WORKDIR /workspace
 RUN git clone https://github.com/victorchall/EveryDream2trainer
 
 WORKDIR /workspace/EveryDream2trainer
-# RUN git checkout torch2
 RUN python utils/get_yamls.py && \
     mkdir -p logs && mkdir -p input
 
