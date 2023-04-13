@@ -236,5 +236,6 @@ def __get_all_aspects():
             ASPECTS_1088,
             ASPECTS_1152,
             ASPECTS_1280,
+            ASPECTS_1408,
             ASPECTS_1536,
            ]
