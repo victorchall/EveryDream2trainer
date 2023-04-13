@@ -174,7 +174,7 @@ class Dataset:
     # Use file name for caption only as a last resort
     @classmethod
     def __ensure_caption(cls, cfg: ImageConfig, file: str):
-        if cfg.main_prompts or cfg.tags:
+        if cfg.main_prompts:
             return cfg
         cap_cfg = ImageConfig.from_caption_text(barename(file).split("_")[0])
         return cfg.merge(cap_cfg)
@@ -217,8 +217,12 @@ class Dataset:
         items = []
         for image in tqdm(self.image_configs, desc="preloading", dynamic_ncols=True):
             config = self.image_configs[image]
+
             if len(config.main_prompts) > 1:
                 logging.warning(f" *** Found multiple multiple main_prompts for image {image}, but only one will be applied: {config.main_prompts}")
+
+            if len(config.main_prompts) < 1:
+                logging.warning(f" *** No main_prompts for image {image}")
 
             tags = []
             tag_weights = []

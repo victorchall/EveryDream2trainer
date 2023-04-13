@@ -100,6 +100,24 @@ class TestDataset(TestCase):
         self.assertEqual(expected, actual)
 
 
+    def test_captions_are_read_from_filename_if_no_main_prompt(self):
+        self.fs.create_file("filename main prompt, filename tag.jpg")
+        self.fs.create_file("filename main prompt, filename tag.yaml", 
+            contents=dedent("""
+                caption: 
+                    tags: 
+                      - tag: standalone yaml tag
+                """))
+        actual = Dataset.from_path(".").image_configs
+
+        expected = {
+            "./filename main prompt, filename tag.jpg": ImageConfig(
+                main_prompts="filename main prompt", 
+                tags= [ Tag("filename tag"), Tag("standalone yaml tag") ]
+            )
+        }
+        self.assertEqual(expected, actual)
+    
     def test_multiple_prompts_and_tags_from_multiple_sidecars_are_supported(self):
         self.fs.create_file("image_1.jpg")
         self.fs.create_file("image_1.yaml", contents=dedent("""
