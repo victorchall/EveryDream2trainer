@@ -57,7 +57,7 @@ Make sure to check out the [tools repo](https://github.com/victorchall/EveryDrea
 
 [Basic Tweaking](doc/TWEAKING.md) - Important args to understand to get started
 
-[Advanced Tweaking](doc/ATWEAKING.md) and [Advanced Optimizer Tweaking](/doc/OPTIMIZER.md)
+[Advanced Tweaking](doc/ADVANCED_TWEAKING.md) and [Advanced Optimizer Tweaking](/doc/OPTIMIZER.md)
 
 [Chaining training sessions](doc/CHAINING.md) - Modify training parameters by chaining training sessions together end to end
 
