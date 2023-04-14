@@ -109,6 +109,6 @@ flip_p: 0.5
 cond_droput: 0.05
 ```
 
-See [Advanced Tweaking](ATWEAKING.md) for more information on image flipping and conditional dropout.
+See [Advanced Tweaking](ADVANCED_TWEAKING.md) for more information on image flipping and conditional dropout.
 
 The [Data Balancing](BALANCING.md) guide has some more information on how to balance your data using multipliers, and what to consider for model preservation and mixing in ground truth data.
