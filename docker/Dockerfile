@@ -79,6 +79,8 @@ ADD requirements-runtime.txt /
 RUN pip install --no-cache-dir -r requirements-runtime.txt
 
 WORKDIR /workspace
+
+ADD "https://api.github.com/repos/victorchall/EveryDream2trainer/commits?per_page=1" cachebust
 RUN git clone https://github.com/victorchall/EveryDream2trainer
 
 WORKDIR /workspace/EveryDream2trainer
