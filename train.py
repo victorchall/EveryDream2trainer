@@ -651,7 +651,9 @@ def main(args):
                                        config_file_path=args.sample_prompts,
                                        batch_size=max(1,args.batch_size//2),
                                        default_sample_steps=args.sample_steps,
-                                       use_xformers=is_xformers_available() and not args.disable_xformers)
+                                       use_xformers=is_xformers_available() and not args.disable_xformers,
+                                       use_penultimate_clip_layer=(args.clip_skip >= 2)
+                                       )
 
     """
     Train the model
