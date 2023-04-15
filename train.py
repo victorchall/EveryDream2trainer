@@ -438,8 +438,8 @@ def main(args):
             logging.info(f" Saving optimizer state to {save_path}")
             save_optimizer(optimizer, optimizer_path)
 
+    optimizer_state_path = None
     try:
-
         # check for a local file
         hf_cache_path = get_hf_ckpt_cache_path(args.resume_ckpt)
         if os.path.exists(hf_cache_path) or os.path.exists(args.resume_ckpt):
