@@ -79,6 +79,7 @@ ADD requirements-runtime.txt /
 RUN pip install --no-cache-dir -r requirements-runtime.txt
 
 WORKDIR /workspace
+ARG CACHEBUST=1
 RUN git clone https://github.com/victorchall/EveryDream2trainer
 
 WORKDIR /workspace/EveryDream2trainer
