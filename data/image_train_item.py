@@ -106,7 +106,7 @@ class ImageCaption:
 
             weights_copy.pop(pos)
             tag = tags_copy.pop(pos)
-            
+
             if caption:
                 caption += ", "
             caption += tag
@@ -122,7 +122,7 @@ class ImageTrainItem:
     """
     image: PIL.Image
     identifier: caption,
-    target_aspect: (width, height), 
+    target_aspect: (width, height),
     pathname: path to image file
     flip_p: probability of flipping image (0.0 to 1.0)
     rating: the relative rating of the images. The rating is measured in comparison to the other images.
@@ -144,14 +144,14 @@ class ImageTrainItem:
             self.image = image
             self.image_size = image.size
             self.target_size = None
-            
+
         self.is_undersized = False
         self.error = None
         self.__compute_target_width_height()
 
     def load_image(self):
-        image = PIL.Image.open(self.pathname).convert('RGB')
         try:
+            image = PIL.Image.open(self.pathname).convert('RGB')
             image = ImageOps.exif_transpose(image)
         except SyntaxError as e:
             pass
@@ -232,15 +232,15 @@ class ImageTrainItem:
         # print(self.image.shape)
 
         return self
-    
+
     def __compute_target_width_height(self):
         self.target_wh = None
         try:
-            with self.load_image() as image:
+            with PIL.Image.open(self.pathname) as image:
                 width, height = image.size
                 image_aspect = width / height
                 target_wh = min(self.aspects, key=lambda aspects:abs(aspects[0]/aspects[1] - image_aspect))
-                
+
                 self.is_undersized = (width * height) < (target_wh[0] * target_wh[1])
                 self.target_wh = target_wh
         except Exception as e:
