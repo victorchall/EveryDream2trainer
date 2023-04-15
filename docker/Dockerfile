@@ -1,7 +1,7 @@
 ###################
 # Builder Stage
 FROM nvidia/cuda:11.8.0-devel-ubuntu22.04 AS builder
-
+LABEL org.opencontainers.image.licenses="AGPL-1.0-only"
 ARG DEBIAN_FRONTEND=noninteractive
 
 # Don't write .pyc bytecode
