@@ -149,13 +149,10 @@ class ImageTrainItem:
         self.error = None
         self.__compute_target_width_height()
 
-    def load_image(self, convert_rgb=True):
+    def load_image(self):
         try:
-            if convert_rgb:
-                image = PIL.Image.open(self.pathname).convert('RGB')
-                image = ImageOps.exif_transpose(image)
-            else:
-                image = PIL.Image.open(self.pathname)
+            image = PIL.Image.open(self.pathname).convert('RGB')
+            image = ImageOps.exif_transpose(image)
         except SyntaxError as e:
             pass
         return image
@@ -239,7 +236,7 @@ class ImageTrainItem:
     def __compute_target_width_height(self):
         self.target_wh = None
         try:
-            with self.load_image(convert_rgb=False) as image:
+            with PIL.Image.open(self.pathname) as image:
                 width, height = image.size
                 image_aspect = width / height
                 target_wh = min(self.aspects, key=lambda aspects:abs(aspects[0]/aspects[1] - image_aspect))
