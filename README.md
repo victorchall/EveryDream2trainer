@@ -35,13 +35,25 @@ Ampere or newer 24GB+ (3090/A5000/4090, etc) recommended for 10k+ images
 ### [Basic setup and getting started](https://www.youtube.com/watch?v=OgpJK8SUW3c) 
 
 Covers install, setup of base models, startning training, basic tweaking, and looking at your logs
-### [Multiaspect and crop jitter](https://www.youtube.com/watch?v=0xswM8QYFD0)
+
+### [Multiaspect and crop jitter explainer](https://www.youtube.com/watch?v=0xswM8QYFD0)
+
 
 Behind the scenes look at how the trainer handles multiaspect and crop jitter
 
 ### Companion tools repo
 
 Make sure to check out the [tools repo](https://github.com/victorchall/EveryDream), it has a grab bag of scripts to help with your data curation prior to training.  It has automatic bulk BLIP captioning for BLIP, script to web scrape based on Laion data files, script to rename generic pronouns to proper names or append artist tags to your captions, etc. 
+
+## Cloud/Docker
+
+### [Free tier Google Colab notebook](https://colab.research.google.com/github/victorchall/EveryDream2trainer/blob/main/Train_Colab.ipynb)
+
+### * [RunPod / Vast Instructions](/doc/CLOUD_SETUP.md)
+#### * [Vast.ai Video Tutorial](https://www.youtube.com/watch?v=PKQesb4om9I)
+#### [Runpod Video Tutorial](https://www.youtube.com/watch?v=XAULP-4hsnA)
+
+### [Docker image link](https://github.com/victorchall/EveryDream2trainer/pkgs/container/everydream2trainer)
 
 ## Docs
 
@@ -71,10 +83,3 @@ Make sure to check out the [tools repo](https://github.com/victorchall/EveryDrea
 
 [Contributing](doc/CONTRIBUTING.md)
 
-## Cloud
-
-[Free tier Google Colab notebook](https://colab.research.google.com/github/victorchall/EveryDream2trainer/blob/main/Train_Colab.ipynb)
-
-[RunPod / Vast](/doc/CLOUD_SETUP.md)
-
-[Docker image link](https://github.com/victorchall/EveryDream2trainer/pkgs/container/everydream2trainer)
