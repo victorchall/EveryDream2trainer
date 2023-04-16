@@ -152,8 +152,16 @@ class ImageTrainItem:
     def load_image(self):
         try:
             image = PIL.Image.open(self.pathname).convert('RGB')
-            image = ImageOps.exif_transpose(image)
+            image = self._try_transpose(image, print_error=False)
         except SyntaxError as e:
+            pass
+        return image
+    
+    def _try_transpose(self, image, print_error=False):
+        try:
+            image = ImageOps.exif_transpose(image)
+        except Exception as e:
+            logging.warning(F"Error rotating image: {e} on {self.pathname}, image will be loaded as is, EXIF may be corrupt") if print_error else None
             pass
         return image
 
@@ -237,7 +245,7 @@ class ImageTrainItem:
         self.target_wh = None
         try:
             with PIL.Image.open(self.pathname) as image:
-                image = ImageOps.exif_transpose(image)
+                image = self._try_transpose(image, print_error=True).convert('RGB')
                 width, height = image.size
                 image_aspect = width / height
                 target_wh = min(self.aspects, key=lambda aspects:abs(aspects[0]/aspects[1] - image_aspect))

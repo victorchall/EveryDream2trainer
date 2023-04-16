@@ -122,7 +122,7 @@ def setup_local_logger(args):
                         datefmt="%m/%d/%Y %I:%M:%S %p",
                        )
     console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.addFilter(lambda msg: "Palette images with Transparency expressed in bytes" in msg.getMessage())
+    console_handler.addFilter(lambda msg: "Palette images with Transparency expressed in bytes" not in msg.getMessage())
     logging.getLogger().addHandler(console_handler)
     import warnings
     warnings.filterwarnings("ignore", message="UserWarning: Palette images with Transparency expressed in bytes should be converted to RGBA images")
