@@ -237,6 +237,7 @@ class ImageTrainItem:
         self.target_wh = None
         try:
             with PIL.Image.open(self.pathname) as image:
+                image = ImageOps.exif_transpose(image)
                 width, height = image.size
                 image_aspect = width / height
                 target_wh = min(self.aspects, key=lambda aspects:abs(aspects[0]/aspects[1] - image_aspect))
