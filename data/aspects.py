@@ -13,6 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 """
+from typing import List, Tuple
 
 """
 Notes:
@@ -238,3 +239,39 @@ def __get_all_aspects():
             ASPECTS_1280,
             ASPECTS_1536,
            ]
+
+
+def get_rational_aspect_ratio(bucket_wh: Tuple[int]) -> Tuple[int]:
+    def farey_aspect_ratio_pair(x: float, max_denominator_value: int):
+        if x <= 1:
+            return farey_aspect_ratio_pair_lt1(x, max_denominator_value)
+        else:
+            b,a = farey_aspect_ratio_pair_lt1(1/x, max_denominator_value)
+            return a,b
+
+    # adapted from https://www.johndcook.com/blog/2010/10/20/best-rational-approximation/
+    def farey_aspect_ratio_pair_lt1(x: float, max_denominator_value: int):
+        if x > 1:
+            raise ValueError("x must be <1")
+        a, b = 0, 1
+        c, d = 1, 1
+        while (b <= max_denominator_value and d <= max_denominator_value):
+            mediant = float(a+c)/(b+d)
+            if x == mediant:
+                if b + d <= max_denominator_value:
+                    return a+c, b+d
+                elif d > b:
+                    return c, d
+                else:
+                    return a, b
+            elif x > mediant:
+                a, b = a+c, b+d
+            else:
+                c, d = a+c, b+d
+
+        if (b > max_denominator_value):
+            return c, d
+        else:
+            return a, b
+
+    return farey_aspect_ratio_pair(bucket_wh[0]/bucket_wh[1], 32)

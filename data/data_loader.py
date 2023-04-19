@@ -21,6 +21,9 @@ import math
 import copy
 
 import random
+
+from colorama import Fore, Style
+
 from data.image_train_item import ImageTrainItem
 import PIL.Image
 
@@ -117,7 +120,9 @@ class DataLoaderMultiAspect():
                 runt_bucket = buckets[bucket][-truncate_count:]
                 for item in runt_bucket:
                     item.runt_size = truncate_count
+                appended_dupes = 0
                 while len(runt_bucket) < batch_size:
+                    appended_dupes += 1
                     runt_bucket.append(random.choice(runt_bucket))
 
                 current_bucket_size = len(buckets[bucket])
@@ -175,3 +180,4 @@ class DataLoaderMultiAspect():
         for item in self.prepared_train_data:
             self.rating_overall_sum += item.caption.rating()
             self.ratings_summed.append(self.rating_overall_sum)
+
