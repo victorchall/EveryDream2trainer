@@ -1,15 +1,20 @@
+import cProfile
+from contextlib import nullcontext
 import os
 import logging
+import time
 import yaml
 import json
 
-from functools import total_ordering
-from attrs import define, field, Factory
+from functools import partial
+from attrs import define, field
 from data.image_train_item import ImageCaption, ImageTrainItem
 from utils.fs_helpers import *
 from typing import Iterable
 
 from tqdm import tqdm
+
+from multiprocessing import Pool, Lock
 
 DEFAULT_MAX_CAPTION_LENGTH = 2048
 
@@ -163,12 +168,14 @@ class Dataset:
             cfgs.append(ImageConfig.from_file(fileset['local.yml']))
         return ImageConfig.fold(cfgs)
 
-    def __sidecar_cfg(imagepath, fileset):
+    def __sidecar_cfg(imagepath, fileset, lock):
         cfgs = []
         for cfgext in ['.txt', '.caption', '.yml', '.yaml']:
             cfgfile = barename(imagepath) + cfgext
             if cfgfile in fileset:
-                cfgs.append(ImageConfig.from_file(fileset[cfgfile]))
+                cfg = ImageConfig.from_file(fileset[cfgfile])
+                with lock:
+                    cfgs.append(cfg)
         return ImageConfig.fold(cfgs)
 
     # Use file name for caption only as a last resort
@@ -180,21 +187,51 @@ class Dataset:
         return cfg.merge(cap_cfg)
 
     @classmethod
+    def scan_one(cls, img, image_configs, fileset, global_cfg, local_cfg, lock):
+        img_cfg = Dataset.__sidecar_cfg(img, fileset, lock)
+        resolved_cfg = ImageConfig.fold([global_cfg, local_cfg, img_cfg])
+        with lock:
+            image_configs[img] = Dataset.__ensure_caption(resolved_cfg, img)
+
+    @classmethod
+    def scan_one_full(cls, img, image_configs, fileset, global_cfg, local_cfg, lock):
+        Dataset.scan_one(img, image_configs, fileset, global_cfg, local_cfg, lock)
+        img_cfg = Dataset.__sidecar_cfg(img, fileset, lock)
+        resolved_cfg = ImageConfig.fold([global_cfg, local_cfg, img_cfg])
+        image_configs[img] = Dataset.__ensure_caption(resolved_cfg, img)
+        #print(f"{image_configs[img].main_prompts} {image_configs[img].tags} {image_configs[img].rating}")
+
+
+    @classmethod
     def from_path(cls, data_root):
         # Create a visitor that maintains global config stack 
         # and accumulates image configs as it traverses dataset
+
         image_configs = {}
         def process_dir(files, parent_globals):
+            #pool = Pool(int(os.cpu_count()/2))
+            lock = Lock()
+
             fileset = {os.path.basename(f): f for f in files}
             global_cfg = parent_globals.merge(Dataset.__global_cfg(fileset))
             local_cfg = Dataset.__local_cfg(fileset)
             for img in filter(is_image, files):
-                img_cfg = Dataset.__sidecar_cfg(img, fileset)
-                resolved_cfg = ImageConfig.fold([global_cfg, local_cfg, img_cfg])
-                image_configs[img] = Dataset.__ensure_caption(resolved_cfg, img)
+                #pool.apply_async(Dataset.scan_one_full, args=(img, image_configs, fileset, global_cfg, local_cfg, lock))
+                Dataset.scan_one_full(img, image_configs, fileset, global_cfg, local_cfg, lock)
+                #Dataset.scan_one(img, image_configs, fileset, global_cfg, local_cfg, lock)
+            #pool.close()
+            #pool.join()
+            #     img_cfg = Dataset.__sidecar_cfg(img, fileset)
+            #     resolved_cfg = ImageConfig.fold([global_cfg, local_cfg, img_cfg])
+            #     image_configs[img] = Dataset.__ensure_caption(resolved_cfg, img)
+            
             return global_cfg
 
+        time_start = time.time()
         walk_and_visit(data_root, process_dir, ImageConfig())
+        time_end = time.time()
+        logging.info(f"   ... walk_and_visit took {(time_end - time_start)/60:.2f} minutes and found {len(image_configs)} images")
+
         return Dataset(image_configs)
 
     @classmethod
@@ -212,45 +249,125 @@ class Dataset:
                     continue
                 image_configs[img] = cfg
         return Dataset(image_configs)    
-    
+
+    def get_one_image_train_item(self, image, aspects, profile=False) -> ImageTrainItem:
+        
+        
+        config = self.image_configs[image]
+
+        tags = []
+        tag_weights = []
+        for tag in sorted(config.tags, key=lambda x: x.weight or 1.0, reverse=True):
+            tags.append(tag.value)
+            tag_weights.append(tag.weight)
+        use_weights = len(set(tag_weights)) > 1 
+
+        try:
+            if profile:
+                profiler = cProfile.Profile()
+                import random
+                random_n = f"{random.randint(0,999):03d}"
+                profiler.enable()
+            caption = ImageCaption(
+                main_prompt=next(iter(config.main_prompts)),
+                rating=config.rating or 1.0,
+                tags=tags,
+                tag_weights=tag_weights,
+                max_target_length=config.max_caption_length or DEFAULT_MAX_CAPTION_LENGTH,
+                use_weights=use_weights)
+            if profile:
+                profiler.disable()
+                profiler.dump_stats(f'profile{random_n}.prof')
+                #exit()
+
+            item = ImageTrainItem(
+                image=None,
+                caption=caption,
+                aspects=aspects,
+                pathname=os.path.abspath(image),
+                flip_p=config.flip_p or 0.0,
+                multiplier=config.multiply or 1.0,
+                cond_dropout=config.cond_dropout
+            )
+        except Exception as e:
+            logging.error(f" *** Error preloading image or caption for: {image}, error: {e}")
+            raise e
+
+        
+        return item
+
     def image_train_items(self, aspects):
+        print(f"   * using async loader")
+        run_profiler = False
         items = []
-        for image in tqdm(self.image_configs, desc="preloading", dynamic_ncols=True):
-            config = self.image_configs[image]
+        process_count = int(os.cpu_count()/2)
+        pool = Pool(process_count)
+        async_results = []
 
-            if len(config.main_prompts) > 1:
-                logging.warning(f" *** Found multiple multiple main_prompts for image {image}, but only one will be applied: {config.main_prompts}")
+        time_start = time.time()
+        with tqdm(total=len(self.image_configs), desc=f"preloading {process_count}", dynamic_ncols=True) as pbar:
+                for image in self.image_configs:
+                    async_result = pool.apply_async(self.get_one_image_train_item, args=(image,aspects, run_profiler), callback=lambda _: pbar.update())
+                    async_results.append(async_result)
+                pool.close()
+                pool.join()
 
-            if len(config.main_prompts) < 1:
-                logging.warning(f" *** No main_prompts for image {image}")
+                for async_result in async_results:
+                    result = async_result.get()
+                    if result is not None:
+                        # ImageTrainItem
+                        items.append(result)
+                    else:
+                        raise ValueError(" *** image_train_items(): Async load item missing")
+                
+                
+        
+        time_end = time.time()
+        logging.info(f" *** Preloading took {(time_end - time_start)/60:.2f} minutes and found {len(items)} images")
+        return items
 
-            tags = []
-            tag_weights = []
-            for tag in sorted(config.tags, key=lambda x: x.weight or 1.0, reverse=True):
-                tags.append(tag.value)
-                tag_weights.append(tag.weight)
-            use_weights = len(set(tag_weights)) > 1 
+    def image_train_items_newish(self, aspects):
+        print(f"   * using async loader")
+        items = []
+        process_count = int(os.cpu_count()/2)
+        pool = Pool(process_count)
 
-            try:            
-                caption = ImageCaption(
-                    main_prompt=next(iter(config.main_prompts)),
-                    rating=config.rating or 1.0,
-                    tags=tags,
-                    tag_weights=tag_weights,
-                    max_target_length=config.max_caption_length or DEFAULT_MAX_CAPTION_LENGTH,
-                    use_weights=use_weights)
+        time_start = time.time()
+        with tqdm(total=len(self.image_configs), desc=f"preloading {process_count}", dynamic_ncols=True) as pbar:
+            async_results = []
+           
+            # run 1000 async tasks
+            for image in self.image_configs:
+                # profile the task
+                #cProfile.runctx('self.get_one(image,aspects)', globals(), locals(), 'profile.prof')
+                async_result = pool.apply_async(self.get_one_image_train_item, args=(image,aspects), callback=lambda _: pbar.update())
+                async_results.append(async_result)
+            pool.close()
+            #pool.join()
+            print(f"   * async pool closed")
 
-                item = ImageTrainItem(
-                    image=None,
-                    caption=caption,
-                    aspects=aspects,
-                    pathname=os.path.abspath(image),
-                    flip_p=config.flip_p or 0.0,
-                    multiplier=config.multiply or 1.0,
-                    cond_dropout=config.cond_dropout
-                )
-                items.append(item)
-            except Exception as e:
-                logging.error(f" *** Error preloading image or caption for: {image}, error: {e}")
-                raise e
+            for async_result in async_results:
+                result = async_result.get()
+                if result is not None:
+                    # ImageTrainItem
+                    items.append(result)
+                    print(f"{result.pathname} {result.caption.main_prompt}")
+                else:
+                    raise ValueError(" *** image_train_items(): Async load item missing")
+        
+        time_end = time.time()
+        logging.info(f" *** Preloading took {(time_end - time_start)/60:.2f} minutes and found {len(items)} images")
+        return items
+
+    def image_train_items_old(self, aspects):
+        print(f"   * using single threaded loader")
+        items = []
+
+        time_start = time.time()
+        with tqdm(total=len(self.image_configs), desc="preloading", dynamic_ncols=True) as pbar:
+            for image in self.image_configs:
+                items.append(self.get_one_image_train_item(image, aspects))
+                pbar.update()
+        time_end = time.time()
+        logging.info(f" *** Preloading took {(time_end - time_start)/60:.2f} minutes and found {len(items)} images")
         return items

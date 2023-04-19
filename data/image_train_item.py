@@ -56,6 +56,9 @@ class ImageCaption:
         if use_weights and len(tag_weights) > len(tags):
             self.__tag_weights = tag_weights[:len(tags)]
 
+    def __repr__(self) -> str:
+        return f"ImageCaption({self.__main_prompt}, {self.__rating}, {self.__tags}, {self.__tag_weights}, {self.__max_target_length}, {self.__use_weights})"
+
     def rating(self) -> float:
         return self.__rating
 
@@ -143,7 +146,6 @@ class ImageTrainItem:
         else:
             self.image = image
             self.image_size = image.size
-            self.target_size = None
 
         self.is_undersized = False
         self.error = None
@@ -245,7 +247,7 @@ class ImageTrainItem:
         self.target_wh = None
         try:
             with PIL.Image.open(self.pathname) as image:
-                image = self._try_transpose(image, print_error=True).convert('RGB')
+                image = self._try_transpose(image, print_error=True)
                 width, height = image.size
                 image_aspect = width / height
                 target_wh = min(self.aspects, key=lambda aspects:abs(aspects[0]/aspects[1] - image_aspect))

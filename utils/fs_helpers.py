@@ -25,7 +25,7 @@ def read_float(file):
     try:
         return float(read_text(file))
     except Exception as e:
-        logging.warning(f" *** Could not parse '{data}' to float in file {file}: {e}")
+        logging.warning(f" *** Could not parse number to float in file {file}: {e}")
 
 import os
 

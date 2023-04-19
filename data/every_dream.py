@@ -1,5 +1,5 @@
 """
-Copyright [2022] Victor C Hall
+Copyright [2022-2023] Victor C Hall
 
 Licensed under the GNU Affero General Public License;
 You may not use this code except in compliance with the License.
@@ -57,11 +57,11 @@ class EveryDreamBatch(Dataset):
         self.retain_contrast = retain_contrast
         self.shuffle_tags = shuffle_tags
         self.seed = seed
-        self.rated_dataset = rated_dataset
-        self.rated_dataset_dropout_target = rated_dataset_dropout_target
+        #self.rated_dataset = rated_dataset
+        #self.rated_dataset_dropout_target = rated_dataset_dropout_target
         # First epoch always trains on all images
         self.image_train_items  = []
-        self.__update_image_train_items(1.0)
+        self.__update_image_train_items()
         self.name = name
 
         num_images = len(self.image_train_items)
@@ -69,13 +69,7 @@ class EveryDreamBatch(Dataset):
 
     def shuffle(self, epoch_n: int, max_epochs: int):
         self.seed += 1
-
-        if self.rated_dataset:
-            dropout_fraction = (max_epochs - (epoch_n * self.rated_dataset_dropout_target)) / max_epochs
-        else:
-            dropout_fraction = 1.0
-
-        self.__update_image_train_items(dropout_fraction)
+        self.__update_image_train_items()
 
     def __len__(self):
         return len(self.image_train_items)
@@ -140,8 +134,8 @@ class EveryDreamBatch(Dataset):
 
         return example
 
-    def __update_image_train_items(self, dropout_fraction: float):
-        self.image_train_items = self.data_loader.get_shuffled_image_buckets(dropout_fraction)
+    def __update_image_train_items(self):
+        self.image_train_items = self.data_loader.get_shuffled_image_buckets()
 
 def build_torch_dataloader(dataset, batch_size) -> torch.utils.data.DataLoader:
     dataloader = torch.utils.data.DataLoader(

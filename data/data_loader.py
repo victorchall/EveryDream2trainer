@@ -1,5 +1,5 @@
 """
-Copyright [2022] Victor C Hall
+Copyright [2022-2223] Victor C Hall
 
 Licensed under the GNU Affero General Public License;
 You may not use this code except in compliance with the License.
@@ -39,7 +39,6 @@ class DataLoaderMultiAspect():
         self.batch_size = batch_size
         self.prepared_train_data = image_train_items
         random.Random(self.seed).shuffle(self.prepared_train_data)
-        self.prepared_train_data = sorted(self.prepared_train_data, key=lambda img: img.caption.rating())
         self.expected_epoch_size = math.floor(sum([i.multiplier for i in self.prepared_train_data]))
         if self.expected_epoch_size != len(self.prepared_train_data):
             logging.info(f" * DLMA initialized with {len(image_train_items)} source images. After applying multipliers, each epoch will train on at least {self.expected_epoch_size} images.")
@@ -48,8 +47,6 @@ class DataLoaderMultiAspect():
 
         self.rating_overall_sum: float = 0.0
         self.ratings_summed: list[float] = []
-        self.__update_rating_sums()
-
 
     def __pick_multiplied_set(self, randomizer: random.Random):
         """
@@ -78,7 +75,7 @@ class DataLoaderMultiAspect():
         
         return picked_images
 
-    def get_shuffled_image_buckets(self, dropout_fraction: float = 1.0) -> list[ImageTrainItem]:
+    def get_shuffled_image_buckets(self) -> list[ImageTrainItem]:
         """
         Returns the current list of `ImageTrainItem` in randomized order,
         sorted into buckets with same sized images.
@@ -94,10 +91,7 @@ class DataLoaderMultiAspect():
         self.seed += 1
         randomizer = random.Random(self.seed)
 
-        if dropout_fraction < 1.0:
-            picked_images = self.__pick_random_subset(dropout_fraction, randomizer)
-        else:
-            picked_images = self.__pick_multiplied_set(randomizer)
+        picked_images = self.__pick_multiplied_set(randomizer)
 
         randomizer.shuffle(picked_images)
 
@@ -131,47 +125,3 @@ class DataLoaderMultiAspect():
             items.extend(buckets[bucket])
 
         return items
-
-    def __pick_random_subset(self, dropout_fraction: float, picker: random.Random) -> list[ImageTrainItem]:
-        """
-        Picks a random subset of all images
-        - The size of the subset is limited by dropout_faction
-        - The chance of an image to be picked is influenced by its rating. Double that rating -> double the chance
-        :param dropout_fraction: must be between 0.0 and 1.0
-        :param picker: seeded random picker
-        :return: list of picked ImageTrainItem
-        """
-
-        prepared_train_data = self.prepared_train_data.copy()
-        ratings_summed = self.ratings_summed.copy()
-        rating_overall_sum = self.rating_overall_sum
-
-        num_images = len(prepared_train_data)
-        num_images_to_pick = math.ceil(num_images * dropout_fraction)
-        num_images_to_pick = max(min(num_images_to_pick, num_images), 0)
-
-        # logging.info(f"Picking {num_images_to_pick} images out of the {num_images} in the dataset for drop_fraction {dropout_fraction}")
-
-        picked_images: list[ImageTrainItem] = []
-        while num_images_to_pick > len(picked_images):
-            # find random sample in dataset
-            point = picker.uniform(0.0, rating_overall_sum)
-            pos = min(bisect.bisect_left(ratings_summed, point), len(prepared_train_data) -1 )
-
-            # pick random sample
-            picked_image = prepared_train_data[pos]
-            picked_images.append(picked_image)
-
-            # kick picked item out of data set to not pick it again
-            rating_overall_sum = max(rating_overall_sum - picked_image.caption.rating(), 0.0)
-            ratings_summed.pop(pos)
-            prepared_train_data.pop(pos)
-
-        return picked_images
-
-    def __update_rating_sums(self):        
-        self.rating_overall_sum: float = 0.0
-        self.ratings_summed: list[float] = []
-        for item in self.prepared_train_data:
-            self.rating_overall_sum += item.caption.rating()
-            self.ratings_summed.append(self.rating_overall_sum)
