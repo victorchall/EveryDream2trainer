@@ -430,7 +430,7 @@ def convert_ldm_unet_checkpoint(checkpoint, config, path=None, extract_ema=False
             else:
                 output_block_list[layer_id] = [layer_name]
 
-        output_block_list = {x : sorted(y) for x, y in output_block_list}
+        output_block_list = {x : sorted(y) for x, y in output_block_list.items()}
 
         if len(output_block_list) > 1:
             resnets = [key for key in output_blocks[i] if f"output_blocks.{i}.0" in key]
