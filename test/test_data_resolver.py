@@ -131,7 +131,7 @@ class TestResolve(unittest.TestCase):
         
         self.assertEqual(len(items), 6)
         self.assertEqual(set(image_paths), set([IMAGE_1_PATH, IMAGE_2_PATH, IMAGE_3_PATH] * 2))
-        self.assertEqual(set(captions), {}'caption for test1', 'test2', 'test3', 'caption for test1', 'caption for test2', 'test3'})
+        self.assertEqual(set(captions), {'caption for test1', 'test2', 'test3', 'caption for test1', 'caption for test2', 'test3'})
         
         undersized_images = list(filter(lambda i: i.is_undersized, items))
         self.assertEqual(len(undersized_images), 2)
