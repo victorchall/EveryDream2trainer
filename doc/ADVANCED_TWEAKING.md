@@ -44,7 +44,7 @@ The value is defaulted at 0.04, which means 4% conditional dropout.  You can set
 
 ## LR tweaking
 
-Learning rate adjustment is a very important part of training.  You can use the default settings, or you can tweak it.  You should consider increasing this further if you increase your batch size further (10+) using [gradient checkpointing](#gradient_checkpointing).
+Learning rate adjustment is a very important part of training. 
 
     --lr 1.0e-6 ^
 
@@ -129,6 +129,8 @@ To use a random seed, use -1:
 
 Default behavior is to use a fixed seed of 555. The seed you set is fixed for all samples if you set a value other than -1.  If you set a seed it is also incrememted for shuffling your training data every epoch (i.e. 555, 556, 557, etc).  This makes training more deterministic.  I suggest a fixed seed when you are trying A/B test tweaks to your general training setup, or when you want all your test samples to use the same seed. 
 
+Fixed seed should be using when performing A/B tests or hyperparameter sweeps.  Random seed (-1) may be better if you are stopping and resuming training often so every restart is using random values for all of the various randomness sources used in training such as noising and data shuffling.
+
 ## Shuffle tags
 
 For those training booru tagged models, you can use this arg to randomly (but deterministicly unless you use `--seed -1`) all the CSV tags in your captions
@@ -182,8 +184,8 @@ The files will be in ```logs/[your project folder]/ep[N]_batch_schedule.txt``` a
 
 ## clip_grad_norm
 
-Clips the gradient normals to a maximum value.  This is an experimental feature, you can read online about gradient clipping.  Default is None (no clipping).  This is typically used for gradient explosion problems, which are not an issue with EveryDream, but might be a fun thing to experiment with?
+Clips the gradient normals to a maximum value.  Default is None (no clipping).  This is typically used for gradient explosion problems, which are generally not an issue with EveryDream and the grad scaler in AMP mode keeps this from being too much of an issue, but it may be worth experimenting with. 
 
-    --clip_grad_norm 1.0 ^
+    --clip_grad_norm 100000.0 ^
 
-This may drastically reduce training speed or have other undesirable effects.  My brief toying was mostly unsuccessful.  I would not recommend using this unless you know what you're doing or are bored, but you might discover something cool or interesting.
+Early indications seem to show high values such as 100000 may be helpful.  Low values like 1.0 will drastically reduce training speed.  Default is no gradient normal clipping.  There are also other ways to deal with gradient explosion, such as increasing optimizer epsilon.
