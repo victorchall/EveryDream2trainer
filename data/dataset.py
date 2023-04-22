@@ -36,7 +36,7 @@ class Tag:
             return Tag(data)
 
         if isinstance(data, dict):
-            value = data.get("tag")
+            value = str(data.get("tag"))
             weight = data.get("weight")
             if value:
                 return Tag(value, weight)

@@ -77,6 +77,7 @@ class TestDataset(TestCase):
                       - tag: from .yml
                       - tag: with weight
                         weight: 0.5
+                      - tag: 1234.5
                 """))
 
         actual = Dataset.from_path(".").image_configs
@@ -94,7 +95,7 @@ class TestDataset(TestCase):
                 rating=1.1,
                 max_caption_length=1024,
                 main_prompts="A complex caption", 
-                tags= { Tag("from .yml"), Tag("with weight", weight=0.5) }
+                tags= { Tag("from .yml"), Tag("with weight", weight=0.5), Tag("1234.5") }
                 )
             }
         self.assertEqual(expected, actual)
