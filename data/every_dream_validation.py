@@ -2,6 +2,7 @@ import json
 import logging
 import math
 import random
+from dataclasses import dataclass, field
 from typing import Callable, Any, Optional, Generator
 from argparse import Namespace
 
@@ -20,6 +21,8 @@ from data import aspects
 from data.image_train_item import ImageTrainItem
 from utils.isolate_rng import isolate_rng
 
+from colorama import Fore, Style
+
 
 def get_random_split(items: list[ImageTrainItem], split_proportion: float, batch_size: int) \
         -> tuple[list[ImageTrainItem], list[ImageTrainItem]]:
@@ -35,6 +38,25 @@ def disable_multiplier_and_flip(items: list[ImageTrainItem]) -> Generator[ImageT
     for i in items:
         yield ImageTrainItem(image=i.image, caption=i.caption, aspects=i.aspects, pathname=i.pathname, flip_p=0, multiplier=1)
 
+
+@dataclass
+class ValidationDataset:
+    name: str
+    dataloader: torch.utils.data.DataLoader
+    loss_history: list[float] = field(default_factory=list)
+    val_loss_window_size: Optional[int] = 5  # todo: arg for this?
+
+    def track_loss_trend(self, mean_loss: float):
+        if self.val_loss_window_size is None:
+            return
+        self.loss_history.append(mean_loss)
+
+        if len(self.loss_history) > ((self.val_loss_window_size * 2) + 1):
+            dy = np.diff(self.loss_history[-self.val_loss_window_size:])
+            if np.average(dy) > 0:
+                logging.warning(f"Validation loss for {self.name} shows diverging.  Check your loss/{self.name} graph.")
+
+
 class EveryDreamValidator:
     def __init__(self,
                  val_config_path: Optional[str],
@@ -42,8 +64,7 @@ class EveryDreamValidator:
                  resolution: int,
                  log_writer: SummaryWriter,
     ):
-        self.val_dataloader = None
-        self.train_overlapping_dataloader = None
+        self.validation_datasets = []
         self.resolution = resolution
         self.log_writer = log_writer
 
@@ -54,22 +75,33 @@ class EveryDreamValidator:
 
             'validate_training': True,
             'val_split_mode': 'automatic',
-            'val_split_proportion': 0.15,
+            'auto_split_proportion': 0.15,
 
             'stabilize_training_loss': False,
             'stabilize_split_proportion': 0.15,
 
             'use_relative_loss': False,
+
+            'extra_manual_datasets': {
+                # name: path pairs
+                # eg "santa suit": "/path/to/captioned_santa_suit_images", will be logged to tensorboard as "loss/santa suit"
+            }
         }
         if val_config_path is not None:
             with open(val_config_path, 'rt') as f:
                 self.config.update(json.load(f))
 
-        self.train_overlapping_dataloader_loss_offset = None
-        self.val_loss_offset = None
+        if self.config.get('val_split_mode') == 'manual':
+            if 'manual_data_root' not in self.config:
+                raise ValueError("Error in validation config .json: 'manual' validation is missing 'manual_data_root'")
+            self.config['extra_manual_datasets'].update({'val': self.config['manual_data_root']})
 
-        self.loss_val_history = []
-        self.val_loss_window_size = 5 # todo: arg for this?
+        if 'val_split_proportion' in self.config:
+            print(f"   * {Fore.YELLOW}using old name 'val_split_proportion' for 'auto_split_proportion' - please "
+                  f"update your validation config json{Style.RESET_ALL}")
+            self.config.update({'auto_split_proportion': self.config['val_split_proportion']})
+
+
 
     @property
     def batch_size(self):
@@ -96,46 +128,35 @@ class EveryDreamValidator:
         """
         with isolate_rng():
             random.seed(self.seed)
-            self.val_dataloader, remaining_train_items = self._build_val_dataloader_if_required(train_items, tokenizer)
+
+            auto_dataset, remaining_train_items = self._build_automatic_validation_dataset_if_required(train_items, tokenizer)
             # order is important - if we're removing images from train, this needs to happen before making
             # the overlapping dataloader
-            self.train_overlapping_dataloader = self._build_train_stabilizer_dataloader_if_required(
+            train_overlapping_dataset = self._build_train_stabilizer_dataloader_if_required(
                 remaining_train_items, tokenizer)
+
+            if auto_dataset is not None:
+                self.validation_datasets.append(auto_dataset)
+            if train_overlapping_dataset is not None:
+                self.validation_datasets.append(train_overlapping_dataset)
+            manual_splits = self._build_manual_validation_datasets(tokenizer)
+            self.validation_datasets.extend(manual_splits)
+
             return remaining_train_items
 
     def do_validation_if_appropriate(self, epoch: int, global_step: int,
                                      get_model_prediction_and_target_callable: Callable[
                                          [Any, Any], tuple[torch.Tensor, torch.Tensor]]):
         if (epoch % self.every_n_epochs) == 0:
-            if self.train_overlapping_dataloader is not None:
-                mean_loss = self._calculate_validation_loss('stabilize-train',
-                                                            self.train_overlapping_dataloader,
+            for i, dataset in enumerate(self.validation_datasets):
+                mean_loss = self._calculate_validation_loss(dataset.name,
+                                                            dataset.dataloader,
                                                             get_model_prediction_and_target_callable)
-                if self.train_overlapping_dataloader_loss_offset is None:
-                    self.train_overlapping_dataloader_loss_offset = -mean_loss
-                self.log_writer.add_scalar(tag=f"loss/stabilize-train",
-                                           scalar_value=self.train_overlapping_dataloader_loss_offset + mean_loss,
+                self.log_writer.add_scalar(tag=f"loss/{dataset.name}",
+                                           scalar_value=mean_loss,
                                            global_step=global_step)
-            if self.val_dataloader is not None:
-                mean_loss = self._calculate_validation_loss('val',
-                                                            self.val_dataloader,
-                                                            get_model_prediction_and_target_callable)
-                if self.val_loss_offset is None:
-                    self.val_loss_offset = -mean_loss
-                self.log_writer.add_scalar(tag=f"loss/val",
-                                           scalar_value=mean_loss if not self.use_relative_loss else self.val_loss_offset + mean_loss,
-                                           global_step=global_step)
-                
+                dataset.track_loss_trend(mean_loss)
 
-                self.track_loss_trend(mean_loss)
-
-    def track_loss_trend(self, mean_loss):
-        self.loss_val_history.append(mean_loss)
-
-        if len(self.loss_val_history) > ((self.val_loss_window_size * 2) + 1):
-            dy = np.diff(self.loss_val_history[-self.val_loss_window_size:])
-            if np.average(dy) > 0:
-                logging.warning(f"Validation loss shows diverging.  Check your val/loss graph.")
 
     def _calculate_validation_loss(self, tag, dataloader, get_model_prediction_and_target: Callable[
         [Any, Any], tuple[torch.Tensor, torch.Tensor]]) -> float:
@@ -166,31 +187,35 @@ class EveryDreamValidator:
         return loss_validation_local
 
 
-    def _build_val_dataloader_if_required(self, image_train_items: list[ImageTrainItem], tokenizer)\
-            -> tuple[Optional[torch.utils.data.DataLoader], list[ImageTrainItem]]:
+    def _build_automatic_validation_dataset_if_required(self, image_train_items: list[ImageTrainItem], tokenizer) \
+            -> tuple[Optional[ValidationDataset], list[ImageTrainItem]]:
         val_split_mode = self.config['val_split_mode'] if self.config['validate_training'] else None
-        val_split_proportion = self.config['val_split_proportion']
-        remaining_train_items = image_train_items
-        if val_split_mode is None or val_split_mode == 'none':
+        if val_split_mode is None or val_split_mode == 'none' or val_split_mode == 'manual':
+            # manual is handled by _build_manual_validation_datasets
             return None, image_train_items
         elif val_split_mode == 'automatic':
-            val_items, remaining_train_items = get_random_split(image_train_items, val_split_proportion, batch_size=self.batch_size)
+            auto_split_proportion = self.config['auto_split_proportion']
+            val_items, remaining_train_items = get_random_split(image_train_items, auto_split_proportion, batch_size=self.batch_size)
             val_items = list(disable_multiplier_and_flip(val_items))
             logging.info(f" * Removed {len(val_items)} images from the training set to use for validation")
-        elif val_split_mode == 'manual':
-            val_data_root = self.config.get('val_data_root', None)
-            if val_data_root is None:
-                raise ValueError("Manual validation split requested but `val_data_root` is not defined in validation config")
-            val_items = self._load_manual_val_split(val_data_root)
-            logging.info(f" * Loaded {len(val_items)} validation images from {val_data_root}")
+            val_ed_batch = self._build_ed_batch(val_items, tokenizer=tokenizer, name='val')
+            val_dataloader = build_torch_dataloader(val_ed_batch, batch_size=self.batch_size)
+            return ValidationDataset(name='val', dataloader=val_dataloader), remaining_train_items
         else:
             raise ValueError(f"Unrecognized validation split mode '{val_split_mode}'")
-        val_ed_batch = self._build_ed_batch(val_items, batch_size=self.batch_size, tokenizer=tokenizer, name='val')
-        val_dataloader = build_torch_dataloader(val_ed_batch, batch_size=self.batch_size)
-        return val_dataloader, remaining_train_items
+
+    def _build_manual_validation_datasets(self, tokenizer) -> list[ValidationDataset]:
+        datasets = []
+        for name, root in self.config.get('extra_manual_datasets', {}).items():
+            items = self._load_manual_val_split(root)
+            logging.info(f" * Loaded {len(items)} validation images for validation set '{name}' from {root}")
+            ed_batch = self._build_ed_batch(items, tokenizer=tokenizer, name=name)
+            dataloader = build_torch_dataloader(ed_batch, batch_size=self.batch_size)
+            datasets.append(ValidationDataset(name=name, dataloader=dataloader))
+        return datasets
 
     def _build_train_stabilizer_dataloader_if_required(self, image_train_items: list[ImageTrainItem], tokenizer) \
-            -> Optional[torch.utils.data.DataLoader]:
+            -> Optional[ValidationDataset]:
         stabilize_training_loss = self.config['stabilize_training_loss']
         if not stabilize_training_loss:
             return None
@@ -198,10 +223,9 @@ class EveryDreamValidator:
         stabilize_split_proportion = self.config['stabilize_split_proportion']
         stabilize_items, _ = get_random_split(image_train_items, stabilize_split_proportion, batch_size=self.batch_size)
         stabilize_items = list(disable_multiplier_and_flip(stabilize_items))
-        stabilize_ed_batch = self._build_ed_batch(stabilize_items, batch_size=self.batch_size, tokenizer=tokenizer,
-                                                  name='stabilize-train')
+        stabilize_ed_batch = self._build_ed_batch(stabilize_items, tokenizer=tokenizer, name='stabilize-train')
         stabilize_dataloader = build_torch_dataloader(stabilize_ed_batch, batch_size=self.batch_size)
-        return stabilize_dataloader
+        return ValidationDataset(name='stabilize-train', dataloader=stabilize_dataloader, val_loss_window_size=None)
 
     def _load_manual_val_split(self, val_data_root: str):
         args = Namespace(
@@ -214,7 +238,7 @@ class EveryDreamValidator:
         random.shuffle(val_items)
         return val_items
 
-    def _build_ed_batch(self, items: list[ImageTrainItem], batch_size: int, tokenizer, name='val'):
+    def _build_ed_batch(self, items: list[ImageTrainItem], tokenizer, name='val'):
         batch_size = self.batch_size
         seed = self.seed
         data_loader = DataLoaderMultiAspect(
