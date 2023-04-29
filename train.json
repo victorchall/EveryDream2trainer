@@ -5,6 +5,7 @@
   "clip_skip": 0,
   "cond_dropout": 0.04,
   "data_root": "X:\\my_project_data\\project_abc",
+  "disable_amp": false,
   "disable_textenc_training": false,
   "disable_xformers": false,
   "flip_p": 0.0,
