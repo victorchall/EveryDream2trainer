@@ -97,7 +97,7 @@ class EveryDreamValidator:
             self.config['extra_manual_datasets'].update({'val': self.config['manual_data_root']})
 
         if 'val_split_proportion' in self.config:
-            print(f"   * {Fore.YELLOW}using old name 'val_split_proportion' for 'auto_split_proportion' - please "
+            logging.warning(f"   * {Fore.YELLOW}using old name 'val_split_proportion' for 'auto_split_proportion' - please "
                   f"update your validation config json{Style.RESET_ALL}")
             self.config.update({'auto_split_proportion': self.config['val_split_proportion']})
 
