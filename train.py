@@ -27,7 +27,6 @@ import gc
 import random
 import traceback
 import shutil
-import importlib
 
 import torch.nn.functional as F
 from torch.cuda.amp import autocast, GradScaler
@@ -305,14 +304,9 @@ def update_grad_scaler(scaler: GradScaler, global_step, epoch, step):
         scaler.set_backoff_factor(1/factor)
         scaler.set_growth_interval(100)
 
-def report_image_train_item_problems(log_folder: str, items: list[ImageTrainItem]) -> None:
-    for item in items:
-        if item.error is not None:
-            logging.error(f"{Fore.LIGHTRED_EX} *** Error opening {Fore.LIGHTYELLOW_EX}{item.pathname}{Fore.LIGHTRED_EX} to get metadata. File may be corrupt and will be skipped.{Style.RESET_ALL}")
-            logging.error(f" *** exception: {item.error}")
 
+def report_image_train_item_problems(log_folder: str, items: list[ImageTrainItem], batch_size) -> None:
     undersized_items = [item for item in items if item.is_undersized]
-
     if len(undersized_items) > 0:
         underized_log_path = os.path.join(log_folder, "undersized_images.txt")
         logging.warning(f"{Fore.LIGHTRED_EX} ** Some images are smaller than the target size, consider using larger images{Style.RESET_ALL}")
@@ -323,15 +317,43 @@ def report_image_train_item_problems(log_folder: str, items: list[ImageTrainItem
                 message = f" *** {undersized_item.pathname} with size: {undersized_item.image_size} is smaller than target size: {undersized_item.target_wh}\n"
                 undersized_images_file.write(message)
 
-def resolve_image_train_items(args: argparse.Namespace, log_folder: str) -> list[ImageTrainItem]:
+
+    # warn on underfilled aspect ratio buckets
+
+    # Intuition: if there are too few images to fill a batch, duplicates will be appended.
+    # this is not a problem for large image counts but can seriously distort training if there
+    # are just a handful of images for a given aspect ratio.
+
+    # at a dupe ratio of 0.5, all images in this bucket have effective multiplier 1.5,
+    # at a dupe ratio 1.0, all images in this bucket have effective multiplier 2.0
+    warn_bucket_dupe_ratio = 0.5
+
+    ar_buckets = set([tuple(i.target_wh) for i in items])
+    for ar_bucket in ar_buckets:
+        count = len([i for i in items if tuple(i.target_wh) == ar_bucket])
+        runt_size = batch_size - (count % batch_size)
+        bucket_dupe_ratio = runt_size / count
+        if bucket_dupe_ratio > warn_bucket_dupe_ratio:
+            aspect_ratio_rational = aspects.get_rational_aspect_ratio(ar_bucket)
+            aspect_ratio_description = f"{aspect_ratio_rational[0]}:{aspect_ratio_rational[1]}"
+            effective_multiplier = round(1 + bucket_dupe_ratio, 1)
+            logging.warning(f" * {Fore.LIGHTRED_EX}Aspect ratio bucket {ar_bucket} has only {count} "
+                            f"images{Style.RESET_ALL}. At batch size {batch_size} this makes for an effective multiplier "
+                            f"of {effective_multiplier}, which may cause problems. Consider adding {runt_size} or "
+                            f"more images for aspect ratio {aspect_ratio_description}, or reducing your batch_size.")
+
+def resolve_image_train_items(args: argparse.Namespace) -> list[ImageTrainItem]:
     logging.info(f"* DLMA resolution {args.resolution}, buckets: {args.aspects}")
     logging.info(" Preloading images...")
 
     resolved_items = resolver.resolve(args.data_root, args)
-    report_image_train_item_problems(log_folder, resolved_items)
     image_paths = set(map(lambda item: item.pathname, resolved_items))
 
     # Remove erroneous items
+    for item in resolved_items:
+        if item.error is not None:
+            logging.error(f"{Fore.LIGHTRED_EX} *** Error opening {Fore.LIGHTYELLOW_EX}{item.pathname}{Fore.LIGHTRED_EX} to get metadata. File may be corrupt and will be skipped.{Style.RESET_ALL}")
+            logging.error(f" *** exception: {item.error}")
     image_train_items = [item for item in resolved_items if item.error is None]
     print (f" * Found {len(image_paths)} files in '{args.data_root}'")
 
@@ -604,7 +626,7 @@ def main(args):
 
     log_optimizer(optimizer, betas, epsilon, weight_decay, curr_lr, curr_text_encoder_lr)
 
-    image_train_items = resolve_image_train_items(args, log_folder)
+    image_train_items = resolve_image_train_items(args)
 
     validator = None
     if args.validation_config is not None:
@@ -615,6 +637,8 @@ def main(args):
                                         )
         # the validation dataset may need to steal some items from image_train_items
         image_train_items = validator.prepare_validation_splits(image_train_items, tokenizer=tokenizer)
+
+    report_image_train_item_problems(log_folder, image_train_items, batch_size=args.batch_size)
 
     data_loader = DataLoaderMultiAspect(
         image_train_items=image_train_items,
