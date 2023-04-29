@@ -27,8 +27,6 @@ import gc
 import random
 import traceback
 import shutil
-import importlib
-from collections import defaultdict
 
 import torch.nn.functional as F
 from torch.cuda.amp import autocast, GradScaler
@@ -306,14 +304,9 @@ def update_grad_scaler(scaler: GradScaler, global_step, epoch, step):
         scaler.set_backoff_factor(1/factor)
         scaler.set_growth_interval(100)
 
+
 def report_image_train_item_problems(log_folder: str, items: list[ImageTrainItem], batch_size) -> None:
-    for item in items:
-        if item.error is not None:
-            logging.error(f"{Fore.LIGHTRED_EX} *** Error opening {Fore.LIGHTYELLOW_EX}{item.pathname}{Fore.LIGHTRED_EX} to get metadata. File may be corrupt and will be skipped.{Style.RESET_ALL}")
-            logging.error(f" *** exception: {item.error}")
-
     undersized_items = [item for item in items if item.is_undersized]
-
     if len(undersized_items) > 0:
         underized_log_path = os.path.join(log_folder, "undersized_images.txt")
         logging.warning(f"{Fore.LIGHTRED_EX} ** Some images are smaller than the target size, consider using larger images{Style.RESET_ALL}")
@@ -346,10 +339,10 @@ def report_image_train_item_problems(log_folder: str, items: list[ImageTrainItem
             effective_multiplier = round(1 + bucket_dupe_ratio, 1)
             logging.warning(f" * {Fore.LIGHTRED_EX}Aspect ratio bucket {ar_bucket} has only {count} "
                             f"images{Style.RESET_ALL}. At batch size {batch_size} this makes for an effective multiplier "
-                            f"of {effective_multiplier}, which may cause problems. Consider adding up to {runt_size} "
+                            f"of {effective_multiplier}, which may cause problems. Consider adding {runt_size} or "
                             f"more images for aspect ratio {aspect_ratio_description}, or reducing your batch_size.")
 
-def resolve_image_train_items(args: argparse.Namespace, log_folder: str) -> list[ImageTrainItem]:
+def resolve_image_train_items(args: argparse.Namespace) -> list[ImageTrainItem]:
     logging.info(f"* DLMA resolution {args.resolution}, buckets: {args.aspects}")
     logging.info(" Preloading images...")
 
@@ -357,6 +350,10 @@ def resolve_image_train_items(args: argparse.Namespace, log_folder: str) -> list
     image_paths = set(map(lambda item: item.pathname, resolved_items))
 
     # Remove erroneous items
+    for item in resolved_items:
+        if item.error is not None:
+            logging.error(f"{Fore.LIGHTRED_EX} *** Error opening {Fore.LIGHTYELLOW_EX}{item.pathname}{Fore.LIGHTRED_EX} to get metadata. File may be corrupt and will be skipped.{Style.RESET_ALL}")
+            logging.error(f" *** exception: {item.error}")
     image_train_items = [item for item in resolved_items if item.error is None]
     print (f" * Found {len(image_paths)} files in '{args.data_root}'")
 
@@ -629,7 +626,7 @@ def main(args):
 
     log_optimizer(optimizer, betas, epsilon, weight_decay, curr_lr, curr_text_encoder_lr)
 
-    image_train_items = resolve_image_train_items(args, log_folder)
+    image_train_items = resolve_image_train_items(args)
 
     validator = None
     if args.validation_config is not None:
