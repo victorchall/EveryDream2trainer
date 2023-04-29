@@ -91,6 +91,11 @@ class EveryDreamValidator:
             with open(val_config_path, 'rt') as f:
                 self.config.update(json.load(f))
 
+        if 'val_data_root' in self.config:
+            logging.warning(f"   * {Fore.YELLOW}using old name 'val_data_root' for 'manual_data_root' - please "
+                  f"update your validation config json{Style.RESET_ALL}")
+            self.config.update({'manual_data_root': self.config['val_data_root']})
+
         if self.config.get('val_split_mode') == 'manual':
             if 'manual_data_root' not in self.config:
                 raise ValueError("Error in validation config .json: 'manual' validation is missing 'manual_data_root'")
