@@ -394,11 +394,6 @@ def main(args):
     print(f" Args:")
     pprint.pprint(vars(args))
 
-    if args.notebook:
-        from tqdm.notebook import tqdm
-    else:
-        from tqdm.auto import tqdm
-
     if args.seed == -1:
         args.seed = random.randint(0, 2**30)
     seed = args.seed
@@ -1021,7 +1016,6 @@ if __name__ == "__main__":
     argparser.add_argument("--lr_scheduler", type=str, default="constant", help="LR scheduler, (default: constant)", choices=["constant", "linear", "cosine", "polynomial"])
     argparser.add_argument("--lr_warmup_steps", type=int, default=None, help="Steps to reach max LR during warmup (def: 0.02 of lr_decay_steps), non-functional for constant")
     argparser.add_argument("--max_epochs", type=int, default=300, help="Maximum number of epochs to train for")
-    #argparser.add_argument("--notebook", action="store_true", default=False, help="disable keypresses and uses tqdm.notebook for jupyter notebook (def: False)")
     argparser.add_argument("--optimizer_config", default="optimizer.json", help="Path to a JSON configuration file for the optimizer.  Default is 'optimizer.json'")
     argparser.add_argument("--project_name", type=str, default="myproj", help="Project name for logs and checkpoints, ex. 'tedbennett', 'superduperV1'")
     argparser.add_argument("--resolution", type=int, default=512, help="resolution to train", choices=supported_resolutions)
