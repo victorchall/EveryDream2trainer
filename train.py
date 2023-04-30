@@ -401,7 +401,8 @@ def main(args):
     else:
         from tqdm.auto import tqdm
     """
-
+    from tqdm.auto import tqdm
+    
     if args.seed == -1:
         args.seed = random.randint(0, 2**30)
     seed = args.seed
