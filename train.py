@@ -37,6 +37,7 @@ import itertools
 import torch
 import datetime
 import json
+from tqdm.auto import tqdm
 
 from diffusers import StableDiffusionPipeline, AutoencoderKL, UNet2DConditionModel, DDIMScheduler, DDPMScheduler, \
     DPMSolverMultistepScheduler
