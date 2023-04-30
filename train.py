@@ -394,13 +394,13 @@ def main(args):
     print(f" Args:")
     pprint.pprint(vars(args))
 
-    '''
+    """
     Not Currently used
     if args.notebook:
         from tqdm.notebook import tqdm
     else:
         from tqdm.auto import tqdm
-    '''
+    """
 
     if args.seed == -1:
         args.seed = random.randint(0, 2**30)
