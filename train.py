@@ -260,11 +260,6 @@ def setup_args(args):
 
     total_batch_size = args.batch_size * args.grad_accum
 
-    if args.scale_lr is not None and args.scale_lr:
-        tmp_lr = args.lr
-        args.lr = args.lr * (total_batch_size**0.55)
-        logging.info(f"{Fore.CYAN} * Scaling learning rate {tmp_lr} by {total_batch_size**0.5}, new value: {args.lr}{Style.RESET_ALL}")
-
     if args.save_ckpt_dir is not None and not os.path.exists(args.save_ckpt_dir):
         os.makedirs(args.save_ckpt_dir)
 
@@ -365,11 +360,6 @@ def main(args):
     args = setup_args(args)
     print(f" Args:")
     pprint.pprint(vars(args))
-
-    if args.notebook:
-        from tqdm.notebook import tqdm
-    else:
-        from tqdm.auto import tqdm
 
     if args.seed == -1:
         args.seed = random.randint(0, 2**30)
@@ -554,7 +544,7 @@ def main(args):
     epoch_len = math.ceil(len(train_batch) / args.batch_size)
 
     ed_optimizer = EveryDreamOptimizer(args, optimizer_config, text_encoder.parameters(), unet.parameters(), epoch_len)
-
+    exit()
     log_args(log_writer, args)
 
     sample_generator = SampleGenerator(log_folder=log_folder, log_writer=log_writer,
@@ -868,7 +858,7 @@ if __name__ == "__main__":
         print("No config file specified, using command line args")
 
     argparser = argparse.ArgumentParser(description="EveryDream2 Training options")
-    #argparser.add_argument("--amp", action="store_true",  default=True, help="deprecated, use --disable_amp if you wish to disable AMP")
+    argparser.add_argument("--amp", action="store_true",  default=True, help="deprecated, use --disable_amp if you wish to disable AMP")
     argparser.add_argument("--batch_size", type=int, default=2, help="Batch size (def: 2)")
     argparser.add_argument("--ckpt_every_n_minutes", type=int, default=None, help="Save checkpoint every n minutes, def: 20")
     argparser.add_argument("--clip_grad_norm", type=float, default=None, help="Clip gradient norm (def: disabled) (ex: 1.5), useful if loss=nan?")
@@ -888,7 +878,7 @@ if __name__ == "__main__":
     argparser.add_argument("--lowvram", action="store_true", default=False, help="automatically overrides various args to support 12GB gpu")
     argparser.add_argument("--lr", type=float, default=None, help="Learning rate, if using scheduler is maximum LR at top of curve")
     argparser.add_argument("--lr_decay_steps", type=int, default=0, help="Steps to reach minimum LR, default: automatically set")
-    argparser.add_argument("--lr_scheduler", type=str, default="constant", help="LR scheduler, (default: constant)", choices=["constant", "linear", "cosine", "polynomial"])
+    #argparser.add_argument("--lr_scheduler", type=str, default="constant", help="LR scheduler, (default: constant)", choices=["constant", "linear", "cosine", "polynomial"])
     argparser.add_argument("--lr_warmup_steps", type=int, default=None, help="Steps to reach max LR during warmup (def: 0.02 of lr_decay_steps), non-functional for constant")
     argparser.add_argument("--max_epochs", type=int, default=300, help="Maximum number of epochs to train for")
     #argparser.add_argument("--notebook", action="store_true", default=False, help="disable keypresses and uses tqdm.notebook for jupyter notebook (def: False)")
@@ -904,7 +894,7 @@ if __name__ == "__main__":
     argparser.add_argument("--save_ckpts_from_n_epochs", type=int, default=0, help="Only saves checkpoints starting an N epochs, def: 0 (disabled)")
     argparser.add_argument("--save_full_precision", action="store_true", default=False, help="save ckpts at full FP32")
     argparser.add_argument("--save_optimizer", action="store_true", default=False, help="saves optimizer state with ckpt, useful for resuming training later")
-    argparser.add_argument("--scale_lr", action="store_true", default=False, help="automatically scale up learning rate based on batch size and grad accumulation (def: False)")
+    #argparser.add_argument("--scale_lr", action="store_true", default=False, help="automatically scale up learning rate based on batch size and grad accumulation (def: False)")
     argparser.add_argument("--seed", type=int, default=555, help="seed used for samples and shuffling, use -1 for random")
     argparser.add_argument("--shuffle_tags", action="store_true", default=False, help="randomly shuffles CSV tags in captions, for booru datasets")
     argparser.add_argument("--useadam8bit", action="store_true", default=False, help="deprecated, use --optimizer_config and optimizer.json instead")
