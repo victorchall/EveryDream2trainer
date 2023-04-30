@@ -29,7 +29,7 @@ import traceback
 import shutil
 
 import torch.nn.functional as F
-from torch.cuda.amp import autocast, GradScaler
+from torch.cuda.amp import autocast
 
 from colorama import Fore, Style
 import numpy as np
@@ -60,6 +60,7 @@ from utils.huggingface_downloader import try_download_model_from_hf
 from utils.convert_diff_to_ckpt import convert as converter
 from utils.isolate_rng import isolate_rng
 from utils.check_git import check_git
+from optimizer.optimizers import EveryDreamOptimizer
 
 if torch.cuda.is_available():
     from utils.gpu import GPU
@@ -131,24 +132,17 @@ def setup_local_logger(args):
 
     return datetimestamp
 
-def log_optimizer(optimizer: torch.optim.Optimizer, betas, epsilon, weight_decay, unet_lr, text_encoder_lr):
-    """
-    logs the optimizer settings
-    """
-    logging.info(f"{Fore.CYAN} * Optimizer: {optimizer.__class__.__name__} *{Style.RESET_ALL}")
-    logging.info(f"{Fore.CYAN}    unet lr: {unet_lr}, text encoder lr: {text_encoder_lr}, betas: {betas}, epsilon: {epsilon}, weight_decay: {weight_decay} *{Style.RESET_ALL}")
+# def save_optimizer(optimizer: torch.optim.Optimizer, path: str):
+#     """
+#     Saves the optimizer state
+#     """
+#     torch.save(optimizer.state_dict(), path)
 
-def save_optimizer(optimizer: torch.optim.Optimizer, path: str):
-    """
-    Saves the optimizer state
-    """
-    torch.save(optimizer.state_dict(), path)
-
-def load_optimizer(optimizer: torch.optim.Optimizer, path: str):
-    """
-    Loads the optimizer state
-    """
-    optimizer.load_state_dict(torch.load(path))
+# def load_optimizer(optimizer: torch.optim.Optimizer, path: str):
+#     """
+#     Loads the optimizer state
+#     """
+#     optimizer.load_state_dict(torch.load(path))
 
 def get_gpu_memory(nvsmi):
     """
@@ -283,28 +277,6 @@ def setup_args(args):
     args.aspects = aspects.get_aspect_buckets(args.resolution)
 
     return args
-
-def update_grad_scaler(scaler: GradScaler, global_step, epoch, step):
-    if global_step == 500:
-        factor = 1.8
-        scaler.set_growth_factor(factor)
-        scaler.set_backoff_factor(1/factor)
-        scaler.set_growth_interval(50)
-    if global_step == 1000:
-        factor = 1.6
-        scaler.set_growth_factor(factor)
-        scaler.set_backoff_factor(1/factor)
-        scaler.set_growth_interval(50)
-    if global_step == 2000:
-        factor = 1.3
-        scaler.set_growth_factor(factor)
-        scaler.set_backoff_factor(1/factor)
-        scaler.set_growth_interval(100)
-    if global_step == 4000:
-        factor = 1.15
-        scaler.set_growth_factor(factor)
-        scaler.set_backoff_factor(1/factor)
-        scaler.set_growth_interval(100)
 
 
 def report_image_train_item_problems(log_folder: str, items: list[ImageTrainItem], batch_size) -> None:
@@ -453,7 +425,6 @@ def main(args):
             logging.info(f" * Saving yaml to {yaml_save_path}")
             shutil.copyfile(yaml_name, yaml_save_path)
 
-
         if save_optimizer_flag:
             optimizer_path = os.path.join(save_path, "optimizer.pt")
             logging.info(f" Saving optimizer state to {save_path}")
@@ -520,7 +491,7 @@ def main(args):
         text_encoder = text_encoder.to(device, dtype=torch.float32)
 
     optimizer_config = None
-    optimizer_config_path  = args.optimizer_config if args.optimizer_config else "optimizer.json"
+    optimizer_config_path = args.optimizer_config if args.optimizer_config else "optimizer.json"
     if os.path.exists(os.path.join(os.curdir, optimizer_config_path)):
         with open(os.path.join(os.curdir, optimizer_config_path), "r") as f:
             optimizer_config = json.load(f)
@@ -531,8 +502,6 @@ def main(args):
             project=args.project_name,
             config={"main_cfg": vars(args), "optimizer_cfg": optimizer_config},
             name=args.run_name,
-            #sync_tensorboard=True, # broken?
-            #dir=log_folder, # only for save, just duplicates the TB log to /{log_folder}/wandb ...
             )
         try:
             if webbrowser.get():
@@ -544,84 +513,6 @@ def main(args):
                                flush_secs=20,
                                comment=args.run_name if args.run_name is not None else log_time,
                               )
-
-    betas = [0.9, 0.999]
-    epsilon = 1e-8
-    weight_decay = 0.01
-    opt_class = None
-    optimizer = None
-
-    default_lr = 1e-6
-    curr_lr = args.lr
-    text_encoder_lr_scale = 1.0
-
-    if optimizer_config is not None:
-        betas = optimizer_config["betas"]
-        epsilon = optimizer_config["epsilon"]
-        weight_decay = optimizer_config["weight_decay"]
-        optimizer_name = optimizer_config["optimizer"]
-        curr_lr = optimizer_config.get("lr", curr_lr)
-        if args.lr is not None:
-            curr_lr = args.lr
-            logging.info(f"Overriding LR from optimizer config with main config/cli LR setting: {curr_lr}")
-
-        text_encoder_lr_scale = optimizer_config.get("text_encoder_lr_scale", text_encoder_lr_scale)
-        if text_encoder_lr_scale != 1.0:
-            logging.info(f" * Using text encoder LR scale {text_encoder_lr_scale}")
-
-        logging.info(f" * Loaded optimizer args from {optimizer_config_path} *")
-
-    if curr_lr is None:
-        curr_lr = default_lr
-        logging.warning(f"No LR setting found, defaulting to {default_lr}")
-
-    curr_text_encoder_lr = curr_lr * text_encoder_lr_scale
-
-    if args.disable_textenc_training:
-        logging.info(f"{Fore.CYAN} * NOT Training Text Encoder, quality reduced *{Style.RESET_ALL}")
-        params_to_train = itertools.chain(unet.parameters())
-    elif args.disable_unet_training:
-        logging.info(f"{Fore.CYAN} * Training Text Encoder Only *{Style.RESET_ALL}")
-        if text_encoder_lr_scale != 1:
-            logging.warning(f"{Fore.YELLOW} * Ignoring text_encoder_lr_scale {text_encoder_lr_scale} and using the "
-                            f"Unet LR {curr_lr} for the text encoder instead *{Style.RESET_ALL}")
-        params_to_train = itertools.chain(text_encoder.parameters())
-    else:
-        logging.info(f"{Fore.CYAN} * Training Text and Unet *{Style.RESET_ALL}")
-        params_to_train = [{'params': unet.parameters()},
-                           {'params': text_encoder.parameters(), 'lr': curr_text_encoder_lr}]
-
-    if optimizer_name:
-        if optimizer_name == "lion":
-            from lion_pytorch import Lion
-            opt_class = Lion
-            optimizer = opt_class(
-                itertools.chain(params_to_train),
-                lr=curr_lr,
-                betas=(betas[0], betas[1]),
-                weight_decay=weight_decay,
-            )
-        elif optimizer_name in ["adamw"]:
-            opt_class = torch.optim.AdamW
-        else:
-            import bitsandbytes as bnb
-            opt_class = bnb.optim.AdamW8bit
-
-    if not optimizer:
-        optimizer = opt_class(
-            itertools.chain(params_to_train),
-            lr=curr_lr,
-            betas=(betas[0], betas[1]),
-            eps=epsilon,
-            weight_decay=weight_decay,
-            amsgrad=False,
-        )
-
-    if optimizer_state_path is not None:
-        logging.info(f"Loading optimizer state from {optimizer_state_path}")
-        load_optimizer(optimizer, optimizer_state_path)
-
-    log_optimizer(optimizer, betas, epsilon, weight_decay, curr_lr, curr_text_encoder_lr)
 
     image_train_items = resolve_image_train_items(args)
 
@@ -658,17 +549,7 @@ def main(args):
 
     epoch_len = math.ceil(len(train_batch) / args.batch_size)
 
-    if args.lr_decay_steps is None or args.lr_decay_steps < 1:
-        args.lr_decay_steps = int(epoch_len * args.max_epochs * 1.5)
-
-    lr_warmup_steps = int(args.lr_decay_steps / 50) if args.lr_warmup_steps is None else args.lr_warmup_steps
-
-    lr_scheduler = get_scheduler(
-        args.lr_scheduler,
-        optimizer=optimizer,
-        num_warmup_steps=lr_warmup_steps,
-        num_training_steps=args.lr_decay_steps,
-    )
+    ed_optimizer = EveryDreamOptimizer(args, optimizer_config, text_encoder.parameters(), unet.parameters())
 
     log_args(log_writer, args)
 
@@ -741,15 +622,6 @@ def main(args):
     logging.info(f" {Fore.GREEN}grad_accum: {Style.RESET_ALL}{Fore.LIGHTGREEN_EX}{args.grad_accum}{Style.RESET_ALL}"),
     logging.info(f" {Fore.GREEN}batch_size: {Style.RESET_ALL}{Fore.LIGHTGREEN_EX}{args.batch_size}{Style.RESET_ALL}")
     logging.info(f" {Fore.GREEN}epoch_len: {Fore.LIGHTGREEN_EX}{epoch_len}{Style.RESET_ALL}")
-
-    scaler = GradScaler(
-        enabled=args.amp,
-        init_scale=2**17.5,
-        growth_factor=2,
-        backoff_factor=1.0/2,
-        growth_interval=25,
-    )
-    logging.info(f" Grad scaler enabled: {scaler.is_enabled()} (amp mode)")
 
     epoch_pbar = tqdm(range(args.max_epochs), position=0, leave=True, dynamic_ncols=True)
     epoch_pbar.set_description(f"{Fore.LIGHTCYAN_EX}Epochs{Style.RESET_ALL}")
@@ -868,20 +740,18 @@ def main(args):
                     loss_scale = batch["runt_size"] / args.batch_size
                     loss = loss * loss_scale
 
-                scaler.scale(loss).backward()
+                ed_optimizer.step(step, global_step)
 
-                if args.clip_grad_norm is not None:
-                    if not args.disable_unet_training:
-                        torch.nn.utils.clip_grad_norm_(parameters=unet.parameters(), max_norm=args.clip_grad_norm)
-                    if not args.disable_textenc_training:
-                        torch.nn.utils.clip_grad_norm_(parameters=text_encoder.parameters(), max_norm=args.clip_grad_norm)
+                # if args.clip_grad_norm is not None:
+                #     if not args.disable_unet_training:
+                #         torch.nn.utils.clip_grad_norm_(parameters=unet.parameters(), max_norm=args.clip_grad_norm)
+                #     if not args.disable_textenc_training:
+                #         torch.nn.utils.clip_grad_norm_(parameters=text_encoder.parameters(), max_norm=args.clip_grad_norm)
 
-                if ((global_step + 1) % args.grad_accum == 0) or (step == epoch_len - 1):
-                    scaler.step(optimizer)
-                    scaler.update()
-                    optimizer.zero_grad(set_to_none=True)
-
-                lr_scheduler.step()
+                #if ((global_step + 1) % args.grad_accum == 0) or (step == epoch_len - 1):
+                #ed_optimizers.step(step, global_step)
+                    #scaler.update()
+                    #optimizer.zero_grad(set_to_none=True)
 
                 loss_step = loss.detach().item()
 
@@ -895,23 +765,23 @@ def main(args):
                 loss_epoch.append(loss_step)
 
                 if (global_step + 1) % args.log_step == 0:
-                    curr_lr = lr_scheduler.get_last_lr()[0]
                     loss_local = sum(loss_log_step) / len(loss_log_step)
+                    lr_unet = ed_optimizer.get_unet_lr()
+                    lr_textenc = ed_optimizer.get_textenc_lr()
                     loss_log_step = []
-                    logs = {"loss/log_step": loss_local, "lr": curr_lr, "img/s": images_per_sec}
-                    if args.disable_textenc_training or args.disable_unet_training or text_encoder_lr_scale == 1:
-                        log_writer.add_scalar(tag="hyperparamater/lr", scalar_value=curr_lr, global_step=global_step)
-                    else:
-                        log_writer.add_scalar(tag="hyperparamater/lr unet", scalar_value=curr_lr, global_step=global_step)
-                        curr_text_encoder_lr = lr_scheduler.get_last_lr()[1]
-                        log_writer.add_scalar(tag="hyperparamater/lr text encoder", scalar_value=curr_text_encoder_lr, global_step=global_step)
+                    
+                    log_writer.add_scalar(tag="hyperparamater/lr unet", scalar_value=lr_unet, global_step=global_step)
+                    log_writer.add_scalar(tag="hyperparamater/lr text encoder", scalar_value=lr_textenc, global_step=global_step)
                     log_writer.add_scalar(tag="loss/log_step", scalar_value=loss_local, global_step=global_step)
+
                     sum_img = sum(images_per_sec_log_step)
                     avg = sum_img / len(images_per_sec_log_step)
                     images_per_sec_log_step = []
                     if args.amp:
-                        log_writer.add_scalar(tag="hyperparamater/grad scale", scalar_value=scaler.get_scale(), global_step=global_step)
+                        log_writer.add_scalar(tag="hyperparamater/grad scale", scalar_value=ed_optimizer.get_scale(), global_step=global_step)
                     log_writer.add_scalar(tag="performance/images per second", scalar_value=avg, global_step=global_step)
+
+                    logs = {"loss/log_step": loss_local, "lr_unet": lr_unet, "lr_te": lr_textenc, "img/s": images_per_sec}
                     append_epoch_log(global_step=global_step, epoch_pbar=epoch_pbar, gpu=gpu, log_writer=log_writer, **logs)
                     torch.cuda.empty_cache()
 
@@ -933,7 +803,7 @@ def main(args):
 
                 del batch
                 global_step += 1
-                update_grad_scaler(scaler, global_step, epoch, step) if args.amp else None
+                #update_grad_scaler(scaler, global_step, epoch, step) if args.amp else None
                 # end of step
 
             steps_pbar.close()
