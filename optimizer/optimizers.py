@@ -24,6 +24,7 @@ class EveryDreamOptimizer():
     unet: unet model
     """
     def __init__(self, args, optimizer_config, text_encoder_params, unet_params, epoch_len):
+        print(f"\noptimizer_config: \n{optimizer_config}\n")
         self.grad_accum = args.grad_accum
         self.clip_grad_norm = args.clip_grad_norm
         self.text_encoder_params = text_encoder_params
@@ -34,14 +35,6 @@ class EveryDreamOptimizer():
         self.lr_scheduler_te, self.lr_scheduler_unet = self.create_lr_schedulers(args, optimizer_config)
 
         self.unet_config = optimizer_config.get("unet", {})
-        if args.lr is not None:
-            self.unet_config["lr"] = args.lr
-        self.te_config = optimizer_config.get("text_encoder", {})
-        if self.te_config.get("lr", None) is None:
-            self.te_config["lr"] = self.unet_config["lr"]
-            te_scale = self.optimizer_config.get("text_encoder_lr_scale", None)
-            if te_scale is not None:
-                self.te_config["lr"] = self.unet_config["lr"] * te_scale
 
         optimizer_te_state_path = os.path.join(args.resume_ckpt, OPTIMIZER_TE_STATE_FILENAME)
         optimizer_unet_state_path = os.path.join(args.resume_ckpt, OPTIMIZER_UNET_STATE_FILENAME)
@@ -100,37 +93,72 @@ class EveryDreamOptimizer():
         self._save_optimizer(self.optimizer_te, os.path.join(ckpt_path, OPTIMIZER_TE_STATE_FILENAME))
         self._save_optimizer(self.optimizer_unet, os.path.join(ckpt_path, OPTIMIZER_UNET_STATE_FILENAME))
 
-    def create_optimizers(self, args, global_optimizer_config, text_encoder, unet):
+    def create_optimizers(self, args, global_optimizer_config, text_encoder_params, unet_params):
         """
         creates optimizers from config and argsfor unet and text encoder
         returns (optimizer_te, optimizer_unet)
         """
+        text_encoder_lr_scale = global_optimizer_config.get("text_encoder_lr_scale")
+        unet_config = global_optimizer_config.get("unet")
+        te_config = global_optimizer_config.get("text_encoder")
+        te_config, unet_config = self.fold(te_config=te_config, 
+                                           unet_config=unet_config, 
+                                           text_encoder_lr_scale=text_encoder_lr_scale)
+
         if args.disable_textenc_training:
             optimizer_te = create_null_optimizer()
         else:
-            optimizer_te = self.create_optimizer(global_optimizer_config.get("text_encoder"), text_encoder)
+            optimizer_te = self.create_optimizer(args, te_config, text_encoder_params)
         if args.disable_unet_training:
             optimizer_unet = create_null_optimizer()
         else:
-            optimizer_unet = self.create_optimizer(global_optimizer_config, unet)
+            optimizer_unet = self.create_optimizer(args, unet_config, unet_params)
 
         return optimizer_te, optimizer_unet
 
+    @staticmethod
+    def fold(te_config, unet_config, text_encoder_lr_scale):
+        """
+        defaults text encoder config values to unet config values if not specified per property
+        """
+        if te_config.get("optimizer", None) is None:
+            te_config["optimizer"] = unet_config["optimizer"]
+        if te_config.get("lr", None) is None:
+            te_config["lr"] = unet_config["lr"]
+            te_scale = text_encoder_lr_scale
+            if te_scale is not None:
+                te_config["lr"] = unet_config["lr"] * te_scale
+        if te_config.get("weight_decay", None) is None:
+            te_config["weight_decay"] = unet_config["weight_decay"]
+        if te_config.get("betas", None) is None:
+            te_config["betas"] = unet_config["betas"]
+        if te_config.get("epsilon", None) is None:
+            te_config["epsilon"] = unet_config["epsilon"]
+        if te_config.get("lr_scheduler", None) is None:
+            te_config["lr_scheduler"] = unet_config["lr_scheduler"]
+
+        return te_config, unet_config
+
     def create_lr_schedulers(self, args, optimizer_config):
         lr_warmup_steps = int(args.lr_decay_steps / 50) if args.lr_warmup_steps is None else args.lr_warmup_steps
-        lr_scheduler_type_te = optimizer_config.get("lr_scheduler", self.unet_config.lr_scheduler)
+        lr_scheduler_type_unet = optimizer_config["unet"].get("lr_scheduler", None)
+        assert lr_scheduler_type_unet is not None, "lr_scheduler must be specified in optimizer config"
+        lr_scheduler_type_te = optimizer_config.get("lr_scheduler", lr_scheduler_type_unet)
+
         self.lr_scheduler_te = get_scheduler(
             lr_scheduler_type_te,
             optimizer=self.optimizer_te,
             num_warmup_steps=lr_warmup_steps,
             num_training_steps=args.lr_decay_steps,
         )
+
         self.lr_scheduler_unet = get_scheduler(
-            args.lr_scheduler,
+            lr_scheduler_type_unet,
             optimizer=self.optimizer_unet,
             num_warmup_steps=lr_warmup_steps,
             num_training_steps=args.lr_decay_steps,
         )
+
         return self.lr_scheduler_te, self.lr_scheduler_unet
 
     def update_grad_scaler(self, global_step):
@@ -169,8 +197,8 @@ class EveryDreamOptimizer():
         """
         optimizer.load_state_dict(torch.load(path))
 
-    @staticmethod
-    def create_optimizer(args, local_optimizer_config, parameters):
+    def create_optimizer(self, args, local_optimizer_config, parameters):
+        print(f"Creating optimizer from {local_optimizer_config}")
         betas = BETAS_DEFAULT
         epsilon = EPSILON_DEFAULT
         weight_decay = WEIGHT_DECAY_DEFAULT
@@ -182,10 +210,10 @@ class EveryDreamOptimizer():
         text_encoder_lr_scale = 1.0
 
         if local_optimizer_config is not None:
-            betas = local_optimizer_config["betas"]
-            epsilon = local_optimizer_config["epsilon"]
-            weight_decay = local_optimizer_config["weight_decay"]
-            optimizer_name = local_optimizer_config["optimizer"]
+            betas = local_optimizer_config["betas"] or betas
+            epsilon = local_optimizer_config["epsilon"] or epsilon
+            weight_decay = local_optimizer_config["weight_decay"] or weight_decay
+            optimizer_name = local_optimizer_config["optimizer"] or None
             curr_lr = local_optimizer_config.get("lr", curr_lr)
             if args.lr is not None:
                 curr_lr = args.lr
@@ -228,17 +256,9 @@ class EveryDreamOptimizer():
             )
         
         if args.lr_decay_steps is None or args.lr_decay_steps < 1:
-            args.lr_decay_steps = int(epoch_len * args.max_epochs * 1.5)
+            args.lr_decay_steps = int(self.epoch_len * args.max_epochs * 1.5)
 
         lr_warmup_steps = int(args.lr_decay_steps / 50) if args.lr_warmup_steps is None else args.lr_warmup_steps
-
-        lr_scheduler = get_scheduler(
-            args.lr_scheduler,
-            optimizer=optimizer,
-            num_warmup_steps=lr_warmup_steps,
-            num_training_steps=args.lr_decay_steps,
-        )
-
 
         log_optimizer(optimizer, betas, epsilon, weight_decay, curr_lr, curr_text_encoder_lr)
         return optimizer
