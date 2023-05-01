@@ -382,7 +382,7 @@ def main(args):
         os.makedirs(log_folder)
 
     @torch.no_grad()
-    def __save_model(save_path, unet, text_encoder, tokenizer, scheduler, vae, optimizer, save_ckpt_dir, yaml_name, save_full_precision=False, save_optimizer_flag=False):
+    def __save_model(save_path, unet, text_encoder, tokenizer, scheduler, vae, ed_optimizer, save_ckpt_dir, yaml_name, save_full_precision=False, save_optimizer_flag=False):
         """
         Save the model to disk
         """
@@ -421,9 +421,8 @@ def main(args):
             shutil.copyfile(yaml_name, yaml_save_path)
 
         if save_optimizer_flag:
-            optimizer_path = os.path.join(save_path, "optimizer.pt")
             logging.info(f" Saving optimizer state to {save_path}")
-            save_optimizer(optimizer, optimizer_path)
+            ed_optimizer.save(save_path)
 
     optimizer_state_path = None
     try:
@@ -545,7 +544,7 @@ def main(args):
     epoch_len = math.ceil(len(train_batch) / args.batch_size)
 
     ed_optimizer = EveryDreamOptimizer(args, optimizer_config, text_encoder.parameters(), unet.parameters(), epoch_len)
-    exit()
+
     log_args(log_writer, args)
 
     sample_generator = SampleGenerator(log_folder=log_folder, log_writer=log_writer,
@@ -675,6 +674,7 @@ def main(args):
         del noise, latents, cuda_caption
 
         with autocast(enabled=args.amp):
+            #print(f"types: {type(noisy_latents)} {type(timesteps)} {type(encoder_hidden_states)}")
             model_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
 
         return model_pred, target
@@ -735,18 +735,7 @@ def main(args):
                     loss_scale = batch["runt_size"] / args.batch_size
                     loss = loss * loss_scale
 
-                ed_optimizer.step(step, global_step)
-
-                # if args.clip_grad_norm is not None:
-                #     if not args.disable_unet_training:
-                #         torch.nn.utils.clip_grad_norm_(parameters=unet.parameters(), max_norm=args.clip_grad_norm)
-                #     if not args.disable_textenc_training:
-                #         torch.nn.utils.clip_grad_norm_(parameters=text_encoder.parameters(), max_norm=args.clip_grad_norm)
-
-                #if ((global_step + 1) % args.grad_accum == 0) or (step == epoch_len - 1):
-                #ed_optimizers.step(step, global_step)
-                    #scaler.update()
-                    #optimizer.zero_grad(set_to_none=True)
+                ed_optimizer.step(loss, step, global_step)
 
                 loss_step = loss.detach().item()
 
@@ -789,16 +778,15 @@ def main(args):
                     last_epoch_saved_time = time.time()
                     logging.info(f"Saving model, {args.ckpt_every_n_minutes} mins at step {global_step}")
                     save_path = os.path.join(f"{log_folder}/ckpts/{args.project_name}-ep{epoch:02}-gs{global_step:05}")
-                    __save_model(save_path, unet, text_encoder, tokenizer, noise_scheduler, vae, optimizer, args.save_ckpt_dir, yaml, args.save_full_precision, args.save_optimizer)
+                    __save_model(save_path, unet, text_encoder, tokenizer, noise_scheduler, vae, ed_optimizer, args.save_ckpt_dir, yaml, args.save_full_precision, args.save_optimizer)
 
                 if epoch > 0 and epoch % args.save_every_n_epochs == 0 and step == 0 and epoch < args.max_epochs - 1 and epoch >= args.save_ckpts_from_n_epochs:
                     logging.info(f" Saving model, {args.save_every_n_epochs} epochs at step {global_step}")
                     save_path = os.path.join(f"{log_folder}/ckpts/{args.project_name}-ep{epoch:02}-gs{global_step:05}")
-                    __save_model(save_path, unet, text_encoder, tokenizer, noise_scheduler, vae, optimizer, args.save_ckpt_dir, yaml, args.save_full_precision, args.save_optimizer)
+                    __save_model(save_path, unet, text_encoder, tokenizer, noise_scheduler, vae, ed_optimizer, args.save_ckpt_dir, yaml, args.save_full_precision, args.save_optimizer)
 
                 del batch
                 global_step += 1
-                #update_grad_scaler(scaler, global_step, epoch, step) if args.amp else None
                 # end of step
 
             steps_pbar.close()
@@ -834,7 +822,7 @@ def main(args):
     except Exception as ex:
         logging.error(f"{Fore.LIGHTYELLOW_EX}Something went wrong, attempting to save model{Style.RESET_ALL}")
         save_path = os.path.join(f"{log_folder}/ckpts/errored-{args.project_name}-ep{epoch:02}-gs{global_step:05}")
-        __save_model(save_path, unet, text_encoder, tokenizer, noise_scheduler, vae, optimizer, args.save_ckpt_dir, yaml, args.save_full_precision, args.save_optimizer)
+        __save_model(save_path, unet, text_encoder, tokenizer, noise_scheduler, vae, ed_optimizer, args.save_ckpt_dir, yaml, args.save_full_precision, args.save_optimizer)
         raise ex
 
     logging.info(f"{Fore.LIGHTWHITE_EX} ***************************{Style.RESET_ALL}")
