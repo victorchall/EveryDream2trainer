@@ -16,7 +16,7 @@ If you do not set `optimizer_config` at all or set it to `null` in train.json, t
 
 ## Optimizers
 
-In `optimizer.json` the you can set independent optimizer settings for both the text encoder and unet.  If you want shared settings, just fill out the `unet` section and leave `text_encoder` properties null an they will be copied from the `unet` section, only respecting `text_encoder_lr_scale` if set.
+In `optimizer.json` the you can set independent optimizer settings for both the text encoder and unet.  If you want shared settings, just fill out the `base` section and leave `text_encoder_overrides` properties null an they will be copied from the `base` section.
 
 If you set the `text_encder_lr_scale` property, the text encoder will be trained with a multiple of the Unet learning rate if it the LR is being copied.  If you explicitly set the text encoder LR, the `text_encder_lr_scale` is ignored.  `text_encder_lr_scale` is likely to be deprecated in the future, but now is left for backwards compatibility. 
 
