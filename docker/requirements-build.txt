@@ -1,0 +1,8 @@
+diffusers[torch]>=0.14.0
+ninja
+numpy
+omegaconf==2.2.3
+protobuf==3.20.3
+pyre-extensions==0.0.23
+pytorch-lightning==1.9.2
+transformers==4.27.1

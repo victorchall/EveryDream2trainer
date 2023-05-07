@@ -91,10 +91,11 @@ The config file has the following options:
 #### Validation settings
 * `validate_training`: If `true`, validate the training using a separate set of image/caption pairs, and log the results as `loss/val`. The curve will trend downwards as the model trains, then flatten and start to trend upwards as effective training finishes and the model begins to overfit the training data. Very useful for preventing overfitting, for checking if your learning rate is too low or too high, and for deciding when to stop training.
 * `val_split_mode`: Either `automatic` or `manual`, ignored if validate_training is false. 
-  * `automatic` val_split_mode picks a random subset of the training set (the number of items is controlled by `val_split_proportion`) and removes them from training to use as a validation set. 
-  * `manual` val_split_mode lets you provide your own folder of validation items (images and captions), specified using `val_data_root`.
-* `val_split_proportion`: For `automatic` val_split_mode, how much of the train dataset that should be removed to use for validation. Typical values are 0.15-0.2 (15-20% of the total dataset). Higher is more accurate but slower.
-* `val_data_root`: For `manual` val_split_mode, the path to a folder containing validation items.
+  * `automatic` val_split_mode picks a random subset of the training set (the number of items is controlled by `auto_split_proportion`) and removes them from training to use as a validation set. 
+  * `manual` val_split_mode lets you provide your own folder of validation items (images and captions), specified using `manual_data_root`.
+* `auto_split_proportion`: For `automatic` val_split_mode, how much of the train dataset that should be removed to use for validation. Typical values are 0.15-0.2 (15-20% of the total dataset). Higher is more accurate but slower.
+* `manual_data_root`: For `manual` val_split_mode, the path to a folder containing validation items.
+* `extra_manual_datasets`: Dictionary specifying additional folders containing validation datasets - see "Extra manual datasets" below.
 
 #### Train loss graph stabilization settings
 
@@ -105,3 +106,29 @@ The config file has the following options:
 
 * `every_n_epochs`: How often to run validation (1=every epoch).
 * `seed`: The seed to use when running validation passes, and also for picking subsets of the data to use with `automatic` val_split_mode and/or `stabilize_training_loss`.
+
+#### Extra manual datasets
+
+If you're building a model with multiple training subjects, you may want to specify additional validation datasets so you can check the progress of each part of your model separately. You can do this using the `extra_manual_datasets` property of the validation config .json file.
+
+For example, suppose you're training a model for different dog breeds, and you're especially interested in how well it's training huskies and puggles. To do this, take some of your husky and puggle training data and put it into two separate folders, outside of the data root. For example, suppose you have 100 husky images and 100 puggle images, like this:
+```commandline
+/workspace/dogs-model-training/data_root/husky   <- contains 100 images for training
+/workspace/dogs-model-training/data_root/puggle  <- contains 100 images for training
+```
+Take about 15 images from each of the `husky` and `puggle` folders and put them in their own `validation` folder, outside of the `data_root`:
+```commandline
+/workspace/dogs-model-training/validation/husky   <- contains 15 images for validation
+/workspace/dogs-model-training/validation/puggle  <- contains 15 images for validation
+/workspace/dogs-model-training/data_root/husky    <- contains the remaining 85 images for training
+/workspace/dogs-model-training/data_root/puggle   <- contains the remaining 85 images for training
+```
+Then update your `validation_config.json` file by adding entries to `extra_manual_datasets` to point to these folders:
+```commandline
+"extra_manual_datasets": { 
+    "husky": "/workspace/dogs-model-training/validation/husky",
+    "puggle": "/workspace/dogs-model-training/validation/puggle"
+}
+```
+When you run training, you'll now get two additional graphs, `loss/husky` and `loss/puggle` that show the  progress for your `husky` and `puggle` training data.  
+When you run training, you'll now get two additional graphs, `loss/husky` and `loss/puggle` that show the  progress for your `husky` and `puggle` training data.  

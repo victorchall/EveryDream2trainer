@@ -1,7 +1,7 @@
 ###################
 # Builder Stage
-FROM nvidia/cuda:11.7.1-devel-ubuntu22.04 AS builder
-
+FROM nvidia/cuda:11.8.0-devel-ubuntu22.04 AS builder
+LABEL org.opencontainers.image.licenses="AGPL-1.0-only"
 ARG DEBIAN_FRONTEND=noninteractive
 
 # Don't write .pyc bytecode
@@ -23,21 +23,16 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 ENV VIRTUAL_ENV=/workspace/venv
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
-
-ADD requirements.txt /build
+ADD requirements-build.txt /build
 RUN --mount=type=cache,target=/root/.cache/pip \
     python3 -m venv ${VIRTUAL_ENV} && \
-    pip install -U -I torch==1.13.1+cu117 torchvision==0.14.1+cu117 --extra-index-url "https://download.pytorch.org/whl/cu117" && \
-    pip install -r requirements.txt && \
-    pip install --pre --no-deps xformers==0.0.17.dev451
-#    In case of emergency, build xformers from scratch
-#    export FORCE_CUDA=1 && export TORCH_CUDA_ARCH_LIST="7.5;8.0;8.6" && export CUDA_VISIBLE_DEVICES=0 && \
-#    pip install --no-deps git+https://github.com/facebookresearch/xformers.git@48a77cc#egg=xformers
-
+    pip install -U -I torch==2.0.0+cu118 torchvision==0.15.1+cu118 --extra-index-url "https://download.pytorch.org/whl/cu118" && \
+    pip install -r requirements-build.txt && \
+    pip install --no-deps xformers==0.0.18
 
 ###################
 # Runtime Stage
-FROM nvidia/cuda:11.7.1-runtime-ubuntu22.04 as runtime
+FROM nvidia/cuda:11.8.0-runtime-ubuntu22.04 as runtime
 
 # Use bash shell
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
@@ -76,12 +71,17 @@ RUN echo "source ${VIRTUAL_ENV}/bin/activate" >> /root/.bashrc
 # Workaround for:
 #   https://github.com/TimDettmers/bitsandbytes/issues/62
 #   https://github.com/TimDettmers/bitsandbytes/issues/73
-ENV LD_LIBRARY_PATH="/usr/local/cuda-11.7/targets/x86_64-linux/lib"
-RUN ln /usr/local/cuda-11.7/targets/x86_64-linux/lib/libcudart.so.11.0 /usr/local/cuda-11.7/targets/x86_64-linux/lib/libcudart.so
-RUN pip install bitsandbytes==0.37.0
+ENV LD_LIBRARY_PATH="/usr/local/cuda-11.8/targets/x86_64-linux/lib/"
+RUN ln /usr/local/cuda/targets/x86_64-linux/lib/libcudart.so.11.8.89 /usr/local/cuda-11.8/targets/x86_64-linux/lib/libcudart.so
+RUN ln /usr/local/cuda/targets/x86_64-linux/lib/libnvrtc.so.11.8.89 /usr/local/cuda-11.8/targets/x86_64-linux/lib/libnvrtc.so
+
+ADD requirements-runtime.txt /
+RUN pip install --no-cache-dir -r requirements-runtime.txt
 
 WORKDIR /workspace
+ARG CACHEBUST=1
 RUN git clone https://github.com/victorchall/EveryDream2trainer
+
 WORKDIR /workspace/EveryDream2trainer
 RUN python utils/get_yamls.py && \
     mkdir -p logs && mkdir -p input

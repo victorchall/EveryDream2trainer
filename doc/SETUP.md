@@ -48,7 +48,6 @@ Double check your python version again after setup by running these two commands
 
 Again, this should show 3.10.x
 
-## Linux, Linux containers, WSL, Runpod, etc
+## Docker container
 
-TBD
-
+`docker run -it -p 8888:8888 -p 6006:6006 --gpus all -e JUPYTER_PASSWORD=test1234 -t ghcr.io/victorchall/everydream2trainer:nightly`

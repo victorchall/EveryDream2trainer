@@ -1,17 +1,37 @@
 {
     "doc": {
+        "base": "base optimizer configuration for unet and text encoder",
+        "text_encoder_overrides": "text encoder config overrides",
+        "text_encoder_lr_scale": "if LR not set on text encoder, sets the Lr to a multiple of the Base LR. for example, if base `lr` is 2e-6 and `text_encoder_lr_scale` is 0.5, the text encoder's LR will be set to `1e-6`.",
+        "-----------------": "-----------------",
         "optimizer": "adamw, adamw8bit, lion",
         "optimizer_desc": "'adamw' in standard 32bit, 'adamw8bit' is bitsandbytes, 'lion' is lucidrains",
-        "lr": "learning rate, if null wil use CLI or main JSON config value",
+        "lr": "learning rate, if null will use CLI or main JSON config value",
+        "lr_scheduler": "'constant' or 'cosine'",
+        "lr_warmup_steps": "number of steps to warmup LR to target LR, if null will use CLI or default a value based on max epochs",
+        "lr_decay_steps": "number of steps to decay LR to zero for cosine, if null will use CLI or default a value based on max epochs",
         "betas": "exponential decay rates for the moment estimates",
         "epsilon": "value added to denominator for numerical stability, unused for lion",
-        "weight_decay": "weight decay (L2 penalty)",
-        "text_encoder_lr_scale": "scale the text encoder LR relative to the Unet LR. for example, if `lr` is 2e-6 and `text_encoder_lr_scale` is 0.5, the text encoder's LR will be set to `1e-6`."
+        "weight_decay": "weight decay (L2 penalty)"
     },
-    "optimizer": "adamw8bit",
-    "lr": 1e-6,
-    "betas": [0.9, 0.999],
-    "epsilon": 1e-8,
-    "weight_decay": 0.010,
-    "text_encoder_lr_scale": 1.0
+    "base": {
+        "optimizer": "adamw8bit",
+        "lr": 1e-6,
+        "lr_scheduler": "constant",
+        "lr_decay_steps": null,
+        "lr_warmup_steps": null,
+        "betas": [0.9, 0.999],
+        "epsilon": 1e-8,
+        "weight_decay": 0.010
+    },
+    "text_encoder_overrides": {
+        "optimizer": null,
+        "lr": null,
+        "lr_scheduler": null,
+        "lr_decay_steps": null,
+        "lr_warmup_steps": null,
+        "betas": null,
+        "epsilon": null,
+        "weight_decay": null
+    }
 }

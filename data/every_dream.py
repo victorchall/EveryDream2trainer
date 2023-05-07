@@ -14,6 +14,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 import logging
+import os
+
 import torch
 from torch.utils.data import Dataset
 from data.data_loader import DataLoaderMultiAspect
@@ -61,18 +63,18 @@ class EveryDreamBatch(Dataset):
         self.image_train_items  = []
         self.__update_image_train_items(1.0)
         self.name = name
-            
+
         num_images = len(self.image_train_items)
         logging.info(f" ** Dataset '{name}': {num_images / self.batch_size:.0f} batches, num_images: {num_images}, batch_size: {self.batch_size}")
 
     def shuffle(self, epoch_n: int, max_epochs: int):
         self.seed += 1
-        
+
         if self.rated_dataset:
             dropout_fraction = (max_epochs - (epoch_n * self.rated_dataset_dropout_target)) / max_epochs
         else:
             dropout_fraction = 1.0
-            
+
         self.__update_image_train_items(dropout_fraction)
 
     def __len__(self):
@@ -104,7 +106,7 @@ class EveryDreamBatch(Dataset):
 
         example["image"] = image_transforms(train_item["image"])
 
-        if random.random() > self.conditional_dropout:
+        if random.random() > (train_item.get("cond_dropout", self.conditional_dropout)):
             example["tokens"] = self.tokenizer(example["caption"],
                                                 truncation=True,
                                                 padding="max_length",
@@ -132,19 +134,21 @@ class EveryDreamBatch(Dataset):
         example["image"] = image_train_tmp.image.copy()  # hack for now to avoid memory leak
         image_train_tmp.image = None # hack for now to avoid memory leak
         example["caption"] = image_train_tmp.caption
+        if image_train_tmp.cond_dropout is not None:
+            example["cond_dropout"] = image_train_tmp.cond_dropout
         example["runt_size"] = image_train_tmp.runt_size
-       
+
         return example
 
     def __update_image_train_items(self, dropout_fraction: float):
         self.image_train_items = self.data_loader.get_shuffled_image_buckets(dropout_fraction)
-        
+
 def build_torch_dataloader(dataset, batch_size) -> torch.utils.data.DataLoader:
     dataloader = torch.utils.data.DataLoader(
         dataset,
-        batch_size=batch_size,
+        batch_size= batch_size,
         shuffle=False,
-        num_workers=4,
+        num_workers=min(batch_size, os.cpu_count()),
         collate_fn=collate_fn
     )
     return dataloader

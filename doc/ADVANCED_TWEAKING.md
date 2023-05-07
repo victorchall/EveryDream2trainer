@@ -44,21 +44,25 @@ The value is defaulted at 0.04, which means 4% conditional dropout.  You can set
 
 ## LR tweaking
 
-Learning rate adjustment is a very important part of training.  You can use the default settings, or you can tweak it.  You should consider increasing this further if you increase your batch size further (10+) using [gradient checkpointing](#gradient_checkpointing).
+Learning rate adjustment is a very important part of training. 
 
-    --lr 1.5e-6 ^
+    --lr 1.0e-6 ^
 
 By default, the learning rate is constant for the entire training session.  However, if you want it to change by itself during training, you can use cosine.
 
+General suggestion is 1e-6 for training SD1.5 at 512 resolution.  For SD2.1 at 768, try a much lower value, such as 2e-7.  [Validation](VALIDATION.md) can be helpful to tune learning rate. 
+
 ## Clip skip
 
-Aka "penultimate layer", this takes the output from the text encoder not from its last output layer, but layers before.  
+Clip skip counts back from the last hidden layer of the text encoder output for use as the text embedding.
+
+*Note: since EveryDream2 uses HuggingFace Diffusers library, the penultimate layer is already selected when training and running inference on SD2.x models.*  This is defined in the text_encoder/config.json by the "num_hidden_layers" property of 23, which is penultimate out of the 24 layers and set by default in all diffusers SD2.x models.
 
     --clip_skip 2 ^
 
-A value of "2" is the canonical form of "penultimate layer" useed by various webuis, but 1 to 4 are accepted as well if you wish to experiment.  Default is "0" which takes the "last hidden layer" or standard output of the text encoder as Stable Diffusion 1.X was originally designed.  Training with this setting may necessititate or work better when also using the same setting in your webui/inference program. 
+A value of "2" will count back one additional layer.  For SD1.x, "2" would be "penultimate" layer as commonly referred to in the community.  For SD2.x, it would be an *additional* layer back. 
 
-Values of 0 to 3 are valid and working.  The number indicates how many extra layers to go "back" into the CLIP embedding output.  0 is the last layer and the default behavior. 1 is the layer before that, etc.
+*A value of "0" or "1" does nothing.*
 
 ### Cosine LR scheduler
 Cosine LR scheduler will "taper off" your learning rate over time. It will reach a peak value of your ```--lr``` value then taper off following a cosine curve.  In other words, it allows you to set a high initial learning rate which lowers as training progresses.  This *may* help speed up training without overfitting.  If you wish to use this, I would set a slightly higher initial [learning rate](#lr-tweaking), maybe by 25-50% than you might use with a normal constant LR schedule.
@@ -125,6 +129,8 @@ To use a random seed, use -1:
 
 Default behavior is to use a fixed seed of 555. The seed you set is fixed for all samples if you set a value other than -1.  If you set a seed it is also incrememted for shuffling your training data every epoch (i.e. 555, 556, 557, etc).  This makes training more deterministic.  I suggest a fixed seed when you are trying A/B test tweaks to your general training setup, or when you want all your test samples to use the same seed. 
 
+Fixed seed should be using when performing A/B tests or hyperparameter sweeps.  Random seed (-1) may be better if you are stopping and resuming training often so every restart is using random values for all of the various randomness sources used in training such as noising and data shuffling.
+
 ## Shuffle tags
 
 For those training booru tagged models, you can use this arg to randomly (but deterministicly unless you use `--seed -1`) all the CSV tags in your captions
@@ -142,6 +148,8 @@ Based on [Nicholas Guttenberg's blog post](https://www.crosslabs.org//blog/diffu
 0.0 is off, old behavior.  Default is 0.02 which is very little to err on the safe side (for now?), but values from 0.05 to 0.10 seem to work well.
 
 Test results: https://huggingface.co/panopstor/ff7r-stable-diffusion/blob/main/zero_freq_test_biggs.webp
+
+Very tentatively, I suggest closer to 0.10 for short term training, and lower values of around 0.02 to 0.03 for longer runs (50k+ steps).  Early indications seem to suggest values like 0.10 can cause divergance over time. 
 
 # Stuff you probably don't need to mess with, but well here it is:
 
@@ -176,8 +184,8 @@ The files will be in ```logs/[your project folder]/ep[N]_batch_schedule.txt``` a
 
 ## clip_grad_norm
 
-Clips the gradient normals to a maximum value.  This is an experimental feature, you can read online about gradient clipping.  Default is None (no clipping).  This is typically used for gradient explosion problems, which are not an issue with EveryDream, but might be a fun thing to experiment with?
+Clips the gradient normals to a maximum value.  Default is None (no clipping).  This is typically used for gradient explosion problems, which are generally not an issue with EveryDream and the grad scaler in AMP mode keeps this from being too much of an issue, but it may be worth experimenting with. 
 
-    --clip_grad_norm 1.0 ^
+    --clip_grad_norm 100000.0 ^
 
-This may drastically reduce training speed or have other undesirable effects.  My brief toying was mostly unsuccessful.  I would not recommend using this unless you know what you're doing or are bored, but you might discover something cool or interesting.
+Early indications seem to show high values such as 100000 may be helpful.  Low values like 1.0 will drastically reduce training speed.  Default is no gradient normal clipping.  There are also other ways to deal with gradient explosion, such as increasing optimizer epsilon.

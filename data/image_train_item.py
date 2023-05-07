@@ -23,12 +23,12 @@ import yaml
 
 import PIL
 import PIL.Image as Image
+import PIL.ImageOps as ImageOps
 import numpy as np
 from torchvision import transforms
 
 _RANDOM_TRIM = 0.04
 
-DEFAULT_MAX_CAPTION_LENGTH = 2048
 
 OptionalImageCaption = typing.Optional['ImageCaption']
 
@@ -36,7 +36,6 @@ class ImageCaption:
     """
     Represents the various parts of an image caption
     """
-
     def __init__(self, main_prompt: str, rating: float, tags: list[str], tag_weights: list[float], max_target_length: int, use_weights: bool):
         """
         :param main_prompt: The part of the caption which should always be included
@@ -49,7 +48,7 @@ class ImageCaption:
         self.__rating = rating
         self.__tags = tags
         self.__tag_weights = tag_weights
-        self.__max_target_length = max_target_length
+        self.__max_target_length = max_target_length or 2048
         self.__use_weights = use_weights
         if use_weights and len(tags) > len(tag_weights):
             self.__tag_weights.extend([1.0] * (len(tags) - len(tag_weights)))
@@ -67,7 +66,13 @@ class ImageCaption:
         :return: generated caption string
         """
         if self.__tags:
-            max_target_tag_length = self.__max_target_length - len(self.__main_prompt)
+            try:
+                max_target_tag_length = self.__max_target_length - len(self.__main_prompt or 0)
+            except Exception as e:
+                print()
+                logging.error(f"Error determining length for: {e} on {self.__main_prompt}")
+                print()
+                max_target_tag_length = 2048
 
             if self.__use_weights:
                 tags_caption = self.__get_weighted_shuffled_tags(seed, self.__tags, self.__tag_weights, max_target_tag_length)
@@ -101,7 +106,7 @@ class ImageCaption:
 
             weights_copy.pop(pos)
             tag = tags_copy.pop(pos)
-            
+
             if caption:
                 caption += ", "
             caption += tag
@@ -113,147 +118,16 @@ class ImageCaption:
         random.Random(seed).shuffle(tags)
         return ", ".join(tags)
 
-    @staticmethod
-    def parse(string: str) -> 'ImageCaption':
-        """
-        Parses a string to get the caption.
-
-        :param string: String to parse.
-        :return: `ImageCaption` object.
-        """
-        split_caption = list(map(str.strip, string.split(",")))
-        main_prompt = split_caption[0]
-        tags = split_caption[1:]
-        tag_weights = [1.0] * len(tags)
-
-        return ImageCaption(main_prompt, 1.0, tags, tag_weights, DEFAULT_MAX_CAPTION_LENGTH, False)
-    
-    @staticmethod
-    def from_file_name(file_path: str) -> 'ImageCaption':
-        """
-        Parses the file name to get the caption.
-        
-        :param file_path: Path to the image file.
-        :return: `ImageCaption` object.
-        """
-        (file_name, _) = os.path.splitext(os.path.basename(file_path))
-        caption = file_name.split("_")[0]
-        return ImageCaption.parse(caption)
-    
-    @staticmethod
-    def from_text_file(file_path: str, default_caption: OptionalImageCaption=None) -> OptionalImageCaption:
-        """
-        Parses a text file to get the caption. Returns the default caption if
-        the file does not exist or is invalid.
-        
-        :param file_path: Path to the text file.
-        :param default_caption: Optional `ImageCaption` to return if the file does not exist or is invalid.
-        :return: `ImageCaption` object or `None`.
-        """
-        try:
-            with open(file_path, encoding='utf-8', mode='r') as caption_file:
-                caption_text = caption_file.read()
-                return ImageCaption.parse(caption_text)
-        except:
-            logging.error(f" *** Error reading {file_path} to get caption")
-            return default_caption
-        
-    @staticmethod
-    def from_yaml_file(file_path: str, default_caption: OptionalImageCaption=None) -> OptionalImageCaption:
-        """
-        Parses a yaml file to get the caption. Returns the default caption if
-        the file does not exist or is invalid.
-        
-        :param file_path: path to the yaml file
-        :param default_caption: caption to return if the file does not exist or is invalid
-        :return: `ImageCaption` object or `None`.
-        """
-        try:
-            with open(file_path, "r") as stream:
-                file_content = yaml.safe_load(stream)
-                main_prompt = file_content.get("main_prompt", "")
-                rating = file_content.get("rating", 1.0)
-                unparsed_tags = file_content.get("tags", [])
-
-                max_caption_length = file_content.get("max_caption_length", DEFAULT_MAX_CAPTION_LENGTH)
-
-                tags = []
-                tag_weights = []
-                last_weight = None
-                weights_differ = False
-                for unparsed_tag in unparsed_tags:
-                    tag = unparsed_tag.get("tag", "").strip()
-                    if len(tag) == 0:
-                        continue
-
-                    tags.append(tag)
-                    tag_weight = unparsed_tag.get("weight", 1.0)
-                    tag_weights.append(tag_weight)
-
-                    if last_weight is not None and weights_differ is False:
-                        weights_differ = last_weight != tag_weight
-
-                    last_weight = tag_weight
-
-                return ImageCaption(main_prompt, rating, tags, tag_weights, max_caption_length, weights_differ)
-        except:
-            logging.error(f" *** Error reading {file_path} to get caption")
-            return default_caption
-        
-    @staticmethod
-    def from_file(file_path: str, default_caption: OptionalImageCaption=None) -> OptionalImageCaption:
-        """
-        Try to resolve a caption from a file path or return `default_caption`.
-
-        :string: The path to the file to parse.
-        :default_caption: Optional `ImageCaption` to return if the file does not exist or is invalid.
-        :return: `ImageCaption` object or `None`.
-        """
-        if os.path.exists(file_path):
-            (file_path_without_ext, ext) = os.path.splitext(file_path) 
-            match ext:
-                case ".yaml" | ".yml":
-                    return ImageCaption.from_yaml_file(file_path, default_caption)
-                
-                case ".txt" | ".caption":
-                    return ImageCaption.from_text_file(file_path, default_caption)
-                
-                case '.jpg'| '.jpeg'| '.png'| '.bmp'| '.webp'| '.jfif':
-                    for ext in [".yaml", ".yml", ".txt", ".caption"]:
-                        file_path = file_path_without_ext + ext
-                        image_caption = ImageCaption.from_file(file_path)
-                        if image_caption is not None:
-                            return image_caption
-                    return ImageCaption.from_file_name(file_path)
-
-                case _:
-                    return default_caption
-        else:
-            return default_caption
-        
-    @staticmethod
-    def resolve(string: str) -> 'ImageCaption':
-        """
-        Try to resolve a caption from a string. If the string is a file path,
-        the caption will be read from the file, otherwise the string will be
-        parsed as a caption.
-
-        :string: The string to resolve.
-        :return: `ImageCaption` object.
-        """
-        return ImageCaption.from_file(string, None) or ImageCaption.parse(string)
-
-
 class ImageTrainItem:
     """
     image: PIL.Image
     identifier: caption,
-    target_aspect: (width, height), 
+    target_aspect: (width, height),
     pathname: path to image file
     flip_p: probability of flipping image (0.0 to 1.0)
     rating: the relative rating of the images. The rating is measured in comparison to the other images.
     """
-    def __init__(self, image: PIL.Image, caption: ImageCaption, aspects: list[float], pathname: str, flip_p=0.0, multiplier: float=1.0):
+    def __init__(self, image: PIL.Image, caption: ImageCaption, aspects: list[float], pathname: str, flip_p=0.0, multiplier: float=1.0, cond_dropout=None):
         self.caption = caption
         self.aspects = aspects
         self.pathname = pathname
@@ -261,6 +135,7 @@ class ImageTrainItem:
         self.cropped_img = None
         self.runt_size = 0
         self.multiplier = multiplier
+        self.cond_dropout = cond_dropout
 
         self.image_size = None
         if image is None or len(image) == 0:
@@ -269,10 +144,26 @@ class ImageTrainItem:
             self.image = image
             self.image_size = image.size
             self.target_size = None
-            
+
         self.is_undersized = False
         self.error = None
         self.__compute_target_width_height()
+
+    def load_image(self):
+        try:
+            image = PIL.Image.open(self.pathname).convert('RGB')
+            image = self._try_transpose(image, print_error=False)
+        except SyntaxError as e:
+            pass
+        return image
+    
+    def _try_transpose(self, image, print_error=False):
+        try:
+            image = ImageOps.exif_transpose(image)
+        except Exception as e:
+            logging.warning(F"Error rotating image: {e} on {self.pathname}, image will be loaded as is, EXIF may be corrupt") if print_error else None
+            pass
+        return image
 
     def hydrate(self, crop=False, save=False, crop_jitter=20):
         """
@@ -283,7 +174,7 @@ class ImageTrainItem:
         # print(self.pathname, self.image)
         try:
             # if not hasattr(self, 'image'):
-            self.image = PIL.Image.open(self.pathname).convert('RGB')
+            self.image = self.load_image()
 
             width, height = self.image.size
             if crop:
@@ -349,15 +240,16 @@ class ImageTrainItem:
         # print(self.image.shape)
 
         return self
-    
+
     def __compute_target_width_height(self):
         self.target_wh = None
         try:
-            with Image.open(self.pathname) as image:
+            with PIL.Image.open(self.pathname) as image:
+                image = self._try_transpose(image, print_error=True).convert('RGB')
                 width, height = image.size
                 image_aspect = width / height
                 target_wh = min(self.aspects, key=lambda aspects:abs(aspects[0]/aspects[1] - image_aspect))
-                
+
                 self.is_undersized = (width * height) < (target_wh[0] * target_wh[1])
                 self.target_wh = target_wh
         except Exception as e:

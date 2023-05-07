@@ -27,10 +27,9 @@ import gc
 import random
 import traceback
 import shutil
-import importlib
 
 import torch.nn.functional as F
-from torch.cuda.amp import autocast, GradScaler
+from torch.cuda.amp import autocast
 
 from colorama import Fore, Style
 import numpy as np
@@ -38,6 +37,7 @@ import itertools
 import torch
 import datetime
 import json
+from tqdm.auto import tqdm
 
 from diffusers import StableDiffusionPipeline, AutoencoderKL, UNet2DConditionModel, DDIMScheduler, DDPMScheduler, \
     DPMSolverMultistepScheduler
@@ -49,6 +49,7 @@ from transformers import CLIPTextModel, CLIPTokenizer
 from accelerate.utils import set_seed
 
 import wandb
+import webbrowser
 from torch.utils.tensorboard import SummaryWriter
 from data.data_loader import DataLoaderMultiAspect
 
@@ -58,6 +59,8 @@ from data.image_train_item import ImageTrainItem
 from utils.huggingface_downloader import try_download_model_from_hf
 from utils.convert_diff_to_ckpt import convert as converter
 from utils.isolate_rng import isolate_rng
+from utils.check_git import check_git
+from optimizer.optimizers import EveryDreamOptimizer
 
 if torch.cuda.is_available():
     from utils.gpu import GPU
@@ -76,7 +79,7 @@ def convert_to_hf(ckpt_path):
     hf_cache = get_hf_ckpt_cache_path(ckpt_path)
     from utils.analyze_unet import get_attn_yaml
 
-    if os.path.isfile(ckpt_path):        
+    if os.path.isfile(ckpt_path):
         if not os.path.exists(hf_cache):
             os.makedirs(hf_cache)
             logging.info(f"Converting {ckpt_path} to Diffusers format")
@@ -88,7 +91,7 @@ def convert_to_hf(ckpt_path):
                 exit()
         else:
             logging.info(f"Found cached checkpoint at {hf_cache}")
-        
+
         is_sd1attn, yaml = get_attn_yaml(hf_cache)
         return hf_cache, is_sd1attn, yaml
     elif os.path.isdir(hf_cache):
@@ -120,29 +123,26 @@ def setup_local_logger(args):
                         format="%(asctime)s %(message)s",
                         datefmt="%m/%d/%Y %I:%M:%S %p",
                        )
-
-    logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.addFilter(lambda msg: "Palette images with Transparency expressed in bytes" not in msg.getMessage())
+    logging.getLogger().addHandler(console_handler)
+    import warnings
+    warnings.filterwarnings("ignore", message="UserWarning: Palette images with Transparency expressed in bytes should be converted to RGBA images")
+    #from PIL import Image
 
     return datetimestamp
 
-def log_optimizer(optimizer: torch.optim.Optimizer, betas, epsilon, weight_decay, unet_lr, text_encoder_lr):
-    """
-    logs the optimizer settings
-    """
-    logging.info(f"{Fore.CYAN} * Optimizer: {optimizer.__class__.__name__} *{Style.RESET_ALL}")
-    logging.info(f"{Fore.CYAN}    unet lr: {unet_lr}, text encoder lr: {text_encoder_lr}, betas: {betas}, epsilon: {epsilon}, weight_decay: {weight_decay} *{Style.RESET_ALL}")
+# def save_optimizer(optimizer: torch.optim.Optimizer, path: str):
+#     """
+#     Saves the optimizer state
+#     """
+#     torch.save(optimizer.state_dict(), path)
 
-def save_optimizer(optimizer: torch.optim.Optimizer, path: str):
-    """
-    Saves the optimizer state
-    """
-    torch.save(optimizer.state_dict(), path)
-
-def load_optimizer(optimizer, path: str):
-    """
-    Loads the optimizer state
-    """
-    optimizer.load_state_dict(torch.load(path))
+# def load_optimizer(optimizer: torch.optim.Optimizer, path: str):
+#     """
+#     Loads the optimizer state
+#     """
+#     optimizer.load_state_dict(torch.load(path))
 
 def get_gpu_memory(nvsmi):
     """
@@ -175,15 +175,15 @@ def append_epoch_log(global_step: int, epoch_pbar, gpu, log_writer, **logs):
 
 def set_args_12gb(args):
     logging.info(" Setting args to 12GB mode")
-    if not args.gradient_checkpointing:   
+    if not args.gradient_checkpointing:
         logging.info("  - Overiding gradient checkpointing to True")
         args.gradient_checkpointing = True
-    if args.batch_size != 1:
-        logging.info("  - Overiding batch size to 1")
-        args.batch_size = 1
+    if args.batch_size > 2:
+        logging.info("  - Overiding batch size to max 2")
+        args.batch_size = 2
         args.grad_accum = 1
     if args.resolution > 512:
-        logging.info("  - Overiding resolution to 512")
+        logging.info("  - Overiding resolution to max 512")
         args.resolution = 512
 
 def find_last_checkpoint(logdir):
@@ -214,6 +214,12 @@ def setup_args(args):
     Sets defaults for missing args (possible if missing from json config)
     Forces some args to be set based on others for compatibility reasons
     """
+    if args.disable_amp:
+        logging.warning(f"{Fore.LIGHTYELLOW_EX} Disabling AMP, not recommended.{Style.RESET_ALL}")
+        args.amp = False
+    else:
+        args.amp = True
+
     if args.disable_unet_training and args.disable_textenc_training:
         raise ValueError("Both unet and textenc are disabled, nothing to train")
 
@@ -255,11 +261,6 @@ def setup_args(args):
 
     total_batch_size = args.batch_size * args.grad_accum
 
-    if args.scale_lr is not None and args.scale_lr:
-        tmp_lr = args.lr
-        args.lr = args.lr * (total_batch_size**0.55)
-        logging.info(f"{Fore.CYAN} * Scaling learning rate {tmp_lr} by {total_batch_size**0.5}, new value: {args.lr}{Style.RESET_ALL}")
-
     if args.save_ckpt_dir is not None and not os.path.exists(args.save_ckpt_dir):
         os.makedirs(args.save_ckpt_dir)
 
@@ -268,64 +269,65 @@ def setup_args(args):
 
         logging.info(logging.info(f"{Fore.CYAN} * Activating rated images learning with a target rate of {args.rated_dataset_target_dropout_percent}% {Style.RESET_ALL}"))
 
-    args.aspects = aspects.get_aspect_buckets(args.resolution)    
+    args.aspects = aspects.get_aspect_buckets(args.resolution)
 
     return args
 
-def update_grad_scaler(scaler: GradScaler, global_step, epoch, step):
-    if global_step == 500:
-        factor = 1.8
-        scaler.set_growth_factor(factor)
-        scaler.set_backoff_factor(1/factor)
-        scaler.set_growth_interval(50)
-    if global_step == 1000:
-        factor = 1.6
-        scaler.set_growth_factor(factor)
-        scaler.set_backoff_factor(1/factor)
-        scaler.set_growth_interval(50)
-    if global_step == 2000:
-        factor = 1.3
-        scaler.set_growth_factor(factor)
-        scaler.set_backoff_factor(1/factor)
-        scaler.set_growth_interval(100)
-    if global_step == 4000:
-        factor = 1.15
-        scaler.set_growth_factor(factor)
-        scaler.set_backoff_factor(1/factor)
-        scaler.set_growth_interval(100)
-        
-def report_image_train_item_problems(log_folder: str, items: list[ImageTrainItem]) -> None:
-    for item in items:
-        if item.error is not None:
-            logging.error(f"{Fore.LIGHTRED_EX} *** Error opening {Fore.LIGHTYELLOW_EX}{item.pathname}{Fore.LIGHTRED_EX} to get metadata. File may be corrupt and will be skipped.{Style.RESET_ALL}")
-            logging.error(f" *** exception: {item.error}")
-    
-    undersized_items = [item for item in items if item.is_undersized]
 
+def report_image_train_item_problems(log_folder: str, items: list[ImageTrainItem], batch_size) -> None:
+    undersized_items = [item for item in items if item.is_undersized]
     if len(undersized_items) > 0:
         underized_log_path = os.path.join(log_folder, "undersized_images.txt")
         logging.warning(f"{Fore.LIGHTRED_EX} ** Some images are smaller than the target size, consider using larger images{Style.RESET_ALL}")
         logging.warning(f"{Fore.LIGHTRED_EX} ** Check {underized_log_path} for more information.{Style.RESET_ALL}")
-        with open(underized_log_path, "w") as undersized_images_file:
+        with open(underized_log_path, "w", encoding='utf-8') as undersized_images_file:
             undersized_images_file.write(f" The following images are smaller than the target size, consider removing or sourcing a larger copy:")
             for undersized_item in undersized_items:
                 message = f" *** {undersized_item.pathname} with size: {undersized_item.image_size} is smaller than target size: {undersized_item.target_wh}\n"
                 undersized_images_file.write(message)
-                
-def resolve_image_train_items(args: argparse.Namespace, log_folder: str) -> list[ImageTrainItem]:
+
+
+    # warn on underfilled aspect ratio buckets
+
+    # Intuition: if there are too few images to fill a batch, duplicates will be appended.
+    # this is not a problem for large image counts but can seriously distort training if there
+    # are just a handful of images for a given aspect ratio.
+
+    # at a dupe ratio of 0.5, all images in this bucket have effective multiplier 1.5,
+    # at a dupe ratio 1.0, all images in this bucket have effective multiplier 2.0
+    warn_bucket_dupe_ratio = 0.5
+
+    ar_buckets = set([tuple(i.target_wh) for i in items])
+    for ar_bucket in ar_buckets:
+        count = len([i for i in items if tuple(i.target_wh) == ar_bucket])
+        runt_size = batch_size - (count % batch_size)
+        bucket_dupe_ratio = runt_size / count
+        if bucket_dupe_ratio > warn_bucket_dupe_ratio:
+            aspect_ratio_rational = aspects.get_rational_aspect_ratio(ar_bucket)
+            aspect_ratio_description = f"{aspect_ratio_rational[0]}:{aspect_ratio_rational[1]}"
+            effective_multiplier = round(1 + bucket_dupe_ratio, 1)
+            logging.warning(f" * {Fore.LIGHTRED_EX}Aspect ratio bucket {ar_bucket} has only {count} "
+                            f"images{Style.RESET_ALL}. At batch size {batch_size} this makes for an effective multiplier "
+                            f"of {effective_multiplier}, which may cause problems. Consider adding {runt_size} or "
+                            f"more images for aspect ratio {aspect_ratio_description}, or reducing your batch_size.")
+
+def resolve_image_train_items(args: argparse.Namespace) -> list[ImageTrainItem]:
     logging.info(f"* DLMA resolution {args.resolution}, buckets: {args.aspects}")
     logging.info(" Preloading images...")
-    
+
     resolved_items = resolver.resolve(args.data_root, args)
-    report_image_train_item_problems(log_folder, resolved_items)
     image_paths = set(map(lambda item: item.pathname, resolved_items))
-    
+
     # Remove erroneous items
+    for item in resolved_items:
+        if item.error is not None:
+            logging.error(f"{Fore.LIGHTRED_EX} *** Error opening {Fore.LIGHTYELLOW_EX}{item.pathname}{Fore.LIGHTRED_EX} to get metadata. File may be corrupt and will be skipped.{Style.RESET_ALL}")
+            logging.error(f" *** exception: {item.error}")
     image_train_items = [item for item in resolved_items if item.error is None]
     print (f" * Found {len(image_paths)} files in '{args.data_root}'")
-    
+
     return image_train_items
-                
+
 def write_batch_schedule(args: argparse.Namespace, log_folder: str, train_batch: EveryDreamBatch, epoch: int):
     if args.write_schedule:
         with open(f"{log_folder}/ep{epoch}_batch_schedule.txt", "w", encoding='utf-8') as f:
@@ -354,14 +356,11 @@ def log_args(log_writer, args):
 def main(args):
     """
     Main entry point
-    """   
+    """
     log_time = setup_local_logger(args)
     args = setup_args(args)
-
-    if args.notebook:
-        from tqdm.notebook import tqdm
-    else:
-        from tqdm.auto import tqdm
+    print(f" Args:")
+    pprint.pprint(vars(args))
 
     if args.seed == -1:
         args.seed = random.randint(0, 2**30)
@@ -383,7 +382,7 @@ def main(args):
         os.makedirs(log_folder)
 
     @torch.no_grad()
-    def __save_model(save_path, unet, text_encoder, tokenizer, scheduler, vae, save_ckpt_dir, yaml_name, save_full_precision=False):
+    def __save_model(save_path, unet, text_encoder, tokenizer, scheduler, vae, ed_optimizer, save_ckpt_dir, yaml_name, save_full_precision=False, save_optimizer_flag=False):
         """
         Save the model to disk
         """
@@ -404,13 +403,13 @@ def main(args):
         )
         pipeline.save_pretrained(save_path)
         sd_ckpt_path = f"{os.path.basename(save_path)}.ckpt"
-        
+
         if save_ckpt_dir is not None:
             sd_ckpt_full = os.path.join(save_ckpt_dir, sd_ckpt_path)
         else:
             sd_ckpt_full = os.path.join(os.curdir, sd_ckpt_path)
             save_ckpt_dir = os.curdir
-        
+
         half = not save_full_precision
 
         logging.info(f" * Saving SD model to {sd_ckpt_full}")
@@ -421,13 +420,12 @@ def main(args):
             logging.info(f" * Saving yaml to {yaml_save_path}")
             shutil.copyfile(yaml_name, yaml_save_path)
 
-        # optimizer_path = os.path.join(save_path, "optimizer.pt")
-        # if self.save_optimizer_flag:
-        #     logging.info(f" Saving optimizer state to {save_path}")
-        #     self.save_optimizer(self.ctx.optimizer, optimizer_path)
+        if save_optimizer_flag:
+            logging.info(f" Saving optimizer state to {save_path}")
+            ed_optimizer.save(save_path)
 
+    optimizer_state_path = None
     try:
-
         # check for a local file
         hf_cache_path = get_hf_ckpt_cache_path(args.resume_ckpt)
         if os.path.exists(hf_cache_path) or os.path.exists(args.resume_ckpt):
@@ -435,6 +433,10 @@ def main(args):
             text_encoder = CLIPTextModel.from_pretrained(model_root_folder, subfolder="text_encoder")
             vae = AutoencoderKL.from_pretrained(model_root_folder, subfolder="vae")
             unet = UNet2DConditionModel.from_pretrained(model_root_folder, subfolder="unet")
+
+            optimizer_state_path = os.path.join(args.resume_ckpt, "optimizer.pt")
+            if not os.path.exists(optimizer_state_path):
+                optimizer_state_path = None
         else:
             # try to download from HF using resume_ckpt as a repo id
             downloaded = try_download_model_from_hf(repo_id=args.resume_ckpt)
@@ -468,8 +470,11 @@ def main(args):
                 logging.warning("failed to load xformers, using attention slicing instead")
                 unet.set_attention_slice("auto")
                 pass
+        elif (not args.amp and is_sd1attn):
+            logging.info("AMP is disabled but model is SD1.X, using attention slicing instead of xformers")
+            unet.set_attention_slice("auto")
     else:
-        logging.info("xformers disabled, using attention slicing instead")
+        logging.info("xformers disabled via arg, using attention slicing instead")
         unet.set_attention_slice("auto")
 
     vae = vae.to(device, dtype=torch.float16 if args.amp else torch.float32)
@@ -480,99 +485,30 @@ def main(args):
         text_encoder = text_encoder.to(device, dtype=torch.float32)
 
     optimizer_config = None
-    optimizer_config_path  = args.optimizer_config if args.optimizer_config else "optimizer.json"
+    optimizer_config_path = args.optimizer_config if args.optimizer_config else "optimizer.json"
     if os.path.exists(os.path.join(os.curdir, optimizer_config_path)):
         with open(os.path.join(os.curdir, optimizer_config_path), "r") as f:
             optimizer_config = json.load(f)
 
-    if args.wandb is not None and args.wandb:
-        wandb.init(project=args.project_name, 
-                   sync_tensorboard=True, 
-                   dir=args.logdir, 
-                   config={"main":args, "optimizer":optimizer_config}, 
-                   name=args.run_name,
-                   )
+    if args.wandb:
+        wandb.tensorboard.patch(root_logdir=log_folder, pytorch=False, tensorboard_x=False, save=False)
+        wandb_run = wandb.init(
+            project=args.project_name,
+            config={"main_cfg": vars(args), "optimizer_cfg": optimizer_config},
+            name=args.run_name,
+            )
+        try:
+            if webbrowser.get():
+                webbrowser.open(wandb_run.url, new=2)
+        except Exception:
+            pass
 
     log_writer = SummaryWriter(log_dir=log_folder,
-                               flush_secs=10,
-                               comment=args.run_name if args.run_name is not None else "EveryDream2FineTunes",
+                               flush_secs=20,
+                               comment=args.run_name if args.run_name is not None else log_time,
                               )
 
-    betas = [0.9, 0.999]
-    epsilon = 1e-8
-    weight_decay = 0.01
-    opt_class = None
-    optimizer = None
-
-    default_lr = 1e-6
-    curr_lr = args.lr
-    text_encoder_lr_scale = 1.0
-
-    if optimizer_config is not None:
-        betas = optimizer_config["betas"]
-        epsilon = optimizer_config["epsilon"]
-        weight_decay = optimizer_config["weight_decay"]
-        optimizer_name = optimizer_config["optimizer"]
-        curr_lr = optimizer_config.get("lr", curr_lr)
-        if args.lr is not None:
-            curr_lr = args.lr
-            logging.info(f"Overriding LR from optimizer config with main config/cli LR setting: {curr_lr}")
-
-        text_encoder_lr_scale = optimizer_config.get("text_encoder_lr_scale", text_encoder_lr_scale)
-        if text_encoder_lr_scale != 1.0:
-            logging.info(f" * Using text encoder LR scale {text_encoder_lr_scale}")
-
-        logging.info(f" * Loaded optimizer args from {optimizer_config_path} *")
-
-    if curr_lr is None:
-        curr_lr = default_lr
-        logging.warning(f"No LR setting found, defaulting to {default_lr}")
-
-    curr_text_encoder_lr = curr_lr * text_encoder_lr_scale
-
-    if args.disable_textenc_training:
-        logging.info(f"{Fore.CYAN} * NOT Training Text Encoder, quality reduced *{Style.RESET_ALL}")
-        params_to_train = itertools.chain(unet.parameters())
-    elif args.disable_unet_training:
-        logging.info(f"{Fore.CYAN} * Training Text Encoder Only *{Style.RESET_ALL}")
-        if text_encoder_lr_scale != 1:
-            logging.warning(f"{Fore.YELLOW} * Ignoring text_encoder_lr_scale {text_encoder_lr_scale} and using the "
-                            f"Unet LR {curr_lr} for the text encoder instead *{Style.RESET_ALL}")
-        params_to_train = itertools.chain(text_encoder.parameters())
-    else:
-        logging.info(f"{Fore.CYAN} * Training Text and Unet *{Style.RESET_ALL}")
-        params_to_train = [{'params': unet.parameters()},
-                           {'params': text_encoder.parameters(), 'lr': curr_text_encoder_lr}]
-
-    if optimizer_name:
-        if optimizer_name == "lion":
-            from lion_pytorch import Lion
-            opt_class = Lion
-            optimizer = opt_class(
-                itertools.chain(params_to_train),
-                lr=curr_lr,
-                betas=(betas[0], betas[1]),
-                weight_decay=weight_decay,
-            )
-        elif optimizer_name in ["adamw"]:            
-            opt_class = torch.optim.AdamW
-        else:
-            import bitsandbytes as bnb
-            opt_class = bnb.optim.AdamW8bit
-
-    if not optimizer:
-        optimizer = opt_class(
-            itertools.chain(params_to_train),
-            lr=curr_lr,
-            betas=(betas[0], betas[1]),
-            eps=epsilon,
-            weight_decay=weight_decay,
-            amsgrad=False,
-        )
-
-    log_optimizer(optimizer, betas, epsilon, weight_decay, curr_lr, curr_text_encoder_lr)
-
-    image_train_items = resolve_image_train_items(args, log_folder)
+    image_train_items = resolve_image_train_items(args)
 
     validator = None
     if args.validation_config is not None:
@@ -583,6 +519,8 @@ def main(args):
                                         )
         # the validation dataset may need to steal some items from image_train_items
         image_train_items = validator.prepare_validation_splits(image_train_items, tokenizer=tokenizer)
+
+    report_image_train_item_problems(log_folder, image_train_items, batch_size=args.batch_size)
 
     data_loader = DataLoaderMultiAspect(
         image_train_items=image_train_items,
@@ -600,23 +538,13 @@ def main(args):
         rated_dataset=args.rated_dataset,
         rated_dataset_dropout_target=(1.0 - (args.rated_dataset_target_dropout_percent / 100.0))
     )
-    
+
     torch.cuda.benchmark = False
 
     epoch_len = math.ceil(len(train_batch) / args.batch_size)
 
-    if args.lr_decay_steps is None or args.lr_decay_steps < 1:
-        args.lr_decay_steps = int(epoch_len * args.max_epochs * 1.5)
+    ed_optimizer = EveryDreamOptimizer(args, optimizer_config, text_encoder.parameters(), unet.parameters(), epoch_len)
 
-    lr_warmup_steps = int(args.lr_decay_steps / 50) if args.lr_warmup_steps is None else args.lr_warmup_steps
-
-    lr_scheduler = get_scheduler(
-        args.lr_scheduler,
-        optimizer=optimizer,
-        num_warmup_steps=lr_warmup_steps,
-        num_training_steps=args.lr_decay_steps,
-    )
-    
     log_args(log_writer, args)
 
     sample_generator = SampleGenerator(log_folder=log_folder, log_writer=log_writer,
@@ -624,7 +552,9 @@ def main(args):
                                        config_file_path=args.sample_prompts,
                                        batch_size=max(1,args.batch_size//2),
                                        default_sample_steps=args.sample_steps,
-                                       use_xformers=is_xformers_available() and not args.disable_xformers)
+                                       use_xformers=is_xformers_available() and not args.disable_xformers,
+                                       use_penultimate_clip_layer=(args.clip_skip >= 2)
+                                       )
 
     """
     Train the model
@@ -655,14 +585,14 @@ def main(args):
                 logging.error(f"{Fore.LIGHTRED_EX} CTRL-C received, attempting to save model to {interrupted_checkpoint_path}{Style.RESET_ALL}")
                 logging.error(f"{Fore.LIGHTRED_EX} ************************************************************************{Style.RESET_ALL}")
                 time.sleep(2) # give opportunity to ctrl-C again to cancel save
-                __save_model(interrupted_checkpoint_path, unet, text_encoder, tokenizer, noise_scheduler, vae, args.save_ckpt_dir, args.save_full_precision)
+                __save_model(interrupted_checkpoint_path, unet, text_encoder, tokenizer, noise_scheduler, vae, optimizer, args.save_ckpt_dir, args.save_full_precision, args.save_optimizer)
             exit(_SIGTERM_EXIT_CODE)
         else:
             # non-main threads (i.e. dataloader workers) should exit cleanly
             exit(0)
 
     signal.signal(signal.SIGINT, sigterm_handler)
-    
+
     if not os.path.exists(f"{log_folder}/samples/"):
         os.makedirs(f"{log_folder}/samples/")
 
@@ -675,7 +605,7 @@ def main(args):
     train_dataloader = build_torch_dataloader(train_batch, batch_size=args.batch_size)
 
     unet.train() if not args.disable_unet_training else unet.eval()
-    text_encoder.train() if not args.disable_textenc_training else text_encoder.eval() 
+    text_encoder.train() if not args.disable_textenc_training else text_encoder.eval()
 
     logging.info(f" unet device: {unet.device}, precision: {unet.dtype}, training: {unet.training}")
     logging.info(f" text_encoder device: {text_encoder.device}, precision: {text_encoder.dtype}, training: {text_encoder.training}")
@@ -683,18 +613,9 @@ def main(args):
     logging.info(f" scheduler: {noise_scheduler.__class__}")
 
     logging.info(f" {Fore.GREEN}Project name: {Style.RESET_ALL}{Fore.LIGHTGREEN_EX}{args.project_name}{Style.RESET_ALL}")
-    logging.info(f" {Fore.GREEN}grad_accum: {Style.RESET_ALL}{Fore.LIGHTGREEN_EX}{args.grad_accum}{Style.RESET_ALL}"), 
+    logging.info(f" {Fore.GREEN}grad_accum: {Style.RESET_ALL}{Fore.LIGHTGREEN_EX}{args.grad_accum}{Style.RESET_ALL}"),
     logging.info(f" {Fore.GREEN}batch_size: {Style.RESET_ALL}{Fore.LIGHTGREEN_EX}{args.batch_size}{Style.RESET_ALL}")
     logging.info(f" {Fore.GREEN}epoch_len: {Fore.LIGHTGREEN_EX}{epoch_len}{Style.RESET_ALL}")
-
-    scaler = GradScaler(
-        enabled=args.amp,
-        init_scale=2**17.5,
-        growth_factor=2,
-        backoff_factor=1.0/2,
-        growth_interval=25,
-    )
-    logging.info(f" Grad scaler enabled: {scaler.is_enabled()} (amp mode)")
 
     epoch_pbar = tqdm(range(args.max_epochs), position=0, leave=True, dynamic_ncols=True)
     epoch_pbar.set_description(f"{Fore.LIGHTCYAN_EX}Epochs{Style.RESET_ALL}")
@@ -720,13 +641,13 @@ def main(args):
             del pixel_values
             latents = latents[0].sample() * 0.18215
 
-            if zero_frequency_noise_ratio > 0.0:            
+            if zero_frequency_noise_ratio > 0.0:
                 # see https://www.crosslabs.org//blog/diffusion-with-offset-noise
                 zero_frequency_noise = zero_frequency_noise_ratio * torch.randn(latents.shape[0], latents.shape[1], 1, 1, device=latents.device)
-                noise = torch.randn_like(latents) + zero_frequency_noise           
+                noise = torch.randn_like(latents) + zero_frequency_noise
             else:
                 noise = torch.randn_like(latents)
-            
+
             bsz = latents.shape[0]
 
             timesteps = torch.randint(0, noise_scheduler.config.num_train_timesteps, (bsz,), device=latents.device)
@@ -753,6 +674,7 @@ def main(args):
         del noise, latents, cuda_caption
 
         with autocast(enabled=args.amp):
+            #print(f"types: {type(noisy_latents)} {type(timesteps)} {type(encoder_hidden_states)}")
             model_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
 
         return model_pred, target
@@ -790,7 +712,7 @@ def main(args):
 
     try:
         write_batch_schedule(args, log_folder, train_batch, epoch = 0)
-        
+
         for epoch in range(args.max_epochs):
             loss_epoch = []
             epoch_start_time = time.time()
@@ -818,20 +740,7 @@ def main(args):
                     loss_scale = batch["runt_size"] / args.batch_size
                     loss = loss * loss_scale
 
-                scaler.scale(loss).backward()
-
-                if args.clip_grad_norm is not None:
-                    if not args.disable_unet_training:
-                        torch.nn.utils.clip_grad_norm_(parameters=unet.parameters(), max_norm=args.clip_grad_norm)
-                    if not args.disable_textenc_training:
-                        torch.nn.utils.clip_grad_norm_(parameters=text_encoder.parameters(), max_norm=args.clip_grad_norm)
-
-                if ((global_step + 1) % args.grad_accum == 0) or (step == epoch_len - 1):
-                    scaler.step(optimizer)
-                    scaler.update()
-                    optimizer.zero_grad(set_to_none=True)
-
-                lr_scheduler.step()
+                ed_optimizer.step(loss, step, global_step)
 
                 loss_step = loss.detach().item()
 
@@ -845,23 +754,23 @@ def main(args):
                 loss_epoch.append(loss_step)
 
                 if (global_step + 1) % args.log_step == 0:
-                    curr_lr = lr_scheduler.get_last_lr()[0]
                     loss_local = sum(loss_log_step) / len(loss_log_step)
+                    lr_unet = ed_optimizer.get_unet_lr()
+                    lr_textenc = ed_optimizer.get_textenc_lr()
                     loss_log_step = []
-                    logs = {"loss/log_step": loss_local, "lr": curr_lr, "img/s": images_per_sec}
-                    if args.disable_textenc_training or args.disable_unet_training or text_encoder_lr_scale == 1:
-                        log_writer.add_scalar(tag="hyperparamater/lr", scalar_value=curr_lr, global_step=global_step)
-                    else:
-                        log_writer.add_scalar(tag="hyperparamater/lr unet", scalar_value=curr_lr, global_step=global_step)
-                        curr_text_encoder_lr = lr_scheduler.get_last_lr()[1]
-                        log_writer.add_scalar(tag="hyperparamater/lr text encoder", scalar_value=curr_text_encoder_lr, global_step=global_step)
+                    
+                    log_writer.add_scalar(tag="hyperparamater/lr unet", scalar_value=lr_unet, global_step=global_step)
+                    log_writer.add_scalar(tag="hyperparamater/lr text encoder", scalar_value=lr_textenc, global_step=global_step)
                     log_writer.add_scalar(tag="loss/log_step", scalar_value=loss_local, global_step=global_step)
+
                     sum_img = sum(images_per_sec_log_step)
                     avg = sum_img / len(images_per_sec_log_step)
                     images_per_sec_log_step = []
                     if args.amp:
-                        log_writer.add_scalar(tag="hyperparamater/grad scale", scalar_value=scaler.get_scale(), global_step=global_step)
+                        log_writer.add_scalar(tag="hyperparamater/grad scale", scalar_value=ed_optimizer.get_scale(), global_step=global_step)
                     log_writer.add_scalar(tag="performance/images per second", scalar_value=avg, global_step=global_step)
+
+                    logs = {"loss/log_step": loss_local, "lr_unet": lr_unet, "lr_te": lr_textenc, "img/s": images_per_sec}
                     append_epoch_log(global_step=global_step, epoch_pbar=epoch_pbar, gpu=gpu, log_writer=log_writer, **logs)
                     torch.cuda.empty_cache()
 
@@ -877,16 +786,15 @@ def main(args):
                     last_epoch_saved_time = time.time()
                     logging.info(f"Saving model, {args.ckpt_every_n_minutes} mins at step {global_step}")
                     save_path = os.path.join(f"{log_folder}/ckpts/{args.project_name}-ep{epoch:02}-gs{global_step:05}")
-                    __save_model(save_path, unet, text_encoder, tokenizer, noise_scheduler, vae, args.save_ckpt_dir, yaml, args.save_full_precision)
+                    __save_model(save_path, unet, text_encoder, tokenizer, noise_scheduler, vae, ed_optimizer, args.save_ckpt_dir, yaml, args.save_full_precision, args.save_optimizer)
 
                 if epoch > 0 and epoch % args.save_every_n_epochs == 0 and step == 0 and epoch < args.max_epochs - 1 and epoch >= args.save_ckpts_from_n_epochs:
                     logging.info(f" Saving model, {args.save_every_n_epochs} epochs at step {global_step}")
                     save_path = os.path.join(f"{log_folder}/ckpts/{args.project_name}-ep{epoch:02}-gs{global_step:05}")
-                    __save_model(save_path, unet, text_encoder, tokenizer, noise_scheduler, vae, args.save_ckpt_dir, yaml, args.save_full_precision)
+                    __save_model(save_path, unet, text_encoder, tokenizer, noise_scheduler, vae, ed_optimizer, args.save_ckpt_dir, yaml, args.save_full_precision, args.save_optimizer)
 
                 del batch
                 global_step += 1
-                update_grad_scaler(scaler, global_step, epoch, step) if args.amp else None
                 # end of step
 
             steps_pbar.close()
@@ -909,7 +817,7 @@ def main(args):
         # end of training
 
         save_path = os.path.join(f"{log_folder}/ckpts/last-{args.project_name}-ep{epoch:02}-gs{global_step:05}")
-        __save_model(save_path, unet, text_encoder, tokenizer, noise_scheduler, vae, args.save_ckpt_dir, yaml, args.save_full_precision)
+        __save_model(save_path, unet, text_encoder, tokenizer, noise_scheduler, vae, ed_optimizer, args.save_ckpt_dir, yaml, args.save_full_precision, args.save_optimizer)
 
         total_elapsed_time = time.time() - training_start_time
         logging.info(f"{Fore.CYAN}Training complete{Style.RESET_ALL}")
@@ -919,7 +827,7 @@ def main(args):
     except Exception as ex:
         logging.error(f"{Fore.LIGHTYELLOW_EX}Something went wrong, attempting to save model{Style.RESET_ALL}")
         save_path = os.path.join(f"{log_folder}/ckpts/errored-{args.project_name}-ep{epoch:02}-gs{global_step:05}")
-        __save_model(save_path, unet, text_encoder, tokenizer, noise_scheduler, vae, args.save_ckpt_dir, yaml, args.save_full_precision)
+        __save_model(save_path, unet, text_encoder, tokenizer, noise_scheduler, vae, ed_optimizer, args.save_ckpt_dir, yaml, args.save_full_precision, args.save_optimizer)
         raise ex
 
     logging.info(f"{Fore.LIGHTWHITE_EX} ***************************{Style.RESET_ALL}")
@@ -928,8 +836,8 @@ def main(args):
 
 
 if __name__ == "__main__":
-    supported_resolutions = [256, 384, 448, 512, 576, 640, 704, 768, 832, 896, 960, 1024, 1088, 1152]
-    supported_precisions = ['fp16', 'fp32']
+    check_git()
+    supported_resolutions = aspects.get_supported_resolutions()
     argparser = argparse.ArgumentParser(description="EveryDream2 Training options")
     argparser.add_argument("--config", type=str, required=False, default=None, help="JSON config file to load options from")
     args, argv = argparser.parse_known_args()
@@ -944,13 +852,14 @@ if __name__ == "__main__":
         print("No config file specified, using command line args")
 
     argparser = argparse.ArgumentParser(description="EveryDream2 Training options")
-    argparser.add_argument("--amp", action="store_true", default=False, help="Enables automatic mixed precision compute, recommended on")
+    argparser.add_argument("--amp", action="store_true",  default=True, help="deprecated, use --disable_amp if you wish to disable AMP")
     argparser.add_argument("--batch_size", type=int, default=2, help="Batch size (def: 2)")
     argparser.add_argument("--ckpt_every_n_minutes", type=int, default=None, help="Save checkpoint every n minutes, def: 20")
     argparser.add_argument("--clip_grad_norm", type=float, default=None, help="Clip gradient norm (def: disabled) (ex: 1.5), useful if loss=nan?")
     argparser.add_argument("--clip_skip", type=int, default=0, help="Train using penultimate layer (def: 0) (2 is 'penultimate')", choices=[0, 1, 2, 3, 4])
     argparser.add_argument("--cond_dropout", type=float, default=0.04, help="Conditional drop out as decimal 0.0-1.0, see docs for more info (def: 0.04)")
     argparser.add_argument("--data_root", type=str, default="input", help="folder where your training images are")
+    argparser.add_argument("--disable_amp", action="store_true", default=False, help="disables training of text encoder (def: False)")
     argparser.add_argument("--disable_textenc_training", action="store_true", default=False, help="disables training of text encoder (def: False)")
     argparser.add_argument("--disable_unet_training", action="store_true", default=False, help="disables training of unet (def: False) NOT RECOMMENDED")
     argparser.add_argument("--disable_xformers", action="store_true", default=False, help="disable xformers, may reduce performance (def: False)")
@@ -966,7 +875,6 @@ if __name__ == "__main__":
     argparser.add_argument("--lr_scheduler", type=str, default="constant", help="LR scheduler, (default: constant)", choices=["constant", "linear", "cosine", "polynomial"])
     argparser.add_argument("--lr_warmup_steps", type=int, default=None, help="Steps to reach max LR during warmup (def: 0.02 of lr_decay_steps), non-functional for constant")
     argparser.add_argument("--max_epochs", type=int, default=300, help="Maximum number of epochs to train for")
-    argparser.add_argument("--notebook", action="store_true", default=False, help="disable keypresses and uses tqdm.notebook for jupyter notebook (def: False)")
     argparser.add_argument("--optimizer_config", default="optimizer.json", help="Path to a JSON configuration file for the optimizer.  Default is 'optimizer.json'")
     argparser.add_argument("--project_name", type=str, default="myproj", help="Project name for logs and checkpoints, ex. 'tedbennett', 'superduperV1'")
     argparser.add_argument("--resolution", type=int, default=512, help="resolution to train", choices=supported_resolutions)
@@ -979,7 +887,6 @@ if __name__ == "__main__":
     argparser.add_argument("--save_ckpts_from_n_epochs", type=int, default=0, help="Only saves checkpoints starting an N epochs, def: 0 (disabled)")
     argparser.add_argument("--save_full_precision", action="store_true", default=False, help="save ckpts at full FP32")
     argparser.add_argument("--save_optimizer", action="store_true", default=False, help="saves optimizer state with ckpt, useful for resuming training later")
-    argparser.add_argument("--scale_lr", action="store_true", default=False, help="automatically scale up learning rate based on batch size and grad accumulation (def: False)")
     argparser.add_argument("--seed", type=int, default=555, help="seed used for samples and shuffling, use -1 for random")
     argparser.add_argument("--shuffle_tags", action="store_true", default=False, help="randomly shuffles CSV tags in captions, for booru datasets")
     argparser.add_argument("--useadam8bit", action="store_true", default=False, help="deprecated, use --optimizer_config and optimizer.json instead")
@@ -992,6 +899,5 @@ if __name__ == "__main__":
 
     # load CLI args to overwrite existing config args
     args = argparser.parse_args(args=argv, namespace=args)
-    print(f" Args:")
-    pprint.pprint(vars(args))
+    
     main(args)

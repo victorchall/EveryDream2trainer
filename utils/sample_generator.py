@@ -9,10 +9,12 @@ import torch
 from PIL import Image, ImageDraw, ImageFont
 from colorama import Fore, Style
 from diffusers import StableDiffusionPipeline, DDIMScheduler, DPMSolverMultistepScheduler, DDPMScheduler, PNDMScheduler, EulerDiscreteScheduler, EulerAncestralDiscreteScheduler, LMSDiscreteScheduler, KDPM2AncestralDiscreteScheduler
+from torch import FloatTensor
 from torch.cuda.amp import autocast
 from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms
 from tqdm.auto import tqdm
+from compel import Compel
 
 
 def clean_filename(filename):
@@ -84,7 +86,8 @@ class SampleGenerator:
                  batch_size: int,
                  default_seed: int,
                  default_sample_steps: int,
-                 use_xformers: bool):
+                 use_xformers: bool,
+                 use_penultimate_clip_layer: bool):
         self.log_folder = log_folder
         self.log_writer = log_writer
         self.batch_size = batch_size
@@ -92,6 +95,7 @@ class SampleGenerator:
         self.use_xformers = use_xformers
         self.show_progress_bars = False
         self.generate_pretrain_samples = False
+        self.use_penultimate_clip_layer = use_penultimate_clip_layer
 
         self.default_resolution = default_resolution
         self.default_seed = default_seed
@@ -198,6 +202,9 @@ class SampleGenerator:
                                     compatibility_test=sample_compatibility_test))
             pbar = tqdm(total=len(batches), disable=disable_progress_bars, position=1, leave=False,
                               desc=f"{Fore.YELLOW}Image samples (batches of {self.batch_size}){Style.RESET_ALL}")
+            compel = Compel(tokenizer=pipe.tokenizer,
+                            text_encoder=pipe.text_encoder,
+                            use_penultimate_clip_layer=self.use_penultimate_clip_layer)
             for batch in batches:
                 prompts = [p.prompt for p in batch]
                 negative_prompts = [p.negative_prompt for p in batch]
@@ -211,8 +218,10 @@ class SampleGenerator:
                 for cfg in self.cfgs:
                     pipe.set_progress_bar_config(disable=disable_progress_bars, position=2, leave=False,
                                                  desc=f"{Fore.LIGHTYELLOW_EX}CFG scale {cfg}{Style.RESET_ALL}")
-                    images = pipe(prompt=prompts,
-                                  negative_prompt=negative_prompts,
+                    prompt_embeds = compel(prompts)
+                    negative_prompt_embeds = compel(negative_prompts)
+                    images = pipe(prompt_embeds=prompt_embeds,
+                                  negative_prompt_embeds=negative_prompt_embeds,
                                   num_inference_steps=self.num_inference_steps,
                                   num_images_per_prompt=1,
                                   guidance_scale=cfg,

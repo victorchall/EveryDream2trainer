@@ -4,13 +4,19 @@ Logs are important to review to track your training and make sure your settings 
 
 Everydream2 uses the Tensorboard library to log performance metrics.  (more options coming!)
 
-You should launch tensorboard while your training is running and watch along.
+You should launch tensorboard while your training is running and watch along.  Open a separate command window, activate venv like you would for training, then run this:
 
     tensorboard --logdir logs --samples_per_plugin images=100
 
+You can leave Tensorboard running in the background as long as you wish. The `samples_per_plugin` arg will make sure Tensorboard gives finer control on the slider bar for looking through samples, but remember ALL samples are always in your logs, even if you don't see a particular expected sample step in Tensorboard.  
+
+VS Code can also launch Tensorboard by installing the extension, then CTRL-SHIFT-P, start typing "tensorboard" and select "Python:  Launch Tensorboard", "select another folder", and select the "logs" folder under your EveryDream2trainer folder.
+
 ## Sample images
 
-By default, the trainer produces sample images from `sample_prompts.txt` with a fixed seed every so many steps as defined by your `sample_steps` argument. These are saved in the logs directory and can be viewed in tensorboard as well if you prefer. If you have a ton of them, the slider bar in tensorboard may not select them all (unless you launch tensorboard with the `--samples_per_plugin` argument as shown above), but the actual files are still stored in your logs as well for review.
+Sample images are generated periodically by the trainer to give visual feedback on training progress.  **It's very important to keep an eye on your samples.**  They are available in Tensorboard (and WandB if enabled), or in your logs folder. 
+
+By default, the trainer produces sample images from `sample_prompts.txt` with a fixed seed every so many steps as defined by your `sample_steps` argument.  If you have a ton of them, the slider bar in tensorboard may not select them all (unless you launch tensorboard with the `--samples_per_plugin` argument as shown above), but the actual files are still stored in your logs as well for review.
 
 Samples are produced at CFG scales of 1, 4, and 7. You may find this very useful to see how your model is progressing. 
 
@@ -58,12 +64,20 @@ Individual samples are defined under the `samples` key. Each sample can have a `
 
 The lr curve is useful to make sure your learning rate curve looks as expected when using something other than constant.  If you hand-tweak the decay steps you may cause issues with the curve, going down and then back up again for instance, in which case you may just wish to remove lr_decay_steps from your command to let the trainer set that for you.
 
+Unet and Text encoder LR are logged separately because the text encoder can be set to ratio of the primary LR.  See [Optimizer](OPTIMIZER.md) for more details.  You can use the logs to confirm the behavior you expect is occurring.
+
 ## Loss
 
-To be perfectly honest, loss on stable diffusion training just jumps around a lot.  It's not a great metric to use to judge your training.  It's better to look at the samples and see if they are improving.
+Standard loss metrics on Stable Diffusion training jumps around a lot in the scope of the fine tuning the community is doing.  It's not a great metric to use to judge your training unless youa re shooting for a significant shift in the entire model (i.e. training on thousands, tens of thousands, or hundreds of thousands of images in an effort to make a broad shift in what the model generates).
+
+For most users, it's better to look at the samples to subjectively judge if they are improving, or enable [Validation](VALIDATION.md). Validation adds the metric `val/loss` which show meaningful trends. Read the validation documentation for more information and hints on how to intrepet trends in `val/loss`.
+
+## Grad scaler
+
+`hyperparameters/grad scale` is logged for troubleshooting purposes.  If the value trends down to a *negative power* (ex 5e-10), something is wrong with training, such as a wildly inappropriate setting or an issue with your installation.  Otherwise, it bounces around, typically around Ne+3 to Ne+8 and is not much concern. 
 
 ## Performance
 
-Images per second will show you when you start a youtube video and your performance tanks.  So, keep an eye on it if you start doing something else on your computer, particularly anything that uses GPU, even playing a video.  Note that the initial performance has a ramp up time, once it gets going it should maintain as long as you don't do anything else that uses GPU.  I have occasionally had issues with my GPU getting "locked" into "slow mode" after trying to play a video, so watch out for that.
+Images per second will show you when you start a youtube video and your performance tanks.  So, keep an eye on it if you start doing something else on your computer, particularly anything that uses GPU, even playing a video.  
 
-Minutes per epoch is inverse, but you'll see it go up (slower, more minutes per epoch) when there are samples being generated that epoch.  This is normal, but will give you an idea on how your sampling (``--sample_steps``) is affecting your training time.  If you set the sample_steps low, you'll see your minutes per epoch spike more due to the delay involved in generating.  It's still very important to generate samples, but you can weight the cost in speed vs the number of samples.
+Minutes per epoch is inverse, but you'll see it go up (slower, more minutes per epoch) when there are samples being generated that epoch.  This is normal, but will give you an idea on how your sampling (`--sample_steps`) is affecting your training time.  If you set the sample_steps low, you'll see your minutes per epoch spike more due to the delay involved in generating the samples.  It's still very important to generate samples, but you can weight the cost in speed vs the number of samples.
