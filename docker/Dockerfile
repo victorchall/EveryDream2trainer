@@ -75,6 +75,10 @@ ENV LD_LIBRARY_PATH="/usr/local/cuda-11.8/targets/x86_64-linux/lib/"
 RUN ln /usr/local/cuda/targets/x86_64-linux/lib/libcudart.so.11.8.89 /usr/local/cuda-11.8/targets/x86_64-linux/lib/libcudart.so
 RUN ln /usr/local/cuda/targets/x86_64-linux/lib/libnvrtc.so.11.8.89 /usr/local/cuda-11.8/targets/x86_64-linux/lib/libnvrtc.so
 
+# Vast.ai SSH ignores ENV vars unless fully exported
+# Exporting anything with an _ should cover the bases
+RUN env | grep _ >> /etc/environment;
+
 ADD requirements-runtime.txt /
 RUN pip install --no-cache-dir -r requirements-runtime.txt
 
