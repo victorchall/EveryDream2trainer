@@ -104,7 +104,7 @@ The config file has the following options:
 
 #### General settings
 
-* `every_n_epochs`: How often to run validation (1=every epoch).
+* `every_n_epochs`: How often to run validation. Specify either whole numbers, eg 1=every epoch (recommended default), 2=every second epoch, etc.; or floating point numbers between 0 and 1, eg 0.5=twice per epoch, 0.33=three times per epoch, etc.
 * `seed`: The seed to use when running validation passes, and also for picking subsets of the data to use with `automatic` val_split_mode and/or `stabilize_training_loss`.
 
 #### Extra manual datasets

@@ -7,7 +7,7 @@
         "extra_manual_datasets": "Dictionary of 'name':'path' pairs defining additional validation datasets to load and log. eg { 'santa_suit': '/path/to/captioned_santa_suit_images', 'flamingo_suit': '/path/to/flamingo_suit_images' }",
         "stabilize_training_loss": "If true, stabilize the train loss curves for `loss/epoch` and `loss/log step` by re-calculating training loss with a fixed random seed, and log the results as `loss/train-stabilized`. This more clearly shows the training progress, but it is not enough alone to tell you if you're overfitting.",
         "stabilize_split_proportion": "For stabilize_training_loss, the proportion of the train dataset to overlap for stabilizing the train loss graph. Typical values are 0.15-0.2 (15-20% of the total dataset). Higher is more accurate but slower.",
-        "every_n_epochs": "How often to run validation (1=every epoch).",
+        "every_n_epochs": "How often to run validation (1=every epoch, 2=every second epoch; 0.5=twice per epoch, 0.33=three times per epoch, etc.).",
         "seed": "The seed to use when running validation and stabilization passes.",
         "use_relative_loss": "logs val/loss as negative relative to first pre-train val/loss value"
     },
