@@ -702,8 +702,8 @@ def main(args):
 
     # Pre-train validation to establish a starting point on the loss graph
     if validator:
-        validator.do_validation_if_appropriate(epoch=0, global_step=0,
-                                               get_model_prediction_and_target_callable=get_model_prediction_and_target)
+        validator.do_validation(global_step=0,
+                                get_model_prediction_and_target_callable=get_model_prediction_and_target)
 
     # the sample generator might be configured to generate samples before step 0
     if sample_generator.generate_pretrain_samples:
@@ -721,6 +721,11 @@ def main(args):
             epoch_len = math.ceil(len(train_batch) / args.batch_size)
             steps_pbar = tqdm(range(epoch_len), position=1, leave=False, dynamic_ncols=True)
             steps_pbar.set_description(f"{Fore.LIGHTCYAN_EX}Steps{Style.RESET_ALL}")
+
+            validation_steps = (
+                [] if validator is None
+                else validator.get_validation_step_indices(epoch, len(train_dataloader))
+            )
 
             for step, batch in enumerate(train_dataloader):
                 step_start_time = time.time()
@@ -769,6 +774,9 @@ def main(args):
                     append_epoch_log(global_step=global_step, epoch_pbar=epoch_pbar, gpu=gpu, log_writer=log_writer, **logs)
                     torch.cuda.empty_cache()
 
+                if validator and step in validation_steps:
+                    validator.do_validation(global_step, get_model_prediction_and_target)
+
                 if (global_step + 1) % sample_generator.sample_steps == 0:
                     generate_samples(global_step=global_step, batch=batch)
 
@@ -802,9 +810,6 @@ def main(args):
 
             loss_local = sum(loss_epoch) / len(loss_epoch)
             log_writer.add_scalar(tag="loss/epoch", scalar_value=loss_local, global_step=global_step)
-
-            if validator:
-                validator.do_validation_if_appropriate(epoch+1, global_step, get_model_prediction_and_target)
 
             gc.collect()
             # end of epoch
