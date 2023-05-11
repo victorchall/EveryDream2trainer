@@ -257,7 +257,6 @@ class EveryDreamOptimizer():
 
         default_lr = 1e-6
         curr_lr = args.lr
-        text_encoder_lr_scale = 1.0
 
         if local_optimizer_config is not None:
             betas = local_optimizer_config["betas"] or betas
@@ -268,8 +267,6 @@ class EveryDreamOptimizer():
             if args.lr is not None:
                 curr_lr = args.lr
                 logging.info(f"Overriding LR from optimizer config with main config/cli LR setting: {curr_lr}")
-
-            print(f" * Using text encoder LR scale {text_encoder_lr_scale}")
 
         if curr_lr is None:
             curr_lr = default_lr
