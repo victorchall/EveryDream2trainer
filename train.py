@@ -543,7 +543,11 @@ def main(args):
 
     epoch_len = math.ceil(len(train_batch) / args.batch_size)
 
-    ed_optimizer = EveryDreamOptimizer(args, optimizer_config, text_encoder.parameters(), unet.parameters(), epoch_len)
+    ed_optimizer = EveryDreamOptimizer(args,
+                                       optimizer_config,
+                                       text_encoder,
+                                       unet,
+                                       epoch_len)
 
     log_args(log_writer, args)
 
