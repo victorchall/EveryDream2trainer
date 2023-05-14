@@ -53,6 +53,32 @@ LR can be set in `optimizer.json` and excluded from the main CLI arg or train.js
 
 The text encoder LR can run at a different value to the Unet LR. This may help prevent over-fitting, especially if you're training from SD2 checkpoints. To set the text encoder LR, add a value for `text_encoder_lr_scale` to `optimizer.json` or set the `text_encoder: lr` to its own value (not null). For example, to train the text encoder with an LR that is half that of the Unet, add `"text_encoder_lr_scale": 0.5` to `optimizer.json`. The default value is `0.5`, meaning the text encoder will be trained at half the learning rate of the unet.
 
+## Text Encoder freezing
+
+If you're training SD2.1 you will likely experience great benefit from partially freezing the text encoder. You can control text encoder freezing using the `text_encoder_freezing` block in your `optimizer.json`:
+
+```
+    "text_encoder_freezing": {
+        "freeze_embeddings": true,
+        "freeze_front_n_layers": -6,
+        "freeze_final_layer_norm": false
+    }
+```
+
+The SD2.1 text encoder is arranged as follows:
+
+```
+embeddings -> CLIP text encoder (23 layers) -> final layer norm
+```
+
+(The SD1.5 text encoder is similar but it has only 12 CLIP layers.) Typically you would apply freezing starting from the left and moving to the right (although it might be interesting to experiment with different freezing patterns). You can control this using the following parameters:  
+
+* `freeze_embeddings` freezes the front 2 layers (the text embeddings - recommend). 
+* `freeze_front_n_layers` freezes the front N layers of the CLIP text encoder. You can also pass null to leave the CLIP layers unfrozen, or negative values to count from the back - in the example above `-6` will freeze all but the last 6 layers.
+* `freeze_final_layer_norm` freezes the parameters for the text encoder's final `LayerNorm` operation.
+
+Recommended settings for SD2.1 are provided in `optimizerSD21.json` - frozen embeddings, all CLIP layers frozen except for the last 6, final layer norm unfrozen. If you want to experiment, start by trying different values for `freeze_front_n_layers` - -2 is slower but seems to produce higher quality, whereas -10 is faster but can be more difficult to control. 
+
 ## General Beta, weight decay, epsilon, etc tuning
 
 Betas, weight decay, and epsilon are documented in the [AdamW paper](https://arxiv.org/abs/1711.05101) and there is a wealth of information on the web, but consider those experimental to tweak.  
