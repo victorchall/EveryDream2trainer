@@ -12,7 +12,11 @@
         "lr_decay_steps": "number of steps to decay LR to zero for cosine, if null will use CLI or default a value based on max epochs",
         "betas": "exponential decay rates for the moment estimates",
         "epsilon": "value added to denominator for numerical stability, unused for lion",
-        "weight_decay": "weight decay (L2 penalty)"
+        "weight_decay": "weight decay (L2 penalty)",
+        "------------------": "-----------------",
+        "freeze_embeddings": "freeze the text embeddings",
+        "freeze_front_n_layers": "freeze the front N layers of the text encoder (you can pass eg -2 to leave only the last 2 layers unfrozen)",
+        "freeze_final_layer_norm": "freeze the final layer norm"
     },
     "base": {
         "optimizer": "adamw8bit",
@@ -33,5 +37,10 @@
         "betas": null,
         "epsilon": null,
         "weight_decay": null
+    },
+    "text_encoder_freezing": {
+        "freeze_embeddings": false,
+        "freeze_front_n_layers": null,
+        "freeze_final_layer_norm": true
     }
 }
