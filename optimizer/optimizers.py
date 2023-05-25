@@ -84,6 +84,10 @@ class EveryDreamOptimizer():
 
         logging.info(f" Grad scaler enabled: {self.scaler.is_enabled()} (amp mode)")
 
+        if args.abort_on_anomaly:
+            torch.autograd.set_detect_anomaly(True)
+            logging.info("Anomaly detection enabled")
+
     def step(self, loss, step, global_step):
         self.scaler.scale(loss).backward()
 

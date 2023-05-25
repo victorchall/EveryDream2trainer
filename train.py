@@ -900,8 +900,8 @@ if __name__ == "__main__":
     argparser.add_argument("--rated_dataset", action="store_true", default=False, help="enable rated image set training, to less often train on lower rated images through the epochs")
     argparser.add_argument("--rated_dataset_target_dropout_percent", type=int, default=50, help="how many images (in percent) should be included in the last epoch (Default 50)")
     argparser.add_argument("--zero_frequency_noise_ratio", type=float, default=0.02, help="adds zero frequency noise, for improving contrast (def: 0.0) use 0.0 to 0.15")
-
-    # load CLI args to overwrite existing config args
+    argparser.add_argument("--abort_on_anomaly", action="store_true", default=False, help="abort training if an 
+                           anomaly is detected (def: False)")
     args = argparser.parse_args(args=argv, namespace=args)
     
     main(args)
