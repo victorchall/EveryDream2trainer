@@ -17,6 +17,25 @@ import os
 import json
 import logging
 
+import torch
+
+def enforce_zero_terminal_snr(betas):
+    # from https://arxiv.org/pdf/2305.08891.pdf
+    alphas = 1 - betas
+    alphas_bar = alphas.cumprod(0)
+    alphas_bar_sqrt = alphas_bar.sqrt()
+
+    alphas_bar_sqrt_0 = alphas_bar_sqrt[0].clone()
+    alphas_bar_sqrt_T = alphas_bar_sqrt[-1].clone()
+    alphas_bar_sqrt -= alphas_bar_sqrt_T
+    alphas_bar_sqrt *= alphas_bar_sqrt_0 / (alphas_bar_sqrt_0 - alphas_bar_sqrt_T)
+    
+    alphas_bar = alphas_bar_sqrt ** 2
+    alphas = alphas_bar[1:] / alphas_bar[:-1]
+    alphas = torch.cat([alphas_bar[0:1], alphas])
+    betas = 1 - alphas
+    return betas
+
 def get_attn_yaml(ckpt_path):
     """
     Analyze the checkpoint to determine the attention head type and yaml to use for inference

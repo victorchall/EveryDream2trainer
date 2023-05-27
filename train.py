@@ -77,7 +77,7 @@ def get_hf_ckpt_cache_path(ckpt_path):
 def convert_to_hf(ckpt_path):
 
     hf_cache = get_hf_ckpt_cache_path(ckpt_path)
-    from utils.analyze_unet import get_attn_yaml
+    from utils.unet_utils import get_attn_yaml
 
     if os.path.isfile(ckpt_path):
         if not os.path.exists(hf_cache):
@@ -450,6 +450,11 @@ def main(args):
 
         reference_scheduler = DDIMScheduler.from_pretrained(model_root_folder, subfolder="scheduler")
         noise_scheduler = DDPMScheduler.from_pretrained(model_root_folder, subfolder="scheduler")
+
+        if args.zero_frequency_noise_ratio == -1.0:
+            from utils.unet_utils import enforce_zero_terminal_snr
+            noise_scheduler.betas = enforce_zero_terminal_snr(noise_scheduler.betas)
+
         tokenizer = CLIPTokenizer.from_pretrained(model_root_folder, subfolder="tokenizer", use_fast=False)
 
     except Exception as e:
@@ -589,7 +594,7 @@ def main(args):
                 logging.error(f"{Fore.LIGHTRED_EX} CTRL-C received, attempting to save model to {interrupted_checkpoint_path}{Style.RESET_ALL}")
                 logging.error(f"{Fore.LIGHTRED_EX} ************************************************************************{Style.RESET_ALL}")
                 time.sleep(2) # give opportunity to ctrl-C again to cancel save
-                __save_model(interrupted_checkpoint_path, unet, text_encoder, tokenizer, noise_scheduler, vae, optimizer, args.save_ckpt_dir, args.save_full_precision, args.save_optimizer)
+                __save_model(interrupted_checkpoint_path, unet, text_encoder, tokenizer, noise_scheduler, vae, ed_optimizer, args.save_ckpt_dir, args.save_full_precision, args.save_optimizer)
             exit(_SIGTERM_EXIT_CODE)
         else:
             # non-main threads (i.e. dataloader workers) should exit cleanly
@@ -899,7 +904,7 @@ if __name__ == "__main__":
     argparser.add_argument("--write_schedule", action="store_true", default=False, help="write schedule of images and their batches to file (def: False)")
     argparser.add_argument("--rated_dataset", action="store_true", default=False, help="enable rated image set training, to less often train on lower rated images through the epochs")
     argparser.add_argument("--rated_dataset_target_dropout_percent", type=int, default=50, help="how many images (in percent) should be included in the last epoch (Default 50)")
-    argparser.add_argument("--zero_frequency_noise_ratio", type=float, default=0.02, help="adds zero frequency noise, for improving contrast (def: 0.0) use 0.0 to 0.15")
+    argparser.add_argument("--zero_frequency_noise_ratio", type=float, default=0.02, help="adds zero frequency noise, for improving contrast (def: 0.0) use 0.0 to 0.15, set to -1 to use zero terminal SNR noising beta schedule instead")
 
     # load CLI args to overwrite existing config args
     args = argparser.parse_args(args=argv, namespace=args)

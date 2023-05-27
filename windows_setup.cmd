@@ -4,10 +4,10 @@ echo should be in venv here
 cd .
 python -m pip install --upgrade pip
 pip install torch==1.12.1+cu116 torchvision==0.13.1+cu116 --extra-index-url "https://download.pytorch.org/whl/cu116"
-pip install transformers==4.27.1
-pip install diffusers[torch]==0.13.0
+pip install -U transformers==4.27.1
+pip install -U diffusers[torch]==0.14.0
 pip install pynvml==11.4.1
-pip install bitsandbytes==0.35.0
+pip install -U https://github.com/victorchall/everydream-whls/raw/main/bitsandbytes-0.38.1-py2.py3-none-any.whl
 git clone https://github.com/DeXtmL/bitsandbytes-win-prebuilt tmp/bnb_cache
 pip install ftfy==6.1.1
 pip install aiohttp==3.8.3

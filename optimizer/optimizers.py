@@ -152,18 +152,22 @@ class EveryDreamOptimizer():
 
     def get_final_optimizer_configs(self, args, global_optimizer_config):
         """
-        defautls and overrides based on priority of 'primary cli args > base config > text encoder overrides'
+        defaults and overrides based on priority
+        cli LR arg will override LR for both unet and text encoder for legacy reasons
         """
         base_config = global_optimizer_config.get("base")
         te_config = global_optimizer_config.get("text_encoder_overrides")
 
         if args.lr_decay_steps is None or args.lr_decay_steps < 1:
+            # sets cosine so the zero crossing is past the end of training, this results in a terminal LR that is about 25% of the nominal LR
             args.lr_decay_steps = int(self.epoch_len * args.max_epochs * 1.5)
 
         if args.lr_warmup_steps is None:
+            # set warmup to 2% of decay, if decay was autoset to 150% of max epochs then warmup will end up about 3% of max epochs
             args.lr_warmup_steps = int(args.lr_decay_steps / 50)
         
         if args.lr is not None:
+            # override for legacy support reasons
             base_config["lr"] = args.lr
 
         base_config["optimizer"] = base_config.get("optimizer", None) or "adamw8bit"
