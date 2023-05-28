@@ -87,8 +87,6 @@ ARG CACHEBUST=1
 RUN git clone https://github.com/victorchall/EveryDream2trainer
 
 WORKDIR /workspace/EveryDream2trainer
-RUN python utils/get_yamls.py && \
-    mkdir -p logs && mkdir -p input
 
 ADD welcome.txt /
 ADD start.sh /
