@@ -30,14 +30,14 @@ class EveryDreamBatch(Dataset):
     data_loader: `DataLoaderMultiAspect` object
     debug_level: 0=none, 1=print drops due to unfilled batches on aspect ratio buckets, 2=debug info per image, 3=save crops to disk for inspection
     conditional_dropout: probability of dropping the caption for a given image
-    crop_jitter: number of pixels to jitter the crop by, only for non-square images
+    crop_jitter: percent of maximum cropping for crop jitter (ex 0.02 is two percent)
     seed: random seed
     """
     def __init__(self,
                  data_loader: DataLoaderMultiAspect,
                  debug_level=0,
                  conditional_dropout=0.02,
-                 crop_jitter=20,
+                 crop_jitter=0.02,
                  seed=555,
                  tokenizer=None,
                  retain_contrast=False,
@@ -129,7 +129,7 @@ class EveryDreamBatch(Dataset):
         example = {}
         save = debug_level > 2
 
-        image_train_tmp = image_train_item.hydrate(crop=False, save=save, crop_jitter=self.crop_jitter)
+        image_train_tmp = image_train_item.hydrate(save=save, crop_jitter=self.crop_jitter)
 
         example["image"] = image_train_tmp.image.copy()  # hack for now to avoid memory leak
         image_train_tmp.image = None # hack for now to avoid memory leak

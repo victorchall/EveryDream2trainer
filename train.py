@@ -357,6 +357,10 @@ def main(args):
     """
     Main entry point
     """
+    if os.name == 'nt':
+        print(" * Windows detected, disabling Triton")
+        os.environ['XFORMERS_FORCE_DISABLE_TRITON'] = "1"
+
     log_time = setup_local_logger(args)
     args = setup_args(args)
     print(f" Args:")

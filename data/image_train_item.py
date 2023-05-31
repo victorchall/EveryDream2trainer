@@ -27,9 +27,6 @@ import PIL.ImageOps as ImageOps
 import numpy as np
 from torchvision import transforms
 
-_RANDOM_TRIM = 0.04
-
-
 OptionalImageCaption = typing.Optional['ImageCaption']
 
 class ImageCaption:
@@ -143,7 +140,7 @@ class ImageTrainItem:
         else:
             self.image = image
             self.image_size = image.size
-            self.target_size = None
+            #self.target_size = None
 
         self.is_undersized = False
         self.error = None
@@ -165,80 +162,108 @@ class ImageTrainItem:
             pass
         return image
 
-    def hydrate(self, crop=False, save=False, crop_jitter=20):
+    def _percent_random_crop(self, image, crop_jitter=0.02):
         """
-        crop: hard center crop to 512x512
+        randomly crops the image by a percentage of the image size on each of the four sides
+        """
+        width, height = image.size
+        max_crop_pixels = min(width, height) * crop_jitter
+
+        left_crop_pixels = random.uniform(0, max_crop_pixels)
+        right_crop_pixels = random.uniform(0, max_crop_pixels)
+        top_crop_pixels = random.uniform(0, max_crop_pixels)
+        bottom_crop_pixels = random.uniform(0, max_crop_pixels)
+
+        # Calculate the cropping coordinates
+        left = left_crop_pixels
+        right = width - right_crop_pixels
+        top = top_crop_pixels
+        bottom = height - bottom_crop_pixels
+        #print(f"\n ***  jitter l: {left}, t: {top}, r: {right}, b: {bottom}, orig w: {width}, h: {height}, max_crop_pixels: {max_crop_pixels}")
+
+        # Crop the image
+        cropped_image = image.crop((left, top, right, bottom))
+
+        cropped_width = width - int(left_crop_pixels + right_crop_pixels)
+        cropped_height = height - int(top_crop_pixels + bottom_crop_pixels)
+
+        cropped_aspect_ratio = cropped_width / cropped_height
+
+        # Resize the cropped image to maintain square pixels
+        if cropped_aspect_ratio > 1:
+            new_width = cropped_width
+            new_height = int(cropped_width / cropped_aspect_ratio)
+        else:
+            new_width = int(cropped_height * cropped_aspect_ratio)
+            new_height = cropped_height
+
+        #print(f" ***  postsquarefix new w: {new_width}, h: {new_height}")
+        cropped_image = cropped_image.resize((new_width, new_height))
+
+        return cropped_image
+    
+    def _debug_save_image(self, image, folder=""):
+        base_name = os.path.basename(self.pathname)
+        target_dir = os.path.join('test/output', folder)
+        target_file = os.path.join(target_dir, base_name)
+
+        if not os.path.exists(target_dir):
+            os.makedirs(target_dir)
+
+        try:
+            #print(f"saving to test/output: {os.path.join('test/output', folder, base_name)}")
+            image.save(target_file)
+        except Exception as e:
+            print(f"error for debug saving image of {self.pathname}: {e}")
+            pass
+
+    def _trim_to_aspect(self, image, target_wh):
+        width, height = image.size
+        target_aspect = target_wh[0] / target_wh[1] # 0.60
+        image_aspect = width / height # 0.5865
+        #self._debug_save_image(image, "precrop")
+        if image_aspect > target_aspect:
+            target_width = int(height * target_aspect)
+            overwidth = width - target_width
+            l = random.normalvariate(overwidth/2, overwidth/2)
+            l = max(0, l)
+            l = min(l, overwidth)
+            r = width - int(overwidth) - l
+            image = image.crop((l, 0, r, height))
+        elif target_aspect > image_aspect:
+            target_height = int(width / target_aspect)
+            overheight = height - target_height
+            image = image.crop((0, int(overheight/2), width, height-int(overheight/2)))
+
+    def hydrate(self, save=False, crop_jitter=0.02):
+        """
         save: save the cropped image to disk, for manual inspection of resize/crop
-        crop_jitter: randomly shift cropp by N pixels when using multiple aspect ratios to improve training quality
         """
         # print(self.pathname, self.image)
-        try:
+        # try:
             # if not hasattr(self, 'image'):
-            self.image = self.load_image()
+        image = self.load_image()
 
-            width, height = self.image.size
-            if crop:
-                cropped_img = self.__autocrop(self.image)
-                self.image = cropped_img.resize((512, 512), resample=PIL.Image.BICUBIC)
-            else:
-                width, height = self.image.size
-                jitter_amount = random.randint(0, crop_jitter)
+        #print(f"** jittering: {self.pathname}")
 
-                if self.target_wh[0] == self.target_wh[1]:
-                    if width > height:
-                        left = random.randint(0, width - height)
-                        self.image = self.image.crop((left, 0, height + left, height))
-                        width = height
-                    elif height > width:
-                        top = random.randint(0, height - width)
-                        self.image = self.image.crop((0, top, width, width + top))
-                        height = width
-                    elif width > self.target_wh[0]:
-                        slice = min(int(self.target_wh[0] * _RANDOM_TRIM), width - self.target_wh[0])
-                        slicew_ratio = random.random()
-                        left = int(slice * slicew_ratio)
-                        right = width - int(slice * (1 - slicew_ratio))
-                        sliceh_ratio = random.random()
-                        top = int(slice * sliceh_ratio)
-                        bottom = height - int(slice * (1 - sliceh_ratio))
+        width, height = image.size
 
-                        self.image = self.image.crop((left, top, right, bottom))
-                else:
-                    image_aspect = width / height
-                    target_aspect = self.target_wh[0] / self.target_wh[1]
-                    if image_aspect > target_aspect:
-                        new_width = int(height * target_aspect)
-                        jitter_amount = max(min(jitter_amount, int(abs(width - new_width) / 2)), 0)
-                        left = jitter_amount
-                        right = left + new_width
-                        self.image = self.image.crop((left, 0, right, height))
-                    else:
-                        new_height = int(width / target_aspect)
-                        jitter_amount = max(min(jitter_amount, int(abs(height - new_height) / 2)), 0)
-                        top = jitter_amount
-                        bottom = top + new_height
-                        self.image = self.image.crop((0, top, width, bottom))
-                self.image = self.image.resize(self.target_wh, resample=PIL.Image.BICUBIC)
+        img_jitter = min((width-self.target_wh[0])/self.target_wh[0], (height-self.target_wh[1])/self.target_wh[1])
+        img_jitter = min(img_jitter, crop_jitter)
+        img_jitter = max(img_jitter, 0.0)
+        
+        if img_jitter > 0.0:
+            image = self._percent_random_crop(image, img_jitter)
 
-            self.image = self.flip(self.image)
-        except Exception as e:
-            logging.error(f"Fatal Error loading image: {self.pathname}:")
-            logging.error(e)
-            exit()
+        self._trim_to_aspect(image, self.target_wh)
 
-        if type(self.image) is not np.ndarray:
-            if save:
-                base_name = os.path.basename(self.pathname)
-                if not os.path.exists("test/output"):
-                    os.makedirs("test/output")
-                self.image.save(f"test/output/{base_name}")
+        self.image = image.resize(self.target_wh)
 
-            self.image = np.array(self.image).astype(np.uint8)
+        self.image = self.flip(self.image)
+        # self._debug_save_image(self.image, "final")
 
-            # self.image = (self.image / 127.5 - 1.0).astype(np.float32)
-
-        # print(self.image.shape)
-
+        self.image = np.array(self.image).astype(np.uint8)
+        
         return self
 
     def __compute_target_width_height(self):
@@ -250,7 +275,7 @@ class ImageTrainItem:
                 image_aspect = width / height
                 target_wh = min(self.aspects, key=lambda aspects:abs(aspects[0]/aspects[1] - image_aspect))
 
-                self.is_undersized = (width * height) < (target_wh[0] * target_wh[1])
+                self.is_undersized = (width * height) < (target_wh[0]*1.02 * target_wh[1]*1.02)
                 self.target_wh = target_wh
         except Exception as e:
             self.error = e
