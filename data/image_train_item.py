@@ -161,6 +161,29 @@ class ImageTrainItem:
             logging.warning(F"Error rotating image: {e} on {self.pathname}, image will be loaded as is, EXIF may be corrupt") if print_error else None
             pass
         return image
+    
+    def _needs_transpose(self, image, print_error=False):
+        try:
+            exif = image.getexif()
+            orientation = exif.get(0x0112)
+            """
+                https://pillow.readthedocs.io/en/stable/_modules/PIL/ImageOps.html#exif_transpose
+                method = {
+                    2: Image.Transpose.FLIP_LEFT_RIGHT,
+                    3: Image.Transpose.ROTATE_180,
+                    4: Image.Transpose.FLIP_TOP_BOTTOM,
+                    5: Image.Transpose.TRANSPOSE,
+                    6: Image.Transpose.ROTATE_270,
+                    7: Image.Transpose.TRANSVERSE,
+                    8: Image.Transpose.ROTATE_90,
+                }.get(orientation)
+            """
+            return orientation in [5, 6, 7, 8]
+        except Exception as e:
+            logging.warning(F"Error rotating image: {e} on {self.pathname}, image will be loaded as is, EXIF may be corrupt") if print_error else None
+            pass
+        return False
+
 
     def _percent_random_crop(self, image, crop_jitter=0.02):
         """
@@ -270,8 +293,11 @@ class ImageTrainItem:
         self.target_wh = None
         try:
             with PIL.Image.open(self.pathname) as image:
-                image = self._try_transpose(image, print_error=True).convert('RGB')
-                width, height = image.size
+                needs_transpose = self._needs_transpose(image)
+                if needs_transpose:
+                    height, width = image.size
+                else:
+                    width, height = image.size
                 image_aspect = width / height
                 target_wh = min(self.aspects, key=lambda aspects:abs(aspects[0]/aspects[1] - image_aspect))
 
