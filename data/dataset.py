@@ -207,8 +207,6 @@ class Dataset:
             return global_cfg
 
         walk_and_visit(data_root, process_dir, ImageConfig())
-        for img in image_configs:
-            print(f" *** {img}: {image_configs[img]}")
         return Dataset(image_configs)
 
     @classmethod
@@ -231,7 +229,7 @@ class Dataset:
         items = []
         for image in tqdm(self.image_configs, desc="preloading", dynamic_ncols=True):
             config = self.image_configs[image]
-            print(f" ********* shuffle: {config.shuffle_tags}")
+            #print(f" ********* shuffle: {config.shuffle_tags}")
 
             if len(config.main_prompts) > 1:
                 logging.warning(f" *** Found multiple multiple main_prompts for image {image}, but only one will be applied: {config.main_prompts}")
