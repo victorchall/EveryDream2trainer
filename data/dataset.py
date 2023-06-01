@@ -99,7 +99,7 @@ class ImageConfig:
             acc = acc.merge(cfg)
             
         acc.shuffle_tags = any(cfg.shuffle_tags for cfg in configs)
-        print(f"accum shuffle:{acc.shuffle_tags}")
+        #print(f"accum shuffle:{acc.shuffle_tags}")
         return acc
 
     def ensure_caption(self):
