@@ -124,7 +124,16 @@ class ImageTrainItem:
     flip_p: probability of flipping image (0.0 to 1.0)
     rating: the relative rating of the images. The rating is measured in comparison to the other images.
     """
-    def __init__(self, image: PIL.Image, caption: ImageCaption, aspects: list[float], pathname: str, flip_p=0.0, multiplier: float=1.0, cond_dropout=None):
+    def __init__(self, 
+                 image: PIL.Image, 
+                 caption: ImageCaption, 
+                 aspects: list[float], 
+                 pathname: str, 
+                 flip_p=0.0, 
+                 multiplier: float=1.0, 
+                 cond_dropout=None,
+                 shuffle_tags=False,
+                 ):
         self.caption = caption
         self.aspects = aspects
         self.pathname = pathname
@@ -133,6 +142,7 @@ class ImageTrainItem:
         self.runt_size = 0
         self.multiplier = multiplier
         self.cond_dropout = cond_dropout
+        self.shuffle_tags = shuffle_tags
 
         self.image_size = None
         if image is None or len(image) == 0:
@@ -197,14 +207,12 @@ class ImageTrainItem:
         top_crop_pixels = random.uniform(0, max_crop_pixels)
         bottom_crop_pixels = random.uniform(0, max_crop_pixels)
 
-        # Calculate the cropping coordinates
         left = left_crop_pixels
         right = width - right_crop_pixels
         top = top_crop_pixels
         bottom = height - bottom_crop_pixels
         #print(f"\n ***  jitter l: {left}, t: {top}, r: {right}, b: {bottom}, orig w: {width}, h: {height}, max_crop_pixels: {max_crop_pixels}")
 
-        # Crop the image
         cropped_image = image.crop((left, top, right, bottom))
 
         cropped_width = width - int(left_crop_pixels + right_crop_pixels)
@@ -212,7 +220,6 @@ class ImageTrainItem:
 
         cropped_aspect_ratio = cropped_width / cropped_height
 
-        # Resize the cropped image to maintain square pixels
         if cropped_aspect_ratio > 1:
             new_width = cropped_width
             new_height = int(cropped_width / cropped_aspect_ratio)
@@ -220,7 +227,6 @@ class ImageTrainItem:
             new_width = int(cropped_height * cropped_aspect_ratio)
             new_height = cropped_height
 
-        #print(f" ***  postsquarefix new w: {new_width}, h: {new_height}")
         cropped_image = cropped_image.resize((new_width, new_height))
 
         return cropped_image
@@ -241,33 +247,32 @@ class ImageTrainItem:
             pass
 
     def _trim_to_aspect(self, image, target_wh):
-        width, height = image.size
-        target_aspect = target_wh[0] / target_wh[1] # 0.60
-        image_aspect = width / height # 0.5865
-        #self._debug_save_image(image, "precrop")
-        if image_aspect > target_aspect:
-            target_width = int(height * target_aspect)
-            overwidth = width - target_width
-            l = random.normalvariate(overwidth/2, overwidth/2)
-            l = max(0, l)
-            l = min(l, overwidth)
-            r = width - int(overwidth) - l
-            image = image.crop((l, 0, r, height))
-        elif target_aspect > image_aspect:
-            target_height = int(width / target_aspect)
-            overheight = height - target_height
-            image = image.crop((0, int(overheight/2), width, height-int(overheight/2)))
+        try:
+            width, height = image.size
+            target_aspect = target_wh[0] / target_wh[1] # 0.60
+            image_aspect = width / height # 0.5865
+            #self._debug_save_image(image, "precrop")
+            if image_aspect > target_aspect:
+                target_width = int(height * target_aspect)
+                overwidth = width - target_width
+                l = random.normalvariate(overwidth/2, overwidth/2)
+                l = max(0, l)
+                l = min(l, overwidth)
+                r = width - int(overwidth) - l
+                image = image.crop((l, 0, r, height))
+            elif target_aspect > image_aspect:
+                target_height = int(width / target_aspect)
+                overheight = height - target_height
+                image = image.crop((0, int(overheight/2), width, height-int(overheight/2)))
+        except Exception as e:
+            print(f"error trimming image {self.pathname}: {e}")
+            pass
 
     def hydrate(self, save=False, crop_jitter=0.02):
         """
         save: save the cropped image to disk, for manual inspection of resize/crop
         """
-        # print(self.pathname, self.image)
-        # try:
-            # if not hasattr(self, 'image'):
         image = self.load_image()
-
-        #print(f"** jittering: {self.pathname}")
 
         width, height = image.size
 
@@ -283,6 +288,7 @@ class ImageTrainItem:
         self.image = image.resize(self.target_wh)
 
         self.image = self.flip(self.image)
+        # Remove comment here to view image cropping outputs
         # self._debug_save_image(self.image, "final")
 
         self.image = np.array(self.image).astype(np.uint8)
@@ -293,8 +299,7 @@ class ImageTrainItem:
         self.target_wh = None
         try:
             with PIL.Image.open(self.pathname) as image:
-                needs_transpose = self._needs_transpose(image)
-                if needs_transpose:
+                if self._needs_transpose(image):
                     height, width = image.size
                 else:
                     width, height = image.size

@@ -40,7 +40,6 @@ class EveryDreamBatch(Dataset):
                  crop_jitter=0.02,
                  seed=555,
                  tokenizer=None,
-                 retain_contrast=False,
                  shuffle_tags=False,
                  rated_dataset=False,
                  rated_dataset_dropout_target=0.5,
@@ -54,7 +53,6 @@ class EveryDreamBatch(Dataset):
         self.unloaded_to_idx = 0
         self.tokenizer = tokenizer
         self.max_token_length = self.tokenizer.model_max_length
-        self.retain_contrast = retain_contrast
         self.shuffle_tags = shuffle_tags
         self.seed = seed
         self.rated_dataset = rated_dataset
@@ -85,12 +83,8 @@ class EveryDreamBatch(Dataset):
 
         train_item = self.__get_image_for_trainer(self.image_train_items[i], self.debug_level)
 
-        if self.retain_contrast:
-            std_dev = 1.0
-            mean = 0.0
-        else:
-            std_dev = 0.5
-            mean = 0.5
+        std_dev = 0.5
+        mean = 0.5
 
         image_transforms = transforms.Compose(
             [
@@ -99,7 +93,7 @@ class EveryDreamBatch(Dataset):
             ]
         )
 
-        if self.shuffle_tags:
+        if self.shuffle_tags or train_item["shuffle_tags"]:
             example["caption"] = train_item["caption"].get_shuffled_caption(self.seed)
         else:
             example["caption"] = train_item["caption"].get_caption()
@@ -137,6 +131,7 @@ class EveryDreamBatch(Dataset):
         if image_train_tmp.cond_dropout is not None:
             example["cond_dropout"] = image_train_tmp.cond_dropout
         example["runt_size"] = image_train_tmp.runt_size
+        example["shuffle_tags"] = image_train_tmp.shuffle_tags
 
         return example
 
