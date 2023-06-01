@@ -255,18 +255,28 @@ class ImageTrainItem:
             if image_aspect > target_aspect:
                 target_width = int(height * target_aspect)
                 overwidth = width - target_width
-                l = random.normalvariate(overwidth/2, overwidth/2)
+                l = random.triangular(0, overwidth)
+                #print(f"l: {l}, overwidth: {overwidth}")
                 l = max(0, l)
-                l = min(l, overwidth)
-                r = width - int(overwidth) - l
+                l = int(min(l, overwidth))
+                r = width - overwidth - l
+                #print(f"_trim_to_aspect actual ar: {image_aspect}, target ar:{target_aspect:.2f}, {image.size}, cropping with box: {l}, 0, {r}, {height}")
                 image = image.crop((l, 0, r, height))
             elif target_aspect > image_aspect:
                 target_height = int(width / target_aspect)
                 overheight = height - target_height
-                image = image.crop((0, int(overheight/2), width, height-int(overheight/2)))
+                t = random.triangular(0, overheight)
+                #print(f"t: {t}, overheight: {overheight}")
+                t = max(0, t)
+                t = int(min(t, overheight))
+                b = height - overheight - t
+                #print(f"_trim_to_aspect actual ar: {image_aspect}, target ar:{target_aspect:.2f}, {image.size}, cropping with box: 0, {t}, {width}, {b}")
+                image = image.crop((0, t, width, b))
+                
         except Exception as e:
-            print(f"error trimming image {self.pathname}: {e}")
-            pass
+            logging.error(f"fatal error trimming image {self.pathname}: {e}")
+            raise e
+        return image
 
     def hydrate(self, save=False, crop_jitter=0.02):
         """
@@ -283,7 +293,7 @@ class ImageTrainItem:
         if img_jitter > 0.0:
             image = self._percent_random_crop(image, img_jitter)
 
-        self._trim_to_aspect(image, self.target_wh)
+        image = self._trim_to_aspect(image, self.target_wh)
 
         self.image = image.resize(self.target_wh)
 
