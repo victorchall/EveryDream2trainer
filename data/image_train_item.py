@@ -259,8 +259,8 @@ class ImageTrainItem:
                 #print(f"l: {l}, overwidth: {overwidth}")
                 l = max(0, l)
                 l = int(min(l, overwidth))
-                r = width - overwidth - l
-                #print(f"_trim_to_aspect actual ar: {image_aspect}, target ar:{target_aspect:.2f}, {image.size}, cropping with box: {l}, 0, {r}, {height}")
+                r = width - overwidth + l
+                #print(f"\n_trim_to_aspect actual ar: {image_aspect}, target ar:{target_aspect:.2f}, {image.size}, cropping with box: {l}, 0, {r}, {height}, {self.pathname}")
                 image = image.crop((l, 0, r, height))
             elif target_aspect > image_aspect:
                 target_height = int(width / target_aspect)
@@ -269,8 +269,8 @@ class ImageTrainItem:
                 #print(f"t: {t}, overheight: {overheight}")
                 t = max(0, t)
                 t = int(min(t, overheight))
-                b = height - overheight - t
-                #print(f"_trim_to_aspect actual ar: {image_aspect}, target ar:{target_aspect:.2f}, {image.size}, cropping with box: 0, {t}, {width}, {b}")
+                b = height - overheight + t
+                #print(f"\n_trim_to_aspect actual ar: {image_aspect}, target ar:{target_aspect:.2f}, {image.size}, cropping with box: 0, {t}, {width}, {b}, {self.pathname}")
                 image = image.crop((0, t, width, b))
                 
         except Exception as e:
@@ -299,7 +299,7 @@ class ImageTrainItem:
 
         self.image = self.flip(self.image)
         # Remove comment here to view image cropping outputs
-        # self._debug_save_image(self.image, "final")
+        #self._debug_save_image(self.image, "final")
 
         self.image = np.array(self.image).astype(np.uint8)
         
