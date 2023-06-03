@@ -453,13 +453,14 @@ def main(args):
             del pipe
 
         reference_scheduler = DDIMScheduler.from_pretrained(model_root_folder, subfolder="scheduler")
-        noise_scheduler = DDPMScheduler.from_pretrained(model_root_folder, subfolder="scheduler")
-
+        
         if args.zero_frequency_noise_ratio == -1.0:
             from utils.unet_utils import enforce_zero_terminal_snr
-            noise_scheduler.betas = enforce_zero_terminal_snr(noise_scheduler.betas)
-            noise_scheduler.alphas = 1.0 - noise_scheduler.betas
-            noise_scheduler.alphas_cumprod = torch.cumprod(noise_scheduler.alphas, dim=0)
+            temp_scheduler = DDIMScheduler.from_pretrained(model_root_folder, subfolder="scheduler", prediction_type="v_prediction")
+            trained_betas = enforce_zero_terminal_snr(temp_scheduler.betas).numpy().tolist()
+            noise_scheduler = DDPMScheduler.from_pretrained(model_root_folder, subfolder="scheduler", prediction_type="v_prediction", trained_betas=trained_betas)
+        else:
+            noise_scheduler = DDPMScheduler.from_pretrained(model_root_folder, subfolder="scheduler")
 
         tokenizer = CLIPTokenizer.from_pretrained(model_root_folder, subfolder="tokenizer", use_fast=False)
 
