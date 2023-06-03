@@ -49,9 +49,9 @@ class EveryDreamOptimizer():
         self.epoch_len = epoch_len
         self.te_config, self.base_config = self.get_final_optimizer_configs(args, optimizer_config)
         self.te_freeze_config = optimizer_config.get("text_encoder_freezing", {})
-        print(f"final unet optimizer config:")
+        print(f" Final unet optimizer config:")
         pprint.pprint(self.base_config)
-        print(f"final text encoder optimizer config:")
+        print(f" Final text encoder optimizer config:")
         pprint.pprint(self.te_config)
 
         self.grad_accum = args.grad_accum
@@ -70,7 +70,7 @@ class EveryDreamOptimizer():
         self.lr_schedulers = []
         schedulers = self.create_lr_schedulers(args, optimizer_config)
         self.lr_schedulers.extend(schedulers)
-        print(self.lr_schedulers)
+        #print(self.lr_schedulers)
 
         self.load(args.resume_ckpt)
 
@@ -270,6 +270,9 @@ class EveryDreamOptimizer():
 
         default_lr = 1e-6
         curr_lr = args.lr
+        d0 = 1e-6 # dadapt 
+        decouple = True # seems bad to turn off, dadapt_adam only
+        momentum = 0.0 # dadapt_sgd only
 
         if local_optimizer_config is not None:
             betas = local_optimizer_config["betas"] or betas
@@ -277,6 +280,9 @@ class EveryDreamOptimizer():
             weight_decay = local_optimizer_config["weight_decay"] or weight_decay
             optimizer_name = local_optimizer_config["optimizer"] or "adamw8bit"
             curr_lr = local_optimizer_config.get("lr", curr_lr)
+            d0 = local_optimizer_config.get("d0", d0)
+            decouple = local_optimizer_config.get("decouple", decouple)
+            momentum = local_optimizer_config.get("momentum", momentum)
             if args.lr is not None:
                 curr_lr = args.lr
                 logging.info(f"Overriding LR from optimizer config with main config/cli LR setting: {curr_lr}")
@@ -297,7 +303,7 @@ class EveryDreamOptimizer():
                 )
             elif optimizer_name == "adamw":
                 opt_class = torch.optim.AdamW
-            elif optimizer_name in ["dadapt_adam", "dadapt_lion"]:
+            elif optimizer_name in ["dadapt_adam", "dadapt_lion", "dadapt_sgd"]:
                 import dadaptation
 
                 if curr_lr < 1e-4:
@@ -309,17 +315,21 @@ class EveryDreamOptimizer():
                     opt_class = dadaptation.DAdaptAdam
                 elif optimizer_name == "dadapt_lion":
                     opt_class = dadaptation.DAdaptLion
+                elif optimizer_name == "dadapt_sgd":
+                    opt_class = dadaptation.DAdaptSGD
 
                 optimizer = opt_class(
                     itertools.chain(parameters),
                     lr=curr_lr,
                     betas=(betas[0], betas[1]),
                     weight_decay=weight_decay,
-                    eps=epsilon,
+                    eps=epsilon, #unused for lion
+                    d0=d0,
+                    log_every=args.log_step,
+                    growth_rate=1e5,
+                    decouple=decouple,
+                    momentum=momentum,
                 )
-            elif optimizer_name == "dadapt_lion":
-                import dadaptation
-                opt_class = dadaptation.DAdaptLion
             else:
                 import bitsandbytes as bnb
                 opt_class = bnb.optim.AdamW8bit
