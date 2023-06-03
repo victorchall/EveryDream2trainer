@@ -458,6 +458,8 @@ def main(args):
         if args.zero_frequency_noise_ratio == -1.0:
             from utils.unet_utils import enforce_zero_terminal_snr
             noise_scheduler.betas = enforce_zero_terminal_snr(noise_scheduler.betas)
+            noise_scheduler.alphas = 1.0 - noise_scheduler.betas
+            noise_scheduler.alphas_cumprod = torch.cumprod(noise_scheduler.alphas, dim=0)
 
         tokenizer = CLIPTokenizer.from_pretrained(model_root_folder, subfolder="tokenizer", use_fast=False)
 
@@ -492,6 +494,15 @@ def main(args):
         text_encoder = text_encoder.to(device, dtype=torch.float16)
     else:
         text_encoder = text_encoder.to(device, dtype=torch.float32)
+
+    try:
+        torch.compile(unet)
+        torch.compile(text_encoder)
+        torch.compile(vae)
+        logging.info("Successfully compiled models")
+    except Exception as ex:
+        logging.warning(f"Failed to compile model, continuing anyway, ex: {ex}")
+        pass
 
     optimizer_config = None
     optimizer_config_path = args.optimizer_config if args.optimizer_config else "optimizer.json"

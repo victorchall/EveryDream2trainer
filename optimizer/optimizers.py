@@ -297,6 +297,29 @@ class EveryDreamOptimizer():
                 )
             elif optimizer_name == "adamw":
                 opt_class = torch.optim.AdamW
+            elif optimizer_name in ["dadapt_adam", "dadapt_lion"]:
+                import dadaptation
+
+                if curr_lr < 1e-4:
+                    logging.warning(f"{Fore.YELLOW} LR, {curr_lr}, is very low for Dadaptation.  Consider reviewing Dadaptation documentation, but proceeding anyway.{Style.RESET_ALL}")
+                if weight_decay < 1e-3:
+                    logging.warning(f"{Fore.YELLOW} Weight decay, {weight_decay}, is very low for Dadaptation.  Consider reviewing Dadaptation documentation, but proceeding anyway.{Style.RESET_ALL}")
+
+                if optimizer_name == "dadapt_adam":
+                    opt_class = dadaptation.DAdaptAdam
+                elif optimizer_name == "dadapt_lion":
+                    opt_class = dadaptation.DAdaptLion
+
+                optimizer = opt_class(
+                    itertools.chain(parameters),
+                    lr=curr_lr,
+                    betas=(betas[0], betas[1]),
+                    weight_decay=weight_decay,
+                    eps=epsilon,
+                )
+            elif optimizer_name == "dadapt_lion":
+                import dadaptation
+                opt_class = dadaptation.DAdaptLion
             else:
                 import bitsandbytes as bnb
                 opt_class = bnb.optim.AdamW8bit
