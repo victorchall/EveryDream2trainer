@@ -20,6 +20,7 @@ pip install OmegaConf==2.2.3
 pip install numpy==1.23.5
 pip install lion-pytorch
 pip install compel~=1.1.3
+pip install dadaptation
 python utils/get_yamls.py
 GOTO :eof
 
