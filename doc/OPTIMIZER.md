@@ -51,7 +51,9 @@ There are no known recommendations for the CLIP text encoder.  Using an even lar
 
 #### D-Adaption optimizers
 
-[Dadaptation](https://arxiv.org/abs/2301.07733) [version](https://github.com/facebookresearch/dadaptation) of various optimizers.  These require drastically different hyperparameters.  Early indications seem to point to LR of 0.1 to 1.0 and weight decay of 0.8 may work well for these.  There is a `decouple` parameter that appears to need to be set to `true` for dadaptation to work and is defaulted. Another `d0` parameter is defaulted to 1e-6 as suggested and, according to the paper authors, does not need to be tuned, but is optional.  See `optimizer_dadapt.json` for an example of a fully configured `dadapt_adam` training. 
+[Dadaptation](https://arxiv.org/abs/2301.07733) [version](https://github.com/facebookresearch/dadaptation) of various optimizers.  
+
+These require drastically different hyperparameters.  Early indications seem to point to LR of 0.1 to 1.0 and weight decay of 0.8 may work well.  There is a `decouple` parameter that appears to need to be set to `true` for dadaptation to work and is defaulted. Another `d0` parameter is defaulted to 1e-6 as suggested and, according to the paper authors, does not need to be tuned, but is optional.  See `optimizer_dadapt.json` for an example of a fully configured `dadapt_adam` training. 
 
 These are not memory efficient.  You should use gradient checkpointing even with 24GB GPU.
 

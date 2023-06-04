@@ -313,23 +313,39 @@ class EveryDreamOptimizer():
 
                 if optimizer_name == "dadapt_adam":
                     opt_class = dadaptation.DAdaptAdam
+                    optimizer = opt_class(
+                        itertools.chain(parameters),
+                        lr=curr_lr,
+                        betas=(betas[0], betas[1]),
+                        weight_decay=weight_decay,
+                        eps=epsilon, #unused for lion
+                        d0=d0,
+                        log_every=args.log_step,
+                        growth_rate=1e5,
+                        decouple=decouple,
+                    )
                 elif optimizer_name == "dadapt_lion":
                     opt_class = dadaptation.DAdaptLion
+                    optimizer = opt_class(
+                        itertools.chain(parameters),
+                        lr=curr_lr,
+                        betas=(betas[0], betas[1]),
+                        weight_decay=weight_decay,
+                        d0=d0,
+                        log_every=args.log_step,
+                    )
                 elif optimizer_name == "dadapt_sgd":
                     opt_class = dadaptation.DAdaptSGD
+                    optimizer = opt_class(
+                        itertools.chain(parameters),
+                        lr=curr_lr,
+                        momentum=momentum,
+                        weight_decay=weight_decay,
+                        d0=d0,
+                        log_every=args.log_step,
+                        growth_rate=float("inf"),
+                    )
 
-                optimizer = opt_class(
-                    itertools.chain(parameters),
-                    lr=curr_lr,
-                    betas=(betas[0], betas[1]),
-                    weight_decay=weight_decay,
-                    eps=epsilon, #unused for lion
-                    d0=d0,
-                    log_every=args.log_step,
-                    growth_rate=1e5,
-                    decouple=decouple,
-                    momentum=momentum,
-                )
             else:
                 import bitsandbytes as bnb
                 opt_class = bnb.optim.AdamW8bit
