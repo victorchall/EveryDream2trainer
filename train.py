@@ -450,16 +450,18 @@ def main(args):
             text_encoder = pipe.text_encoder
             vae = pipe.vae
             unet = pipe.unet
-            del pipe
+            del pipe        
+        temp_scheduler = DDIMScheduler.from_pretrained(model_root_folder, subfolder="scheduler", prediction_type="v_prediction")
 
-        reference_scheduler = DDIMScheduler.from_pretrained(model_root_folder, subfolder="scheduler")
-        
+
+
         if args.zero_frequency_noise_ratio == -1.0:
             from utils.unet_utils import enforce_zero_terminal_snr
-            temp_scheduler = DDIMScheduler.from_pretrained(model_root_folder, subfolder="scheduler", prediction_type="v_prediction")
             trained_betas = enforce_zero_terminal_snr(temp_scheduler.betas).numpy().tolist()
-            noise_scheduler = DDPMScheduler.from_pretrained(model_root_folder, subfolder="scheduler", prediction_type="v_prediction", trained_betas=trained_betas)
+            noise_scheduler = DDPMScheduler.from_pretrained(model_root_folder, subfolder="scheduler", trained_betas=trained_betas)
+            reference_scheduler = DDIMScheduler.from_pretrained(model_root_folder, subfolder="scheduler", trained_betas=trained_betas)
         else:
+            reference_scheduler = DDIMScheduler.from_pretrained(model_root_folder, subfolder="scheduler")
             noise_scheduler = DDPMScheduler.from_pretrained(model_root_folder, subfolder="scheduler")
 
         tokenizer = CLIPTokenizer.from_pretrained(model_root_folder, subfolder="tokenizer", use_fast=False)
