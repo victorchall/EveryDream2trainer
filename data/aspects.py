@@ -248,7 +248,7 @@ def __get_all_aspects():
            ]
 
 
-def get_rational_aspect_ratio(bucket_wh: Tuple[int]) -> Tuple[int]:
+def get_rational_aspect_ratio(bucket_wh: Tuple[int, int]) -> Tuple[int]:
     def farey_aspect_ratio_pair(x: float, max_denominator_value: int):
         if x <= 1:
             return farey_aspect_ratio_pair_lt1(x, max_denominator_value)
