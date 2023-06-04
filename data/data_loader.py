@@ -107,28 +107,16 @@ class DataLoaderMultiAspect():
         buckets = {}
         batch_size = self.batch_size
 
-        def append_to_bucket(item, batch_id):
-            bucket_key = (batch_id, item.target_wh[0], item.target_wh[1])
-            if bucket_key not in buckets:
-                buckets[bucket_key] = []
-            buckets[bucket_key].append(item)
-
         for image_caption_pair in picked_images:
             image_caption_pair.runt_size = 0
             batch_id = image_caption_pair.batch_id
-            append_to_bucket(image_caption_pair, batch_id)
-
-        # shunt any runts from "named" buckets into the appropriate "general" buckets
-        for bucket in [b for b in buckets if b[0] != DEFAULT_BATCH_ID]:
-            truncate_count = len(buckets[bucket]) % batch_size
-            for runt in buckets[bucket][-truncate_count:]:
-                append_to_bucket(runt, DEFAULT_BATCH_ID)
-            del buckets[bucket][-truncate_count:]
-            if len(buckets[bucket]) == 0:
-                del buckets[bucket]
+            bucket_key = (batch_id, image_caption_pair.target_wh[0], image_caption_pair.target_wh[1])
+            if bucket_key not in buckets:
+                buckets[bucket_key] = []
+            buckets[bucket_key].append(image_caption_pair)
 
         # handle runts in "general" buckets by randomly duplicating items
-        for bucket in [b for b in buckets if b[0] == DEFAULT_BATCH_ID]:
+        for bucket in buckets:
             truncate_count = len(buckets[bucket]) % batch_size
             if truncate_count > 0:
                 runt_bucket = buckets[bucket][-truncate_count:]
