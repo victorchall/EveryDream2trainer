@@ -77,7 +77,7 @@ def get_hf_ckpt_cache_path(ckpt_path):
 def convert_to_hf(ckpt_path):
 
     hf_cache = get_hf_ckpt_cache_path(ckpt_path)
-    from utils.analyze_unet import get_attn_yaml
+    from utils.unet_utils import get_attn_yaml
 
     if os.path.isfile(ckpt_path):
         if not os.path.exists(hf_cache):
@@ -357,6 +357,10 @@ def main(args):
     """
     Main entry point
     """
+    if os.name == 'nt':
+        print(" * Windows detected, disabling Triton")
+        os.environ['XFORMERS_FORCE_DISABLE_TRITON'] = "1"
+
     log_time = setup_local_logger(args)
     args = setup_args(args)
     print(f" Args:")
@@ -447,9 +451,18 @@ def main(args):
             vae = pipe.vae
             unet = pipe.unet
             del pipe
+        
+        if args.zero_frequency_noise_ratio == -1.0:
+            # use zero terminal SNR, currently backdoor way to enable it by setting ZFN to -1, still in testing
+            from utils.unet_utils import enforce_zero_terminal_snr
+            temp_scheduler = DDIMScheduler.from_pretrained(model_root_folder, subfolder="scheduler")
+            trained_betas = enforce_zero_terminal_snr(temp_scheduler.betas).numpy().tolist()
+            reference_scheduler = DDIMScheduler.from_pretrained(model_root_folder, subfolder="scheduler", trained_betas=trained_betas)
+            noise_scheduler = DDPMScheduler.from_pretrained(model_root_folder, subfolder="scheduler", trained_betas=trained_betas)
+        else:
+            reference_scheduler = DDIMScheduler.from_pretrained(model_root_folder, subfolder="scheduler")
+            noise_scheduler = DDPMScheduler.from_pretrained(model_root_folder, subfolder="scheduler")
 
-        reference_scheduler = DDIMScheduler.from_pretrained(model_root_folder, subfolder="scheduler")
-        noise_scheduler = DDPMScheduler.from_pretrained(model_root_folder, subfolder="scheduler")
         tokenizer = CLIPTokenizer.from_pretrained(model_root_folder, subfolder="tokenizer", use_fast=False)
 
     except Exception as e:
@@ -483,6 +496,15 @@ def main(args):
         text_encoder = text_encoder.to(device, dtype=torch.float16)
     else:
         text_encoder = text_encoder.to(device, dtype=torch.float32)
+
+    try:
+        torch.compile(unet)
+        torch.compile(text_encoder)
+        torch.compile(vae)
+        logging.info("Successfully compiled models")
+    except Exception as ex:
+        logging.warning(f"Failed to compile model, continuing anyway, ex: {ex}")
+        pass
 
     optimizer_config = None
     optimizer_config_path = args.optimizer_config if args.optimizer_config else "optimizer.json"
@@ -589,7 +611,7 @@ def main(args):
                 logging.error(f"{Fore.LIGHTRED_EX} CTRL-C received, attempting to save model to {interrupted_checkpoint_path}{Style.RESET_ALL}")
                 logging.error(f"{Fore.LIGHTRED_EX} ************************************************************************{Style.RESET_ALL}")
                 time.sleep(2) # give opportunity to ctrl-C again to cancel save
-                __save_model(interrupted_checkpoint_path, unet, text_encoder, tokenizer, noise_scheduler, vae, optimizer, args.save_ckpt_dir, args.save_full_precision, args.save_optimizer)
+                __save_model(interrupted_checkpoint_path, unet, text_encoder, tokenizer, noise_scheduler, vae, ed_optimizer, args.save_ckpt_dir, args.save_full_precision, args.save_optimizer)
             exit(_SIGTERM_EXIT_CODE)
         else:
             # non-main threads (i.e. dataloader workers) should exit cleanly
@@ -899,7 +921,7 @@ if __name__ == "__main__":
     argparser.add_argument("--write_schedule", action="store_true", default=False, help="write schedule of images and their batches to file (def: False)")
     argparser.add_argument("--rated_dataset", action="store_true", default=False, help="enable rated image set training, to less often train on lower rated images through the epochs")
     argparser.add_argument("--rated_dataset_target_dropout_percent", type=int, default=50, help="how many images (in percent) should be included in the last epoch (Default 50)")
-    argparser.add_argument("--zero_frequency_noise_ratio", type=float, default=0.02, help="adds zero frequency noise, for improving contrast (def: 0.0) use 0.0 to 0.15")
+    argparser.add_argument("--zero_frequency_noise_ratio", type=float, default=0.02, help="adds zero frequency noise, for improving contrast (def: 0.0) use 0.0 to 0.15, set to -1 to use zero terminal SNR noising beta schedule instead")
 
     # load CLI args to overwrite existing config args
     args = argparser.parse_args(args=argv, namespace=args)

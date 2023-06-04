@@ -1,5 +1,5 @@
 """
-Copyright [2022] Victor C Hall
+Copyright [2022-2023] Victor C Hall
 
 Licensed under the GNU Affero General Public License;
 You may not use this code except in compliance with the License.
@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 """
-from typing import List, Tuple
+from typing import Tuple
 
 """
 Notes:
@@ -195,10 +195,16 @@ ASPECTS_384 = [[384,384],      # 147456 1:1
     [704,192],[192,704],   # 135168 3.667:1
 ]
 
+ASPECTS_320 = [[320,320],      # 102400 1:1
+    [384,256],[256,384],   # 98304 1.5:1
+    [448,192],[192,448],   # 86016 2.333:1
+    [576,128],[576,640],   # 73728 4.5:1
+]
+
 ASPECTS_256 = [[256,256],  # 65536 1:1
     [384,192],[192,384],   # 73728 2:1
     [512,128],[128,512],   # 65536 4:1
-] # very few buckets available for 256 with 64 pixel increments
+]
 
 def get_aspect_buckets(resolution, square_only=False, reduced_buckets=False):
     if resolution < 256:
@@ -223,6 +229,7 @@ def get_supported_resolutions():
 
 def __get_all_aspects():
     return [ASPECTS_256,
+            ASPECTS_320,
             ASPECTS_384,
             ASPECTS_448,
             ASPECTS_512,

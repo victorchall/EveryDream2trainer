@@ -49,9 +49,9 @@ class EveryDreamOptimizer():
         self.epoch_len = epoch_len
         self.te_config, self.base_config = self.get_final_optimizer_configs(args, optimizer_config)
         self.te_freeze_config = optimizer_config.get("text_encoder_freezing", {})
-        print(f"final unet optimizer config:")
+        print(f" Final unet optimizer config:")
         pprint.pprint(self.base_config)
-        print(f"final text encoder optimizer config:")
+        print(f" Final text encoder optimizer config:")
         pprint.pprint(self.te_config)
 
         self.grad_accum = args.grad_accum
@@ -70,7 +70,7 @@ class EveryDreamOptimizer():
         self.lr_schedulers = []
         schedulers = self.create_lr_schedulers(args, optimizer_config)
         self.lr_schedulers.extend(schedulers)
-        print(self.lr_schedulers)
+        #print(self.lr_schedulers)
 
         self.load(args.resume_ckpt)
 
@@ -155,18 +155,22 @@ class EveryDreamOptimizer():
 
     def get_final_optimizer_configs(self, args, global_optimizer_config):
         """
-        defautls and overrides based on priority of 'primary cli args > base config > text encoder overrides'
+        defaults and overrides based on priority
+        cli LR arg will override LR for both unet and text encoder for legacy reasons
         """
         base_config = global_optimizer_config.get("base")
         te_config = global_optimizer_config.get("text_encoder_overrides")
 
         if args.lr_decay_steps is None or args.lr_decay_steps < 1:
+            # sets cosine so the zero crossing is past the end of training, this results in a terminal LR that is about 25% of the nominal LR
             args.lr_decay_steps = int(self.epoch_len * args.max_epochs * 1.5)
 
         if args.lr_warmup_steps is None:
+            # set warmup to 2% of decay, if decay was autoset to 150% of max epochs then warmup will end up about 3% of max epochs
             args.lr_warmup_steps = int(args.lr_decay_steps / 50)
         
         if args.lr is not None:
+            # override for legacy support reasons
             base_config["lr"] = args.lr
 
         base_config["optimizer"] = base_config.get("optimizer", None) or "adamw8bit"
@@ -266,6 +270,9 @@ class EveryDreamOptimizer():
 
         default_lr = 1e-6
         curr_lr = args.lr
+        d0 = 1e-6 # dadapt 
+        decouple = True # seems bad to turn off, dadapt_adam only
+        momentum = 0.0 # dadapt_sgd only
 
         if local_optimizer_config is not None:
             betas = local_optimizer_config["betas"] or betas
@@ -273,6 +280,9 @@ class EveryDreamOptimizer():
             weight_decay = local_optimizer_config["weight_decay"] or weight_decay
             optimizer_name = local_optimizer_config["optimizer"] or "adamw8bit"
             curr_lr = local_optimizer_config.get("lr", curr_lr)
+            d0 = local_optimizer_config.get("d0", d0)
+            decouple = local_optimizer_config.get("decouple", decouple)
+            momentum = local_optimizer_config.get("momentum", momentum)
             if args.lr is not None:
                 curr_lr = args.lr
                 logging.info(f"Overriding LR from optimizer config with main config/cli LR setting: {curr_lr}")
@@ -293,6 +303,49 @@ class EveryDreamOptimizer():
                 )
             elif optimizer_name == "adamw":
                 opt_class = torch.optim.AdamW
+            elif optimizer_name in ["dadapt_adam", "dadapt_lion", "dadapt_sgd"]:
+                import dadaptation
+
+                if curr_lr < 1e-4:
+                    logging.warning(f"{Fore.YELLOW} LR, {curr_lr}, is very low for Dadaptation.  Consider reviewing Dadaptation documentation, but proceeding anyway.{Style.RESET_ALL}")
+                if weight_decay < 1e-3:
+                    logging.warning(f"{Fore.YELLOW} Weight decay, {weight_decay}, is very low for Dadaptation.  Consider reviewing Dadaptation documentation, but proceeding anyway.{Style.RESET_ALL}")
+
+                if optimizer_name == "dadapt_adam":
+                    opt_class = dadaptation.DAdaptAdam
+                    optimizer = opt_class(
+                        itertools.chain(parameters),
+                        lr=curr_lr,
+                        betas=(betas[0], betas[1]),
+                        weight_decay=weight_decay,
+                        eps=epsilon, #unused for lion
+                        d0=d0,
+                        log_every=args.log_step,
+                        growth_rate=1e5,
+                        decouple=decouple,
+                    )
+                elif optimizer_name == "dadapt_lion":
+                    opt_class = dadaptation.DAdaptLion
+                    optimizer = opt_class(
+                        itertools.chain(parameters),
+                        lr=curr_lr,
+                        betas=(betas[0], betas[1]),
+                        weight_decay=weight_decay,
+                        d0=d0,
+                        log_every=args.log_step,
+                    )
+                elif optimizer_name == "dadapt_sgd":
+                    opt_class = dadaptation.DAdaptSGD
+                    optimizer = opt_class(
+                        itertools.chain(parameters),
+                        lr=curr_lr,
+                        momentum=momentum,
+                        weight_decay=weight_decay,
+                        d0=d0,
+                        log_every=args.log_step,
+                        growth_rate=float("inf"),
+                    )
+
             else:
                 import bitsandbytes as bnb
                 opt_class = bnb.optim.AdamW8bit

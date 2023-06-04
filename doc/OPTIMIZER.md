@@ -45,7 +45,23 @@ Recommended settings for lion based on the paper are as follows:
         "epsilon": 1e-8,
         "weight_decay": 0.10
 
-The recommendations are based on "1/10th LR" but "10x the weight decay" compared to AdamW when training diffusion models.  There are no known recommendations for the CLIP text encoder.  Lion converges quickly, so take care with the learning rate, and even lower learning rates  may be effective. 
+The recommendations are based on "1/10th LR" but "10x the weight decay" compared to AdamW when training diffusion models.  Lion converges quickly, so take care with the learning rate, and even lower learning rates  may be effective.  
+
+There are no known recommendations for the CLIP text encoder.  Using an even larger weight decay, increased epsilon, or even lower LR may be effective for the text encoder.  Further investigation on betas for text encoder is needed as well. 
+
+#### D-Adaption optimizers
+
+[Dadaptation](https://arxiv.org/abs/2301.07733) [version](https://github.com/facebookresearch/dadaptation) of various optimizers.  
+
+These require drastically different hyperparameters.  Early indications seem to point to LR of 0.1 to 1.0 and weight decay of 0.8 may work well.  There is a `decouple` parameter that appears to need to be set to `true` for dadaptation to work and is defaulted. Another `d0` parameter is defaulted to 1e-6 as suggested and, according to the paper authors, does not need to be tuned, but is optional.  See `optimizer_dadapt.json` for an example of a fully configured `dadapt_adam` training. 
+
+These are not memory efficient.  You should use gradient checkpointing even with 24GB GPU.
+
+Available optimizer values for Dadaptation are:
+
+* dadapt_lion, dadapt_adam, dadapt_sgd
+
+These are fairly experimental but tested as working.  Gradient checkpointing may be required even on 24GB GPUs.  Performance is slower than the compiled and optimized AdamW8bit optimizer unless you increae gradient accumulation as it seems the accumulation steps process slowly with the current implementation of D-Adaption
 
 ## Optimizer parameters
 

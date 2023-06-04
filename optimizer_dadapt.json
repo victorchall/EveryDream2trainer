@@ -1,0 +1,53 @@
+{
+    "doc": {
+        "base": "base optimizer configuration for unet and text encoder",
+        "text_encoder_overrides": "text encoder config overrides",
+        "text_encoder_lr_scale": "if LR not set on text encoder, sets the Lr to a multiple of the Base LR. for example, if base `lr` is 2e-6 and `text_encoder_lr_scale` is 0.5, the text encoder's LR will be set to `1e-6`.",
+        "-----------------": "-----------------",
+        "optimizer": "adamw, adamw8bit, lion, dadapt_adam, dadapt_lion",
+        "optimizer_desc": "'adamw' in standard 32bit, 'adamw8bit' is bitsandbytes, 'lion' is EvoLved Sign Momentum, 'dadapt_...' are D-Adaptation methods",
+        "lr": "learning rate, if null will use CLI or main JSON config value",
+        "lr_scheduler": "'constant' or 'cosine'",
+        "lr_warmup_steps": "number of steps to warmup LR to target LR, if null will use CLI or default a value based on max epochs",
+        "lr_decay_steps": "number of steps to decay LR to zero for cosine, if null will use CLI or default a value based on max epochs",
+        "betas": "exponential decay rates for the moment estimates",
+        "epsilon": "value added to denominator for numerical stability, unused for lion, also used as d0 for dadaptation",
+        "weight_decay": "weight decay (L2 penalty)",
+        "d0": "for dadaptation only, scale of initial steps (def: 1e-6)",
+        "decouple": "for dadapt_adam only, whether to decouple the learning rates of the two distributions, suggested true",
+        "momentum": "for dadapt_sgd only, the momentum factor",
+        "------------------": "-----------------",
+        "freeze_embeddings": "whether to freeze the text embeddings",
+        "freeze_front_n_layers": "if not null, freeze the front N layers of the text encoder (you can pass eg -2 to leave only the last 2 layers unfrozen)",
+        "freeze_final_layer_norm": "whether to freeze the text encoder's final layer norm"
+    },
+    "base": {
+        "optimizer": "dadapt_adam",
+        "lr": 1e-1,
+        "lr_scheduler": "constant",
+        "lr_decay_steps": null,
+        "lr_warmup_steps": null,
+        "betas": [0.9, 0.999],
+        "epsilon": 1e-8,
+        "weight_decay": 0.80,
+        "d0": 1e-6,
+        "decouple": true
+    },
+    "text_encoder_overrides": {
+        "optimizer": null,
+        "lr": 1e-1,
+        "lr_scheduler": null,
+        "lr_decay_steps": null,
+        "lr_warmup_steps": null,
+        "betas": null,
+        "epsilon": 1e-8,
+        "weight_decay": 0.80,
+        "d0": 1e-6,
+        "decouple": true
+    },
+    "text_encoder_freezing": {
+        "freeze_embeddings": true,
+        "freeze_front_n_layers": -6,
+        "freeze_final_layer_norm": false
+    }
+}

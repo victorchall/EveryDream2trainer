@@ -5,7 +5,7 @@ from typing import Optional, Tuple
 import huggingface_hub
 from diffusers import StableDiffusionPipeline
 
-from utils.analyze_unet import get_attn_yaml
+from utils.unet_utils import get_attn_yaml
 
 
 def try_download_model_from_hf(repo_id: str) -> Tuple[StableDiffusionPipeline, str, bool, str] | None:

@@ -55,6 +55,7 @@ class ImageConfig:
     multiply: float = None
     cond_dropout: float = None
     flip_p: float = None
+    shuffle_tags: bool = False
 
     def merge(self, other):
         if other is None:
@@ -68,6 +69,7 @@ class ImageConfig:
             multiply=overlay(other.multiply, self.multiply),
             cond_dropout=overlay(other.cond_dropout, self.cond_dropout),
             flip_p=overlay(other.flip_p, self.flip_p),
+            shuffle_tags=overlay(other.shuffle_tags, self.shuffle_tags),
         )
 
     @classmethod
@@ -81,6 +83,7 @@ class ImageConfig:
             multiply=data.get("multiply"),
             cond_dropout=data.get("cond_dropout"),
             flip_p=data.get("flip_p"),
+            shuffle_tags=data.get("shuffle_tags"),
             )
 
         # Alternatively parse from dedicated `caption` attribute
@@ -94,6 +97,9 @@ class ImageConfig:
         acc = ImageConfig()
         for cfg in configs:
             acc = acc.merge(cfg)
+            
+        acc.shuffle_tags = any(cfg.shuffle_tags for cfg in configs)
+        #print(f"accum shuffle:{acc.shuffle_tags}")
         return acc
 
     def ensure_caption(self):
@@ -151,6 +157,7 @@ class Dataset:
 
     def __local_cfg(fileset):
         cfgs = []
+
         if 'multiply.txt' in fileset:
             cfgs.append(ImageConfig(multiply=read_float(fileset['multiply.txt'])))
         if 'cond_dropout.txt' in fileset:
@@ -161,7 +168,12 @@ class Dataset:
             cfgs.append(ImageConfig.from_file(fileset['local.yaml']))
         if 'local.yml' in fileset:
             cfgs.append(ImageConfig.from_file(fileset['local.yml']))
-        return ImageConfig.fold(cfgs)
+        
+        result = ImageConfig.fold(cfgs)
+        if 'shuffle_tags.txt' in fileset:
+            result.shuffle_tags = True
+
+        return result
 
     def __sidecar_cfg(imagepath, fileset):
         cfgs = []
@@ -217,6 +229,7 @@ class Dataset:
         items = []
         for image in tqdm(self.image_configs, desc="preloading", dynamic_ncols=True):
             config = self.image_configs[image]
+            #print(f" ********* shuffle: {config.shuffle_tags}")
 
             if len(config.main_prompts) > 1:
                 logging.warning(f" *** Found multiple multiple main_prompts for image {image}, but only one will be applied: {config.main_prompts}")
@@ -247,7 +260,8 @@ class Dataset:
                     pathname=os.path.abspath(image),
                     flip_p=config.flip_p or 0.0,
                     multiplier=config.multiply or 1.0,
-                    cond_dropout=config.cond_dropout
+                    cond_dropout=config.cond_dropout,
+                    shuffle_tags=config.shuffle_tags,
                 )
                 items.append(item)
             except Exception as e:
