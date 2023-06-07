@@ -27,6 +27,8 @@ from typing import Tuple, List
 from data.image_train_item import ImageTrainItem, DEFAULT_BATCH_ID
 import PIL.Image
 
+from utils.first_fit_decreasing import first_fit_decreasing
+
 PIL.Image.MAX_IMAGE_PIXELS = 715827880*4 # increase decompression bomb error limit to 4x default
 
 class DataLoaderMultiAspect():
@@ -37,9 +39,10 @@ class DataLoaderMultiAspect():
     seed: random seed
     batch_size: number of images per batch
     """
-    def __init__(self, image_train_items: list[ImageTrainItem], seed=555, batch_size=1):
+    def __init__(self, image_train_items: list[ImageTrainItem], seed=555, batch_size=1, grad_accum=1):
         self.seed = seed
         self.batch_size = batch_size
+        self.grad_accum = grad_accum
         self.prepared_train_data = image_train_items
         random.Random(self.seed).shuffle(self.prepared_train_data)
         self.prepared_train_data = sorted(self.prepared_train_data, key=lambda img: img.caption.rating())
@@ -106,6 +109,7 @@ class DataLoaderMultiAspect():
 
         buckets = {}
         batch_size = self.batch_size
+        grad_accum = self.grad_accum
 
         for image_caption_pair in picked_images:
             image_caption_pair.runt_size = 0
@@ -115,7 +119,7 @@ class DataLoaderMultiAspect():
                 buckets[bucket_key] = []
             buckets[bucket_key].append(image_caption_pair)
 
-        # handle runts in "general" buckets by randomly duplicating items
+        # handle runts by randomly duplicating items
         for bucket in buckets:
             truncate_count = len(buckets[bucket]) % batch_size
             if truncate_count > 0:
@@ -130,10 +134,38 @@ class DataLoaderMultiAspect():
                 buckets[bucket] = buckets[bucket][:current_bucket_size - truncate_count]
                 buckets[bucket].extend(runt_bucket)
 
-        # flatten the buckets
-        items: list[ImageTrainItem] = []
-        for bucket in buckets:
-            items.extend(buckets[bucket])
+        def chunk(l: List, chunk_size) -> List:
+            num_chunks = int(math.ceil(float(len(l)) / chunk_size))
+            return [l[i*chunk_size:(i+1)*chunk_size] for i in range(num_chunks)]
+
+        def unchunk(chunked_list: List):
+            return [i for c in chunked_list for i in c]
+
+        # interleave buckets while trying to maximise shared grad accum chunks
+        batch_ids = [k[0] for k in buckets.keys()]
+        items_by_batch_id = {}
+        for batch_id in batch_ids:
+            items_by_batch_id[batch_id] = unchunk([b for bucket_key,b in buckets.items() if bucket_key[0] == batch_id])
+        # ensure we don't mix and match aspect ratios by treating each chunk of batch_size images as a single unit to pass to first_fit_decreasing
+        filler_items = chunk(items_by_batch_id[DEFAULT_BATCH_ID], batch_size)
+        custom_batched_items = [chunk(v, batch_size) for k, v in items_by_batch_id.items() if k != DEFAULT_BATCH_ID]
+        #custom_batched_items = chunk([b for bucket_key,b in buckets.items() if bucket_key[0] != DEFAULT_BATCH_ID], batch_size)
+        neighbourly_chunked_items = first_fit_decreasing(custom_batched_items, batch_size=grad_accum, filler_items=filler_items)
+
+        items: List[ImageTrainItem] = unchunk(neighbourly_chunked_items)
+
+        # chunk by effective batch size
+        effective_batch_size = batch_size * grad_accum
+        chunks = chunk(items, effective_batch_size)
+        # shuffle, but preserve the last chunk as last if it is incomplete
+        last_chunk = None
+        if len(chunks[-1]) < effective_batch_size:
+            last_chunk = chunks.pop(-1)
+        random.shuffle(chunks)
+        if last_chunk is not None:
+            chunks.append(last_chunk)
+        # un-chunk
+        items = unchunk(chunks)
 
         return items
 

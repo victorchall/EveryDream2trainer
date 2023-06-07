@@ -552,6 +552,7 @@ def main(args):
         image_train_items=image_train_items,
         seed=seed,
         batch_size=args.batch_size,
+        grad_accum=args.grad_accum
     )
 
     train_batch = EveryDreamBatch(
