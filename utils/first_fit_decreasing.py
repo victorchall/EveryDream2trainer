@@ -13,7 +13,7 @@ def first_fit_decreasing(input_items: List[List], batch_size: int, filler_items:
     def sort_by_length(items: List[List]) -> List[List]:
         return sorted(items, key=lambda x: len(x))
 
-    remaining = copy.deepcopy(input_items)
+    remaining = input_items
     output = []
     while remaining:
         remaining = sort_by_length(remaining)
@@ -27,7 +27,7 @@ def first_fit_decreasing(input_items: List[List], batch_size: int, filler_items:
                 remaining.append(longest)
         else:
             # need to build this chunk by combining multiple
-            combined = copy.deepcopy(longest)
+            combined = longest
             while True:
                 fill_length = batch_size - len(combined)
                 if fill_length == 0:
