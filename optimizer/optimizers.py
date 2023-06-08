@@ -303,6 +303,14 @@ class EveryDreamOptimizer():
                 )
             elif optimizer_name == "adamw":
                 opt_class = torch.optim.AdamW
+            if "dowg" in optimizer_name:
+                from dowg import CoordinateDoWG, ScalarDoWG
+                if optimizer_name == "coordinate_dowg":                    
+                    opt_class = CoordinateDoWG
+                elif optimizer_name == "scalar_dowg":
+                    opt_class = ScalarDoWG
+                else:
+                    raise ValueError(f"Unknown DoWG optimizer {optimizer_name}. Available options are coordinate_dowg and scalar_dowg")
             elif optimizer_name in ["dadapt_adam", "dadapt_lion", "dadapt_sgd"]:
                 import dadaptation
 
