@@ -2,6 +2,12 @@
 cat /welcome.txt
 export PYTHONUNBUFFERED=1
 
+if [[ ! -f "v2-inference-v.yaml" ]]; then
+    python utils/get_yamls.py
+fi
+
+mkdir -p logs input
+
 # RunPod SSH
 if [[ -v "PUBLIC_KEY" ]] && [[ ! -d "${HOME}/.ssh" ]]
 then

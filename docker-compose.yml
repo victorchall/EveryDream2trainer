@@ -1,0 +1,19 @@
+version: '3.8'
+services:
+  everydream2trainer:
+    image: ghcr.io/victorchall/everydream2trainer:nightly
+    ports:
+      - "127.0.0.1:8888:8888"
+      - "127.0.0.1:6006:6006"
+    environment:
+      - JUPYTER_PASSWORD=test1234
+    volumes:
+      - .:/workspace/EveryDream2trainer
+      - ./.cache:/root/.cache
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

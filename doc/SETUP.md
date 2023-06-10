@@ -48,6 +48,18 @@ Double check your python version again after setup by running these two commands
 
 Again, this should show 3.10.x
 
-## Docker container
+## Local docker container
 
-`docker run -it -p 8888:8888 -p 6006:6006 --gpus all -e JUPYTER_PASSWORD=test1234 -t ghcr.io/victorchall/everydream2trainer:nightly`
+```sh
+    docker compose up
+```
+
+And you can either get a shell via:
+```sh
+    docker exec -it everydream2trainer-docker-everydream2trainer-1 /bin/bash
+```
+
+Or go to your browser and hit `http://localhost:8888`. The web password is
+`test1234` but you can change that in `docker-compose.yml`.
+
+Your current source directory will be moutned to the Jupyter notebook.
