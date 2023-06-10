@@ -303,6 +303,15 @@ class EveryDreamOptimizer():
                 )
             elif optimizer_name == "adamw":
                 opt_class = torch.optim.AdamW
+            if "dowg" in optimizer_name:  
+                # coordinate_dowg, scalar_dowg require no additional parameters. Epsilon is overrideable but is unnecessary in all stable diffusion training situations.
+                import dowg
+                if optimizer_name == "coordinate_dowg":                    
+                    opt_class = dowg.CoordinateDoWG
+                elif optimizer_name == "scalar_dowg":
+                    opt_class = dowg.ScalarDoWG
+                else:
+                    raise ValueError(f"Unknown DoWG optimizer {optimizer_name}. Available options are coordinate_dowg and scalar_dowg")
             elif optimizer_name in ["dadapt_adam", "dadapt_lion", "dadapt_sgd"]:
                 import dadaptation
 
