@@ -1,10 +1,7 @@
-import os
-import logging
 import yaml
 import json
 
-from functools import total_ordering
-from attrs import define, field, Factory
+from attrs import define, field
 from data.image_train_item import ImageCaption, ImageTrainItem
 from utils.fs_helpers import *
 from typing import Iterable
@@ -50,6 +47,7 @@ class ImageConfig:
     rating: float = None
     max_caption_length: int = None
     tags: dict[Tag, None] = field(factory=dict, converter=safe_set)
+    batch_id: str = None
     
     # Options
     multiply: float = None
@@ -70,6 +68,7 @@ class ImageConfig:
             cond_dropout=overlay(other.cond_dropout, self.cond_dropout),
             flip_p=overlay(other.flip_p, self.flip_p),
             shuffle_tags=overlay(other.shuffle_tags, self.shuffle_tags),
+            batch_id=overlay(other.batch_id, self.batch_id)
         )
 
     @classmethod
@@ -84,6 +83,7 @@ class ImageConfig:
             cond_dropout=data.get("cond_dropout"),
             flip_p=data.get("flip_p"),
             shuffle_tags=data.get("shuffle_tags"),
+            batch_id=data.get("batch_id")
             )
 
         # Alternatively parse from dedicated `caption` attribute
@@ -168,6 +168,8 @@ class Dataset:
             cfgs.append(ImageConfig.from_file(fileset['local.yaml']))
         if 'local.yml' in fileset:
             cfgs.append(ImageConfig.from_file(fileset['local.yml']))
+        if 'batch_id.txt' in fileset:
+            cfgs.append(ImageConfig(batch_id=read_text(fileset['batch_id.txt'])))
         
         result = ImageConfig.fold(cfgs)
         if 'shuffle_tags.txt' in fileset:
@@ -262,6 +264,7 @@ class Dataset:
                     multiplier=config.multiply or 1.0,
                     cond_dropout=config.cond_dropout,
                     shuffle_tags=config.shuffle_tags,
+                    batch_id=config.batch_id
                 )
                 items.append(item)
             except Exception as e:

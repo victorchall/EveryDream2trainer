@@ -55,7 +55,7 @@ from data.data_loader import DataLoaderMultiAspect
 
 from data.every_dream import EveryDreamBatch, build_torch_dataloader
 from data.every_dream_validation import EveryDreamValidator
-from data.image_train_item import ImageTrainItem
+from data.image_train_item import ImageTrainItem, DEFAULT_BATCH_ID
 from utils.huggingface_downloader import try_download_model_from_hf
 from utils.convert_diff_to_ckpt import convert as converter
 from utils.isolate_rng import isolate_rng
@@ -297,19 +297,23 @@ def report_image_train_item_problems(log_folder: str, items: list[ImageTrainItem
     # at a dupe ratio 1.0, all images in this bucket have effective multiplier 2.0
     warn_bucket_dupe_ratio = 0.5
 
-    ar_buckets = set([tuple(i.target_wh) for i in items])
+    def make_bucket_key(item):
+        return (item.batch_id, int(item.target_wh[0]), int(item.target_wh[1]))
+
+    ar_buckets = set(make_bucket_key(i) for i in items)
     for ar_bucket in ar_buckets:
-        count = len([i for i in items if tuple(i.target_wh) == ar_bucket])
+        count = len([i for i in items if make_bucket_key(i) == ar_bucket])
         runt_size = batch_size - (count % batch_size)
         bucket_dupe_ratio = runt_size / count
         if bucket_dupe_ratio > warn_bucket_dupe_ratio:
-            aspect_ratio_rational = aspects.get_rational_aspect_ratio(ar_bucket)
+            aspect_ratio_rational = aspects.get_rational_aspect_ratio((ar_bucket[1], ar_bucket[2]))
             aspect_ratio_description = f"{aspect_ratio_rational[0]}:{aspect_ratio_rational[1]}"
+            batch_id_description = "" if ar_bucket[0] == DEFAULT_BATCH_ID else f" for batch id '{ar_bucket[0]}'"
             effective_multiplier = round(1 + bucket_dupe_ratio, 1)
             logging.warning(f" * {Fore.LIGHTRED_EX}Aspect ratio bucket {ar_bucket} has only {count} "
                             f"images{Style.RESET_ALL}. At batch size {batch_size} this makes for an effective multiplier "
                             f"of {effective_multiplier}, which may cause problems. Consider adding {runt_size} or "
-                            f"more images for aspect ratio {aspect_ratio_description}, or reducing your batch_size.")
+                            f"more images with aspect ratio {aspect_ratio_description}{batch_id_description}, or reducing your batch_size.")
 
 def resolve_image_train_items(args: argparse.Namespace) -> list[ImageTrainItem]:
     logging.info(f"* DLMA resolution {args.resolution}, buckets: {args.aspects}")
@@ -548,6 +552,7 @@ def main(args):
         image_train_items=image_train_items,
         seed=seed,
         batch_size=args.batch_size,
+        grad_accum=args.grad_accum
     )
 
     train_batch = EveryDreamBatch(
@@ -785,15 +790,15 @@ def main(args):
                     lr_textenc = ed_optimizer.get_textenc_lr()
                     loss_log_step = []
                     
-                    log_writer.add_scalar(tag="hyperparamater/lr unet", scalar_value=lr_unet, global_step=global_step)
-                    log_writer.add_scalar(tag="hyperparamater/lr text encoder", scalar_value=lr_textenc, global_step=global_step)
+                    log_writer.add_scalar(tag="hyperparameter/lr unet", scalar_value=lr_unet, global_step=global_step)
+                    log_writer.add_scalar(tag="hyperparameter/lr text encoder", scalar_value=lr_textenc, global_step=global_step)
                     log_writer.add_scalar(tag="loss/log_step", scalar_value=loss_local, global_step=global_step)
 
                     sum_img = sum(images_per_sec_log_step)
                     avg = sum_img / len(images_per_sec_log_step)
                     images_per_sec_log_step = []
                     if args.amp:
-                        log_writer.add_scalar(tag="hyperparamater/grad scale", scalar_value=ed_optimizer.get_scale(), global_step=global_step)
+                        log_writer.add_scalar(tag="hyperparameter/grad scale", scalar_value=ed_optimizer.get_scale(), global_step=global_step)
                     log_writer.add_scalar(tag="performance/images per second", scalar_value=avg, global_step=global_step)
 
                     logs = {"loss/log_step": loss_local, "lr_unet": lr_unet, "lr_te": lr_textenc, "img/s": images_per_sec}

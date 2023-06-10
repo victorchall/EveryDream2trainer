@@ -13,6 +13,7 @@ xformers==0.0.20
 pytorch-lightning==1.6.5
 OmegaConf==2.2.3
 numpy==1.23.5
+dowg
 lion-pytorch
 compel~=1.1.3
 OmegaConf==2.2.3
