@@ -18,6 +18,7 @@ import json
 import logging
 
 import torch
+from colorama import Fore, Style
 
 def enforce_zero_terminal_snr(betas):
     # from https://arxiv.org/pdf/2305.08891.pdf
@@ -67,7 +68,9 @@ def get_attn_yaml(ckpt_path):
     elif prediction_type == "epsilon" and is_sd1attn:
         yaml = "v1-inference.yaml"
     else:
-        raise ValueError(f"Unknown model format for: {prediction_type} and attention_head_dim {unet_cfg['attention_head_dim']}")
+        logging.warning(f"{Fore.YELLOW}Unknown model format for: {prediction_type} and attention_head_dim {unet_cfg['attention_head_dim']}{Style.RESET_ALL}")
+        yaml = "v1-inference.yaml" # HACK: for now this means no yaml is saved together with .ckpt files during checkpointing
+
 
     logging.info(f"Inferred yaml: {yaml}, attn: {'sd1' if is_sd1attn else 'sd2'}, prediction_type: {prediction_type}")
 
