@@ -124,7 +124,7 @@ class ImageTrainItem:
     flip_p: probability of flipping image (0.0 to 1.0)
     rating: the relative rating of the images. The rating is measured in comparison to the other images.
     """
-    def __init__(self, 
+    def __init__(self,
                  image: PIL.Image, 
                  caption: ImageCaption, 
                  aspects: list[float], 
@@ -133,6 +133,7 @@ class ImageTrainItem:
                  multiplier: float=1.0, 
                  cond_dropout=None,
                  shuffle_tags=False,
+                 batch_id: str=None
                  ):
         self.caption = caption
         self.aspects = aspects
@@ -143,6 +144,8 @@ class ImageTrainItem:
         self.multiplier = multiplier
         self.cond_dropout = cond_dropout
         self.shuffle_tags = shuffle_tags
+        self.batch_id = batch_id or DEFAULT_BATCH_ID
+        self.target_wh = None
 
         self.image_size = None
         if image is None or len(image) == 0:
@@ -351,3 +354,6 @@ class ImageTrainItem:
             image = image.crop((x_crop, y_crop, x_crop + min_xy, y_crop + min_xy))
 
         return image
+
+
+DEFAULT_BATCH_ID = "default_batch"
