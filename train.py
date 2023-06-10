@@ -785,15 +785,15 @@ def main(args):
                     lr_textenc = ed_optimizer.get_textenc_lr()
                     loss_log_step = []
                     
-                    log_writer.add_scalar(tag="hyperparamater/lr unet", scalar_value=lr_unet, global_step=global_step)
-                    log_writer.add_scalar(tag="hyperparamater/lr text encoder", scalar_value=lr_textenc, global_step=global_step)
+                    log_writer.add_scalar(tag="hyperparameter/lr unet", scalar_value=lr_unet, global_step=global_step)
+                    log_writer.add_scalar(tag="hyperparameter/lr text encoder", scalar_value=lr_textenc, global_step=global_step)
                     log_writer.add_scalar(tag="loss/log_step", scalar_value=loss_local, global_step=global_step)
 
                     sum_img = sum(images_per_sec_log_step)
                     avg = sum_img / len(images_per_sec_log_step)
                     images_per_sec_log_step = []
                     if args.amp:
-                        log_writer.add_scalar(tag="hyperparamater/grad scale", scalar_value=ed_optimizer.get_scale(), global_step=global_step)
+                        log_writer.add_scalar(tag="hyperparameter/grad scale", scalar_value=ed_optimizer.get_scale(), global_step=global_step)
                     log_writer.add_scalar(tag="performance/images per second", scalar_value=avg, global_step=global_step)
 
                     logs = {"loss/log_step": loss_local, "lr_unet": lr_unet, "lr_te": lr_textenc, "img/s": images_per_sec}
