@@ -19,13 +19,19 @@ def read_text(file):
         with open(file, encoding='utf-8', mode='r') as stream:
             return stream.read().strip()
     except Exception as e:
-        logging.warning(f" *** Error reading text file {file}: {e}")
+        logging.warning(f" *** Error reading text file as utf-8: {file}: {e}")
+
+    try:
+        with open(file, encoding='latin-1', mode='r') as stream:
+            return stream.read().strip()
+    except Exception as e:
+        logging.warning(f" *** Error reading text file as latin-1: {file}: {e}")
 
 def read_float(file):
     try:
         return float(read_text(file))
     except Exception as e:
-        logging.warning(f" *** Could not parse '{data}' to float in file {file}: {e}")
+        logging.warning(f" *** Could not parse to float in file {file}: {e}")
 
 import os
 
