@@ -34,3 +34,6 @@ It should do ABC because...  XYZ is wrong because...
 
 **Additional context**
 Add any other context about the problem here.
+
+**Closure**
+Reminder:  Please close your issue once it has been resolved and please state what you did to fix it, whether a reply helped you or you figure it out on your own.  Your issue may be closed if you do not reply to keep the backlog of issues manageable. 

@@ -20,3 +20,6 @@ Add any other context about the problem here.
 
 Also consider posting your cfg and log to the Discord #help channel here instead, there are far more people there than will read your issue here on Github: 
 Have you joined discord?  You're far more likely to get a response there: https://discord.gg/uheqxU6sXN
+
+**Closure**
+Reminder:  Please close your issue once it has been resolved and please state what you did to fix it, whether a reply helped you or you figure it out on your own.  Your issue may be closed if you do not reply to keep the backlog of issues manageable. 
