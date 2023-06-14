@@ -253,6 +253,8 @@ def chunked_shuffle(l: List, chunk_size: int, randomizer: random.Random) -> List
     Shuffles l in chunks, preserving the chunk boundaries and the order of items within each chunk.
     If the last chunk is incomplete, it is not shuffled (i.e. preserved as the last chunk)
     """
+    if len(l) == 0:
+        return []
 
     # chunk by effective batch size
     chunks = chunk(l, chunk_size)
