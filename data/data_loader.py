@@ -108,32 +108,35 @@ class DataLoaderMultiAspect():
         batch_size = self.batch_size
         grad_accum = self.grad_accum
 
-        for image_caption_pair in picked_images:
-            image_caption_pair.runt_size = 0
-            bucket_key = (image_caption_pair.batch_id,
-                          image_caption_pair.target_wh[0],
-                          image_caption_pair.target_wh[1])
+        def add_image_to_appropriate_bucket(image: ImageTrainItem, batch_id_override: str=None):
+            bucket_key = (image.batch_id if batch_id_override is None else batch_id_override,
+                          image.target_wh[0],
+                          image.target_wh[1])
             if bucket_key not in buckets:
                 buckets[bucket_key] = []
-            buckets[bucket_key].append(image_caption_pair)
+            buckets[bucket_key].append(image)
+
+        for image_caption_pair in picked_images:
+            image_caption_pair.runt_size = 0
+            add_image_to_appropriate_bucket(image_caption_pair)
 
         # handled named batch runts by demoting them to the DEFAULT_BATCH_ID
-        for key, bucket in [(k, b) for k, b in buckets.items() if k[0] != DEFAULT_BATCH_ID]:
-            runt_count = len(bucket) % batch_size
+        for key, bucket_contents in [(k, b) for k, b in buckets.items() if k[0] != DEFAULT_BATCH_ID]:
+            runt_count = len(bucket_contents) % batch_size
             if runt_count == 0:
                 continue
-            runts = bucket[-runt_count:]
-            del bucket[-runt_count:]
-            matching_default_bucket_key = (DEFAULT_BATCH_ID, key[1], key[2])
-            if matching_default_bucket_key not in buckets:
-                buckets[matching_default_bucket_key] = []
-            buckets[matching_default_bucket_key].extend(runts)
+            runts = bucket_contents[-runt_count:]
+            del bucket_contents[-runt_count:]
+            for r in runts:
+                add_image_to_appropriate_bucket(r, batch_id_override=DEFAULT_BATCH_ID)
+            if len(bucket_contents) == 0:
+                del buckets[key]
 
         # handle remaining runts by randomly duplicating items
         for bucket in buckets:
-            assert bucket[0] == DEFAULT_BATCH_ID, "there should be no more runts in named batches"
             truncate_count = len(buckets[bucket]) % batch_size
             if truncate_count > 0:
+                assert bucket[0] == DEFAULT_BATCH_ID, "there should be no more runts in named batches"
                 runt_bucket = buckets[bucket][-truncate_count:]
                 for item in runt_bucket:
                     item.runt_size = truncate_count
