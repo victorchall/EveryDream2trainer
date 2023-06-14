@@ -125,6 +125,8 @@ class DataLoaderMultiAspect():
             runts = bucket[-runt_count:]
             del bucket[-runt_count:]
             matching_default_bucket_key = (DEFAULT_BATCH_ID, key[1], key[2])
+            if matching_default_bucket_key not in buckets:
+                buckets[matching_default_bucket_key] = []
             buckets[matching_default_bucket_key].extend(runts)
 
         # handle remaining runts by randomly duplicating items
