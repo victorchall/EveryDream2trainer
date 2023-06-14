@@ -66,15 +66,33 @@ Your current source directory will be moutned to the Jupyter notebook.
 
 ## Local Linux install
 
+### Preinstallation
+* Make sure you have python3.10 installed.  Often this is `python3` so check with `python3 -V`
 * Make sure Linux Nvidia driver is up to date and working. 
 Check that `nvidia-smi` is working and shows your GPU.  
-How to update your driver may depend on the Linux distribution you use.  For Ubuntu, use Gnome and open `Softwrae & Updates`, go to the `additional drivers` tab and select `Using NVIDIA driver metapackage from nvidia-driver-530 (proprietary)`.  Currently `530` is the latest version, but you can use latest at your time of install.
+Steps to update the driver may depend on the Linux distribution you use.  For Ubuntu, use Gnome and open `Softwrae & Updates`, go to the `additional drivers` tab and select `Using NVIDIA driver metapackage from nvidia-driver-530 (proprietary)`.  Currently `530` is the latest version, but you can use latest at your time of install.
 *You will need to use the proprietary driver.*
-* Install Cuda 11.8. You can use https://developer.nvidia.com/cuda-11-8-0-download-archive?target_os=Linux&target_arch=x86_64&Distribution=Ubuntu&target_version=22.04&target_type=deb_local for Ubuntu 22.04 for instance.  Your install may vary depending on Linux distribution
+* Install Cuda 11.8. You can use this link for Ubuntu: https://developer.nvidia.com/cuda-11-8-0-download-archive?target_os=Linux&target_arch=x86_64&Distribution=Ubuntu&target_version=22.04&target_type=deb_local for Ubuntu 22.04 for instance.  Your install may vary depending on Linux distribution, make sure to select appropriate options.
+* Most problems arise from improper driver or cuda install and will not successfully run `nvidia-smi` (various errors like `command not found` or `driver mismatch`).  Make sure `nvidia-smi` runs and prints your GPU information before continuing.
+* Install git with `sudo apt-get git`
+* Suggested: Enable git lfs support, follow instructions: https://github.com/git-lfs/git-lfs/blob/main/INSTALLING.md
+* Optional: Enable remote desktop and/or SSH (see instructions for your distribution)
+* Optional if you'd rather use conda instead of VENV: Install miniconda, `wget` the appropriate bash script then run it: https://docs.conda.io/en/latest/miniconda.html#linux-installers
+
+### ED2 setup
 * `git clone https://github.com/victorchall/EveryDream2trainer`
 * `cd EveryDream2trainer`
 * `python3 -m venv venv`
 * `source venv/bin/activate`
+
+At this point `python -V` should return 3.10 and `which python` should return something like `/home/username/EveryDream2trainer/venv/bin/python` so you can just use `python` to run instead of `python3` if you like.  YMMV based on distribution.
 * `pip install -r requirements.txt`
 
-If you are savvy you can configure your own conda environment as well using roughly the above but using a conda env instead of venv. 
+Should be good to go.
+
+Conda should be something like this (untested)
+* `git clone https://github.com/victorchall/EveryDream2trainer`
+* `cd EveryDream2trainer`
+* `conda create --name ed2 python=3.10`
+* `conda activate ed2`
+* `pip install -r requirements.txt`
