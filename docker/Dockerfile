@@ -11,6 +11,12 @@ ENV PYTHONDONTWRITEBYTECODE=1
 RUN mkdir /build
 WORKDIR /build
 
+# clean some disk space
+RUN rm -rf /usr/share/dotnet
+RUN rm -rf /opt/ghc
+RUN rm -rf "/usr/local/share/boost"
+RUN rm -rf "$AGENT_TOOLSDIRECTORY"
+
 RUN rm -f /etc/apt/apt.conf.d/docker-clean; echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
