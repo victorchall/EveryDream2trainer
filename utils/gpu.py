@@ -21,9 +21,6 @@ class GPU:
     def __init__(self, device: torch.device):
         self.nvsmi = smi.getInstance()
         self.device = device
-
-    def __querythis(self, query):
-        return gpu_query['gpu'][self.device.index]
     
     def get_gpu_memory(self):
         """
@@ -39,10 +36,10 @@ class GPU:
         pynvml.nvmlInit()
         handle = pynvml.nvmlDeviceGetHandleByIndex(self.device.index)
         compute_compatibility = pynvml.nvmlDeviceGetCudaComputeCapability(handle)
+        pynvml.nvmlShutdown()
         return compute_compatibility[0] >= 8
 
     def driver_version(self):
         gpu_query = self.nvsmi.DeviceQuery('driver_version')
         driver_version = gpu_query['gpu'][self.device.index]['driver_version']
         return driver_version
-    

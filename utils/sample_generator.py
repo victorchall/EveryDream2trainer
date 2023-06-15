@@ -3,7 +3,7 @@ import logging
 import os.path
 from dataclasses import dataclass
 import random
-from typing import Generator, Callable, Any
+from typing import Generator, Callable, Any, List
 
 import torch
 from PIL import Image, ImageDraw, ImageFont
@@ -74,7 +74,7 @@ class SampleGenerator:
     num_inference_steps: int = 30
     random_captions = False
 
-    sample_requests: [str]
+    sample_requests: List[str]
     log_folder: str
     log_writer: SummaryWriter
 
@@ -270,7 +270,7 @@ class SampleGenerator:
                     with open(f"{self.log_folder}/samples/gs{global_step:05}-{sample_index}-{clean_prompt[:100]}.txt", "w", encoding='utf-8') as f:
                         f.write(str(batch[prompt_idx]))
 
-                    tfimage = transforms.ToTensor()(result)
+                    tfimage = transforms.ToTensor()(result).float()
                     if batch[prompt_idx].wants_random_caption:
                         self.log_writer.add_image(tag=f"sample_{sample_index}", img_tensor=tfimage, global_step=global_step)
                     else:

@@ -74,12 +74,18 @@ class EveryDreamOptimizer():
 
         self.load(args.resume_ckpt)
 
+        use_bf16 = torch.cuda.is_bf16_supported()
+        if use_bf16:
+            torch.set_default_tensor_type(torch.cuda.BFloat16Tensor)
+
+        init_scale = 2**17.5
+
         self.scaler = GradScaler(
-            enabled=args.amp,
-            init_scale=2**17.5,
+            enabled=args.amp and not use_bf16, # bfloat16 does not need grad scaler, same dynamic range as fp32
+            init_scale=init_scale,
             growth_factor=2,
             backoff_factor=1.0/2,
-            growth_interval=25,
+            growth_interval=50,
         )
 
         logging.info(f" Grad scaler enabled: {self.scaler.is_enabled()} (amp mode)")
@@ -369,7 +375,7 @@ class EveryDreamOptimizer():
                 amsgrad=False,
             )
 
-        log_optimizer(label, optimizer, betas, epsilon, weight_decay, curr_lr)
+        log_optimizer(label, optimizer)
         return optimizer
 
     def _apply_text_encoder_freeze(self, text_encoder) -> chain[Any]:
@@ -399,18 +405,34 @@ class EveryDreamOptimizer():
         return parameters
 
 
-def log_optimizer(label: str, optimizer: torch.optim.Optimizer, betas, epsilon, weight_decay, lr):
+def log_optimizer(label: str, optimizer: torch.optim.Optimizer):
     """
     logs the optimizer settings
     """
+    # , betas, epsilon, weight_decay, curr_lr
     all_params = sum([g['params'] for g in optimizer.param_groups], [])
     frozen_parameter_count = len([p for p in all_params if not p.requires_grad])
     total_parameter_count = len(all_params)
     if frozen_parameter_count > 0:
-        param_info = f"({total_parameter_count} parameters, {frozen_parameter_count} frozen)"
+        param_info = f"({total_parameter_count} param_groups, {frozen_parameter_count} frozen)"
     else:
-        param_info = f"({total_parameter_count} parameters)"
+        param_info = f"({total_parameter_count} param_groups)"
+
+    #try get lr
+    lr = optimizer.param_groups[0].get('lr', None)
+    betas = optimizer.param_groups[0].get('betas', None)
+    epsilon = optimizer.param_groups[0].get('eps', None)
+    weight_decay = optimizer.param_groups[0].get('weight_decay', None)
+    d0 = optimizer.param_groups[0].get('d0', None)
+
+    string_empty = ""
+    log_line = f"{Fore.CYAN}    lr: {lr}"
+    log_line += f", betas: {betas}" if betas else string_empty
+    log_line += f", epsilon: {epsilon}" if epsilon else string_empty
+    log_line += f", weight_decay: {weight_decay}" if weight_decay else string_empty
+    log_line += f", d0: {d0}" if d0 else string_empty
+    log_line += f" *{Style.RESET_ALL}"
 
     logging.info(f"{Fore.CYAN} * {label} optimizer: {optimizer.__class__.__name__} {param_info} *{Style.RESET_ALL}")
-    logging.info(f"{Fore.CYAN}    lr: {lr}, betas: {betas}, epsilon: {epsilon}, weight_decay: {weight_decay} *{Style.RESET_ALL}")
+    logging.info(log_line)
 

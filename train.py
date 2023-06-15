@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
+from functools import partial
 import os
 import pprint
 import sys
@@ -494,10 +495,13 @@ def main(args):
         logging.info("xformers disabled via arg, using attention slicing instead")
         unet.set_attention_slice("auto")
 
-    vae = vae.to(device, dtype=torch.float16 if args.amp else torch.float32)
+    use_bf16 = torch.cuda.is_bf16_supported()
+    amp_precision = torch.bfloat16 if use_bf16 else torch.float16
+
+    vae = vae.to(device, dtype=amp_precision if args.amp else torch.float32)
     unet = unet.to(device, dtype=torch.float32)
     if args.disable_textenc_training and args.amp:
-        text_encoder = text_encoder.to(device, dtype=torch.float16)
+        text_encoder = text_encoder.to(device, dtype=torch.float16 if not use_bf16 else torch.bfloat16)
     else:
         text_encoder = text_encoder.to(device, dtype=torch.float32)
 
@@ -664,9 +668,9 @@ def main(args):
     assert len(train_batch) > 0, "train_batch is empty, check that your data_root is correct"
 
     # actual prediction function - shared between train and validate
-    def get_model_prediction_and_target(image, tokens, zero_frequency_noise_ratio=0.0):
+    def get_model_prediction_and_target(image, tokens, zero_frequency_noise_ratio=0.0, dtype=torch.float16):
         with torch.no_grad():
-            with autocast(enabled=args.amp):
+            with autocast(enabled=args.amp, dtype=dtype):
                 pixel_values = image.to(memory_format=torch.contiguous_format).to(unet.device)
                 latents = vae.encode(pixel_values, return_dict=False)
             del pixel_values
@@ -704,7 +708,7 @@ def main(args):
             raise ValueError(f"Unknown prediction type {noise_scheduler.config.prediction_type}")
         del noise, latents, cuda_caption
 
-        with autocast(enabled=args.amp):
+        with autocast(enabled=args.amp, dtype=dtype):
             #print(f"types: {type(noisy_latents)} {type(timesteps)} {type(encoder_hidden_states)}")
             model_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
 
@@ -761,7 +765,7 @@ def main(args):
             for step, batch in enumerate(train_dataloader):
                 step_start_time = time.time()
 
-                model_pred, target = get_model_prediction_and_target(batch["image"], batch["tokens"], args.zero_frequency_noise_ratio)
+                model_pred, target = get_model_prediction_and_target(batch["image"], batch["tokens"], args.zero_frequency_noise_ratio, dtype=amp_precision)
 
                 loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
 
@@ -806,7 +810,8 @@ def main(args):
                     torch.cuda.empty_cache()
 
                 if validator and step in validation_steps:
-                    validator.do_validation(global_step, get_model_prediction_and_target)
+                    fn = partial(get_model_prediction_and_target, dtype=amp_precision)
+                    validator.do_validation(global_step, fn)
 
                 if (global_step + 1) % sample_generator.sample_steps == 0:
                     generate_samples(global_step=global_step, batch=batch)
@@ -930,5 +935,6 @@ if __name__ == "__main__":
 
     # load CLI args to overwrite existing config args
     args = argparser.parse_args(args=argv, namespace=args)
-    
+    import multiprocessing
+    multiprocessing.set_start_method('spawn')
     main(args)
