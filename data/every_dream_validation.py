@@ -167,15 +167,22 @@ class EveryDreamValidator:
     def do_validation(self, global_step: int,
                       get_model_prediction_and_target_callable: Callable[
                                          [Any, Any], tuple[torch.Tensor, torch.Tensor]]):
+        mean_loss_accumulator = 0
         for i, dataset in enumerate(self.validation_datasets):
             mean_loss = self._calculate_validation_loss(dataset.name,
                                                         dataset.dataloader,
                                                         get_model_prediction_and_target_callable)
+            mean_loss_accumulator += mean_loss
             self.log_writer.add_scalar(tag=f"loss/{dataset.name}",
                                        scalar_value=mean_loss,
                                        global_step=global_step)
             dataset.track_loss_trend(mean_loss)
-
+        # log combine loss to loss/_all_val_combined
+        if len(self.validation_datasets) > 1:
+            total_mean_loss = mean_loss_accumulator / len(self.validation_datasets)
+            self.log_writer.add_scalar(tag=f"loss/_all_val_combined",
+                                       scalar_value=total_mean_loss,
+                                       global_step=global_step)
 
     def _calculate_validation_loss(self, tag, dataloader, get_model_prediction_and_target: Callable[
         [Any, Any], tuple[torch.Tensor, torch.Tensor]]) -> float:
