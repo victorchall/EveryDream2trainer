@@ -97,9 +97,12 @@ class EveryDreamValidator:
             self.config.update({'manual_data_root': self.config['val_data_root']})
 
         if self.config.get('val_split_mode') == 'manual':
-            if 'manual_data_root' not in self.config:
-                raise ValueError("Error in validation config .json: 'manual' validation is missing 'manual_data_root'")
-            self.config['extra_manual_datasets'].update({'val': self.config['manual_data_root']})
+            if 'manual_data_root' in self.config:
+                self.config['extra_manual_datasets'].update({'val': self.config['manual_data_root']})
+            else:
+                if len(self.config['extra_manual_datasets']) == 0:
+                    raise ValueError("Error in validation config .json: 'manual' validation requested but no "
+                                     "'manual_data_root' or 'extra_manual_datasets'")
 
         if 'val_split_proportion' in self.config:
             logging.warning(f"   * {Fore.YELLOW}using old name 'val_split_proportion' for 'auto_split_proportion' - please "
