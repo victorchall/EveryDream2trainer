@@ -42,5 +42,6 @@
         "freeze_embeddings": false,
         "freeze_front_n_layers": null,
         "freeze_final_layer_norm": false
-    }
+    },
+    "apply_grad_scaler_step_tweaks": true
 }
