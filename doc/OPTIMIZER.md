@@ -81,7 +81,7 @@ If you're training SD2.1 you will likely experience great benefit from partially
 
 This will freeze the text encoder up to the last 2 layers, leaving the earlier layers and the embeddings intact. 
 
-Recommended settings for SD2.1 are provided in `optimizerSD21.json`. Unfreezing more layers will speed up training at the expense of text encoder stability. You can also try unfreezing the embeddings as well, by setting `"unfreeze_embeddings": true`. This may improve training, but it also seems to lead to quicker frying. 
+Recommended settings for SD2.1 are provided in `optimizerSD21.json`. Unfreezing more layers will speed up training at the expense of text encoder stability. You can also try unfreezing the embeddings as well, by setting `"freeze_embeddings": false`. This may improve training, but it also seems to lead to quicker frying. 
 
 ## General Beta, weight decay, epsilon, etc tuning
 
