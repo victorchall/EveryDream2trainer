@@ -97,7 +97,8 @@ class EveryDreamValidator:
             self.config.update({'manual_data_root': self.config['val_data_root']})
 
         if self.config.get('val_split_mode') == 'manual':
-            if 'manual_data_root' in self.config:
+            manual_data_root = self.config.get('manual_data_root')
+            if manual_data_root is not None:
                 self.config['extra_manual_datasets'].update({'val': self.config['manual_data_root']})
             else:
                 if len(self.config['extra_manual_datasets']) == 0:
