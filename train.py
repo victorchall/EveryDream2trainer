@@ -390,7 +390,8 @@ def main(args):
         os.makedirs(log_folder)
 
     @torch.no_grad()
-    def __save_model(save_path, unet, text_encoder, tokenizer, scheduler, vae, ed_optimizer, save_ckpt_dir, yaml_name, save_full_precision=False, save_optimizer_flag=False):
+    def __save_model(save_path, unet, text_encoder, tokenizer, scheduler, vae, ed_optimizer, save_ckpt_dir, yaml_name,
+                     save_full_precision=False, save_optimizer_flag=False, save_ckpt=True):
         """
         Save the model to disk
         """
@@ -412,21 +413,22 @@ def main(args):
         pipeline.save_pretrained(save_path)
         sd_ckpt_path = f"{os.path.basename(save_path)}.ckpt"
 
-        if save_ckpt_dir is not None:
-            sd_ckpt_full = os.path.join(save_ckpt_dir, sd_ckpt_path)
-        else:
-            sd_ckpt_full = os.path.join(os.curdir, sd_ckpt_path)
-            save_ckpt_dir = os.curdir
+        if save_ckpt:
+            if save_ckpt_dir is not None:
+                sd_ckpt_full = os.path.join(save_ckpt_dir, sd_ckpt_path)
+            else:
+                sd_ckpt_full = os.path.join(os.curdir, sd_ckpt_path)
+                save_ckpt_dir = os.curdir
 
-        half = not save_full_precision
+            half = not save_full_precision
 
-        logging.info(f" * Saving SD model to {sd_ckpt_full}")
-        converter(model_path=save_path, checkpoint_path=sd_ckpt_full, half=half)
+            logging.info(f" * Saving SD model to {sd_ckpt_full}")
+            converter(model_path=save_path, checkpoint_path=sd_ckpt_full, half=half)
 
-        if yaml_name and yaml_name != "v1-inference.yaml":
-            yaml_save_path = f"{os.path.join(save_ckpt_dir, os.path.basename(save_path))}.yaml"
-            logging.info(f" * Saving yaml to {yaml_save_path}")
-            shutil.copyfile(yaml_name, yaml_save_path)
+            if yaml_name and yaml_name != "v1-inference.yaml":
+                yaml_save_path = f"{os.path.join(save_ckpt_dir, os.path.basename(save_path))}.yaml"
+                logging.info(f" * Saving yaml to {yaml_save_path}")
+                shutil.copyfile(yaml_name, yaml_save_path)
 
         if save_optimizer_flag:
             logging.info(f" Saving optimizer state to {save_path}")
@@ -616,7 +618,7 @@ def main(args):
                 logging.error(f"{Fore.LIGHTRED_EX} CTRL-C received, attempting to save model to {interrupted_checkpoint_path}{Style.RESET_ALL}")
                 logging.error(f"{Fore.LIGHTRED_EX} ************************************************************************{Style.RESET_ALL}")
                 time.sleep(2) # give opportunity to ctrl-C again to cancel save
-                __save_model(interrupted_checkpoint_path, unet, text_encoder, tokenizer, noise_scheduler, vae, ed_optimizer, args.save_ckpt_dir, args.save_full_precision, args.save_optimizer)
+                __save_model(interrupted_checkpoint_path, unet, text_encoder, tokenizer, noise_scheduler, vae, ed_optimizer, args.save_ckpt_dir, args.save_full_precision, args.save_optimizer, save_ckpt=not args.no_save_ckpt)
             exit(_SIGTERM_EXIT_CODE)
         else:
             # non-main threads (i.e. dataloader workers) should exit cleanly
@@ -731,6 +733,9 @@ def main(args):
         gc.collect()
         torch.cuda.empty_cache()
 
+    def make_save_path(epoch, global_step, prepend=""):
+        return os.path.join(f"{log_folder}/ckpts/{prepend}{args.project_name}-ep{epoch:02}-gs{global_step:05}")
+
     # Pre-train validation to establish a starting point on the loss graph
     if validator:
         validator.do_validation(global_step=0,
@@ -816,13 +821,13 @@ def main(args):
                 if args.ckpt_every_n_minutes is not None and (min_since_last_ckpt > args.ckpt_every_n_minutes):
                     last_epoch_saved_time = time.time()
                     logging.info(f"Saving model, {args.ckpt_every_n_minutes} mins at step {global_step}")
-                    save_path = os.path.join(f"{log_folder}/ckpts/{args.project_name}-ep{epoch:02}-gs{global_step:05}")
-                    __save_model(save_path, unet, text_encoder, tokenizer, noise_scheduler, vae, ed_optimizer, args.save_ckpt_dir, yaml, args.save_full_precision, args.save_optimizer)
+                    save_path = make_save_path(epoch, global_step)
+                    __save_model(save_path, unet, text_encoder, tokenizer, noise_scheduler, vae, ed_optimizer, args.save_ckpt_dir, yaml, args.save_full_precision, args.save_optimizer, save_ckpt=not args.no_save_ckpt)
 
                 if epoch > 0 and epoch % args.save_every_n_epochs == 0 and step == 0 and epoch < args.max_epochs - 1 and epoch >= args.save_ckpts_from_n_epochs:
                     logging.info(f" Saving model, {args.save_every_n_epochs} epochs at step {global_step}")
-                    save_path = os.path.join(f"{log_folder}/ckpts/{args.project_name}-ep{epoch:02}-gs{global_step:05}")
-                    __save_model(save_path, unet, text_encoder, tokenizer, noise_scheduler, vae, ed_optimizer, args.save_ckpt_dir, yaml, args.save_full_precision, args.save_optimizer)
+                    save_path = make_save_path(epoch, global_step)
+                    __save_model(save_path, unet, text_encoder, tokenizer, noise_scheduler, vae, ed_optimizer, args.save_ckpt_dir, yaml, args.save_full_precision, args.save_optimizer, save_ckpt=not args.no_save_ckpt)
 
                 del batch
                 global_step += 1
@@ -846,9 +851,9 @@ def main(args):
             # end of epoch
 
         # end of training
-
-        save_path = os.path.join(f"{log_folder}/ckpts/last-{args.project_name}-ep{epoch:02}-gs{global_step:05}")
-        __save_model(save_path, unet, text_encoder, tokenizer, noise_scheduler, vae, ed_optimizer, args.save_ckpt_dir, yaml, args.save_full_precision, args.save_optimizer)
+        epoch = args.max_epochs
+        save_path = make_save_path(epoch, global_step, prepend=("" if args.no_prepend_last else "last-"))
+        __save_model(save_path, unet, text_encoder, tokenizer, noise_scheduler, vae, ed_optimizer, args.save_ckpt_dir, yaml, args.save_full_precision, args.save_optimizer, save_ckpt=not args.no_save_ckpt)
 
         total_elapsed_time = time.time() - training_start_time
         logging.info(f"{Fore.CYAN}Training complete{Style.RESET_ALL}")
@@ -857,8 +862,8 @@ def main(args):
 
     except Exception as ex:
         logging.error(f"{Fore.LIGHTYELLOW_EX}Something went wrong, attempting to save model{Style.RESET_ALL}")
-        save_path = os.path.join(f"{log_folder}/ckpts/errored-{args.project_name}-ep{epoch:02}-gs{global_step:05}")
-        __save_model(save_path, unet, text_encoder, tokenizer, noise_scheduler, vae, ed_optimizer, args.save_ckpt_dir, yaml, args.save_full_precision, args.save_optimizer)
+        save_path = make_save_path(epoch, global_step, prepend="errored-")
+        __save_model(save_path, unet, text_encoder, tokenizer, noise_scheduler, vae, ed_optimizer, args.save_ckpt_dir, yaml, args.save_full_precision, args.save_optimizer, save_ckpt=not args.no_save_ckpt)
         raise ex
 
     logging.info(f"{Fore.LIGHTWHITE_EX} ***************************{Style.RESET_ALL}")
@@ -906,6 +911,8 @@ if __name__ == "__main__":
     argparser.add_argument("--lr_scheduler", type=str, default="constant", help="LR scheduler, (default: constant)", choices=["constant", "linear", "cosine", "polynomial"])
     argparser.add_argument("--lr_warmup_steps", type=int, default=None, help="Steps to reach max LR during warmup (def: 0.02 of lr_decay_steps), non-functional for constant")
     argparser.add_argument("--max_epochs", type=int, default=300, help="Maximum number of epochs to train for")
+    argparser.add_argument("--no_prepend_last", action="store_true", help="Do not prepend 'last-' to the final checkpoint filename")
+    argparser.add_argument("--no_save_ckpt", action="store_true", help="Save only diffusers files, no .ckpts" )
     argparser.add_argument("--optimizer_config", default="optimizer.json", help="Path to a JSON configuration file for the optimizer.  Default is 'optimizer.json'")
     argparser.add_argument("--project_name", type=str, default="myproj", help="Project name for logs and checkpoints, ex. 'tedbennett', 'superduperV1'")
     argparser.add_argument("--resolution", type=int, default=512, help="resolution to train", choices=supported_resolutions)
