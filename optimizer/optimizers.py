@@ -56,6 +56,7 @@ class EveryDreamOptimizer():
 
         self.grad_accum = args.grad_accum
         self.clip_grad_norm = args.clip_grad_norm
+        self.apply_grad_scaler_step_tweaks = optimizer_config.get("apply_grad_scaler_step_tweaks", True)
 
         self.text_encoder_params = self._apply_text_encoder_freeze(text_encoder)
         self.unet_params = unet.parameters()
@@ -103,7 +104,8 @@ class EveryDreamOptimizer():
         for scheduler in self.lr_schedulers:
             scheduler.step()
 
-        self._update_grad_scaler(global_step)
+        if self.apply_grad_scaler_step_tweaks:
+            self._update_grad_scaler(global_step)
 
     def _zero_grad(self, set_to_none=False):
         for optimizer in self.optimizers:
