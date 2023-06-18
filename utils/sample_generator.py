@@ -176,7 +176,7 @@ class SampleGenerator:
                                                       wants_random_caption=p.get('random_caption', False)
                                                       ) for p in sample_requests_config]
             if len(self.sample_requests) == 0:
-                self._make_random_caption_sample_requests()
+                self.sample_requests = self._make_random_caption_sample_requests()
 
     @torch.no_grad()
     def generate_samples(self, pipe: StableDiffusionPipeline, global_step: int):

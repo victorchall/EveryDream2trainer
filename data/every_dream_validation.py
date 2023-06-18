@@ -97,9 +97,13 @@ class EveryDreamValidator:
             self.config.update({'manual_data_root': self.config['val_data_root']})
 
         if self.config.get('val_split_mode') == 'manual':
-            if 'manual_data_root' not in self.config:
-                raise ValueError("Error in validation config .json: 'manual' validation is missing 'manual_data_root'")
-            self.config['extra_manual_datasets'].update({'val': self.config['manual_data_root']})
+            manual_data_root = self.config.get('manual_data_root')
+            if manual_data_root is not None:
+                self.config['extra_manual_datasets'].update({'val': self.config['manual_data_root']})
+            else:
+                if len(self.config['extra_manual_datasets']) == 0:
+                    raise ValueError("Error in validation config .json: 'manual' validation requested but no "
+                                     "'manual_data_root' or 'extra_manual_datasets'")
 
         if 'val_split_proportion' in self.config:
             logging.warning(f"   * {Fore.YELLOW}using old name 'val_split_proportion' for 'auto_split_proportion' - please "
@@ -167,15 +171,22 @@ class EveryDreamValidator:
     def do_validation(self, global_step: int,
                       get_model_prediction_and_target_callable: Callable[
                                          [Any, Any], tuple[torch.Tensor, torch.Tensor]]):
+        mean_loss_accumulator = 0
         for i, dataset in enumerate(self.validation_datasets):
             mean_loss = self._calculate_validation_loss(dataset.name,
                                                         dataset.dataloader,
                                                         get_model_prediction_and_target_callable)
+            mean_loss_accumulator += mean_loss
             self.log_writer.add_scalar(tag=f"loss/{dataset.name}",
                                        scalar_value=mean_loss,
                                        global_step=global_step)
             dataset.track_loss_trend(mean_loss)
-
+        # log combine loss to loss/_all_val_combined
+        if len(self.validation_datasets) > 1:
+            total_mean_loss = mean_loss_accumulator / len(self.validation_datasets)
+            self.log_writer.add_scalar(tag=f"loss/_all_val_combined",
+                                       scalar_value=total_mean_loss,
+                                       global_step=global_step)
 
     def _calculate_validation_loss(self, tag, dataloader, get_model_prediction_and_target: Callable[
         [Any, Any], tuple[torch.Tensor, torch.Tensor]]) -> float:
