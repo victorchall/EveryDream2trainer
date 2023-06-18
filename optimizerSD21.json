@@ -20,7 +20,7 @@
     },
     "base": {
         "optimizer": "adamw8bit",
-        "lr": 1e-6,
+        "lr": 2e-6,
         "lr_scheduler": "constant",
         "lr_decay_steps": null,
         "lr_warmup_steps": null,
@@ -39,8 +39,6 @@
         "weight_decay": null
     },
     "text_encoder_freezing": {
-        "freeze_embeddings": true,
-        "freeze_front_n_layers": -6,
-        "freeze_final_layer_norm": false
+        "unfreeze_last_n_layers": 2
     }
 }

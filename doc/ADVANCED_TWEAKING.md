@@ -197,6 +197,7 @@ The files will be in ```logs/[your project folder]/ep[N]_batch_schedule.txt``` a
 
 Clips the gradient normals to a maximum value.  Default is None (no clipping).  This is typically used for gradient explosion problems, which are generally not an issue with EveryDream and the grad scaler in AMP mode keeps this from being too much of an issue, but it may be worth experimenting with. 
 
-    --clip_grad_norm 100000.0 ^
+    --clip_grad_norm 1.0 ^
 
-Early indications seem to show high values such as 100000 may be helpful.  Low values like 1.0 will drastically reduce training speed.  Default is no gradient normal clipping.  There are also other ways to deal with gradient explosion, such as increasing optimizer epsilon.
+Default is no gradient normal clipping. There are also other ways to deal with gradient explosion, such as increasing optimizer epsilon.
+

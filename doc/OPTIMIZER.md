@@ -75,25 +75,13 @@ If you're training SD2.1 you will likely experience great benefit from partially
 
 ```
     "text_encoder_freezing": {
-        "freeze_embeddings": true,
-        "freeze_front_n_layers": -6,
-        "freeze_final_layer_norm": false
+        "unfreeze_final_n_layers": 2,
     }
 ```
 
-The SD2.1 text encoder is arranged as follows:
+This will freeze the text encoder up to the last 2 layers, leaving the earlier layers and the embeddings intact. 
 
-```
-embeddings -> CLIP text encoder (23 layers) -> final layer norm
-```
-
-(The SD1.5 text encoder is similar but it has only 12 CLIP layers.) Typically you would apply freezing starting from the left and moving to the right, although it might be interesting to experiment with different freezing patterns. You can control this using the following parameters:  
-
-* `freeze_embeddings` freezes the front 2 layers (the text embeddings - recommend). 
-* `freeze_front_n_layers` freezes the front N layers of the CLIP text encoder. You can also pass null to leave the CLIP layers unfrozen, or negative values to count from the back. In the example above, `-6` will freeze all but the last 6 layers.
-* `freeze_final_layer_norm` freezes the parameters for the text encoder's final `LayerNorm` operation.
-
-Recommended settings for SD2.1 are provided in `optimizerSD21.json`: frozen embeddings, all CLIP layers frozen except for the last 6, final layer norm unfrozen. If you want to experiment, start by trying different values for `freeze_front_n_layers`: `-2` is slower but seems to produce a higher quality model, whereas `-10` is faster but can be more difficult to control. 
+Recommended settings for SD2.1 are provided in `optimizerSD21.json`. Unfreezing more layers will speed up training at the expense of text encoder stability. You can also try unfreezing the embeddings as well, by setting `"freeze_embeddings": false`. This may improve training, but it also seems to lead to quicker frying. 
 
 ## General Beta, weight decay, epsilon, etc tuning
 

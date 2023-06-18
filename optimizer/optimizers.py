@@ -375,28 +375,56 @@ class EveryDreamOptimizer():
         return optimizer
 
     def _apply_text_encoder_freeze(self, text_encoder) -> chain[Any]:
-        parameters = itertools.chain([])
+        num_layers = len(text_encoder.text_model.encoder.layers)
+        unfreeze_embeddings = True
+        unfreeze_last_n_layers = None
+        unfreeze_final_layer_norm = True
+        if "freeze_front_n_layers" in self.te_freeze_config:
+            logging.warning(
+                ' * Found "freeze_front_n_layers" in JSON, please use "unfreeze_last_n_layers" instead')
+            freeze_front_n_layers = self.te_freeze_config["freeze_front_n_layers"]
+            if freeze_front_n_layers<0:
+                # eg -2 = freeze all but the last 2
+                unfreeze_last_n_layers = -freeze_front_n_layers
+            else:
+                unfreeze_last_n_layers = num_layers - freeze_front_n_layers
+        if "unfreeze_last_n_layers" in self.te_freeze_config:
+            unfreeze_last_n_layers = self.te_freeze_config["unfreeze_last_n_layers"]
 
-        if self.te_freeze_config.get('freeze_embeddings', False):
-            # freeze embeddings
-            print(" ❄️ freezing embeddings")
+        if unfreeze_last_n_layers is None:
+            # nothing specified: default behaviour
+            unfreeze_last_n_layers = num_layers
         else:
-            parameters = itertools.chain(parameters, text_encoder.text_model.embeddings.parameters())
+            # something specified:
+            assert(unfreeze_last_n_layers > 0)
+            if unfreeze_last_n_layers < num_layers:
+                # if we're unfreezing layers then by default we ought to freeze the embeddings
+                unfreeze_embeddings = False
 
-        freeze_front_n_layers = self.te_freeze_config.get('freeze_front_n_layers', None)
-        if freeze_front_n_layers is None:
+        if "freeze_embeddings" in self.te_freeze_config:
+            unfreeze_embeddings = not self.te_freeze_config["freeze_embeddings"]
+        if "freeze_final_layer_norm" in self.te_freeze_config:
+            unfreeze_final_layer_norm = not self.te_freeze_config["freeze_final_layer_norm"]
+
+        parameters = itertools.chain([])
+        if unfreeze_embeddings:
+            parameters = itertools.chain(parameters, text_encoder.text_model.embeddings.parameters())
+        else:
+            print(" ❄️ freezing embeddings")
+
+        if unfreeze_last_n_layers >= num_layers:
             parameters = itertools.chain(parameters, text_encoder.text_model.encoder.layers.parameters())
         else:
             # freeze the specified CLIP text encoder layers
             layers = text_encoder.text_model.encoder.layers
-            print(f" ❄️ freezing text encoder layers 0-{len(layers[:freeze_front_n_layers])} of {len(layers)}")
-            parameters = itertools.chain(parameters, layers[freeze_front_n_layers:].parameters())
+            first_layer_to_unfreeze = num_layers - unfreeze_last_n_layers
+            print(f" ❄️ freezing text encoder layers 1-{first_layer_to_unfreeze} out of {num_layers} layers total")
+            parameters = itertools.chain(parameters, layers[first_layer_to_unfreeze:].parameters())
 
-        if self.te_freeze_config.get('freeze_final_layer_norm', False):
-            # instead of freezing the final layer norm parameters, we simply do not return them
-            print(" ❄️ freezing final layer norm")
-        else:
+        if unfreeze_final_layer_norm:
             parameters = itertools.chain(parameters, text_encoder.text_model.final_layer_norm.parameters())
+        else:
+            print(" ❄️ freezing final layer norm")
 
         return parameters
 
