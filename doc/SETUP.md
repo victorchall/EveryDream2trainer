@@ -98,3 +98,17 @@ Conda should be something like this (untested)
 * `conda create --name ed2 python=3.10`
 * `conda activate ed2`
 * `pip install -r requirements.txt`
+
+### Ensure BitsandBytes can find CUDA
+Bitsandbytes (AdamW8Bit, etc) needs to find the location of your CUDA libraries.  It attempts to find it in a few locations, but this likely will require an extra step. 
+ This may vary slightly based on distribution.
+
+Find the cuda library location:
+`find / -name libcudart.so* 2>/dev/null`
+
+example result:
+`/home/freon/EveryDream2trainer/venv/lib/python3.10/site-packages/nvidia/cuda_runtime/lib/libcudart.so.11.0 /home/freon/ml-ed2/venv/lib/python3.10/site-packages/nvidia/cuda_runtime/lib/libcudart.so.11.0`
+
+Set path hint for bitsandbytes (should work with either example above)
+`export LD_LIBRARY_PATH=/home/freon/EveryDream2trainer/venv/lib/python3.10/site-packages/nvidia/cuda_runtime/lib`
+You may wish to set this up as part of a startup script such as your `~/.bashrc` to make sure it is set on every login.
