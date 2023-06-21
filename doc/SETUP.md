@@ -48,6 +48,8 @@ Double check your python version again after setup by running these two commands
 
 Again, this should show 3.10.x
 
+Finally, install CUDA 11.8 from this link: `https://developer.nvidia.com/cuda-11-8-0-download-archive`
+
 ## Local docker container
 
 ```sh
