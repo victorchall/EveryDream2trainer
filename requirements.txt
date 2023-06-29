@@ -20,3 +20,5 @@ OmegaConf==2.2.3
 numpy==1.23.5
 wandb
 colorama
+safetensors
+open-flamingo==2.0.0
