@@ -21,6 +21,8 @@ pip install numpy==1.23.5
 pip install lion-pytorch
 pip install compel~=1.1.3
 pip install dadaptation
+pip install safetensors
+pip install open-flamingo==2.0.0
 python utils/get_yamls.py
 GOTO :eof
 
