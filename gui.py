@@ -34,9 +34,7 @@ def launch_training():
     gradient_steps = gradient_steps_entry.get()
     dataset_location = dataset_entry.get()
     max_epochs = max_epochs_slider.get()
-    save_every_n_epoch = save_every_n_epoch_entry.get()
-    steps_between_samples = steps_between_samples_entry.get()
-    training_seed = training_seed_entry.get()
+    sample_steps = sample_steps_entry.get()
     sample_file = sample_file_combobox.get()
     clip_grad_norm = clip_grad_norm_var.get()
     disable_amp = disable_amp_var.get()
@@ -48,7 +46,7 @@ def launch_training():
     logdir = logdir_entry.get()
     log_step = log_step_entry.get()
     lowvram = lowvram_var.get()
-    resume_ckpt = Model_to_train.get()
+    resume_ckpt = resume_ckpt_entry.get()
     run_name = run_name_entry.get()
     sample_steps = sample_steps_entry.get()
     save_ckpt_dir = save_ckpt_dir_entry.get()
@@ -60,6 +58,19 @@ def launch_training():
     validation_config = validation_config_entry.get()
     wandb = wandb_var.get()
     write_schedule = write_schedule_var.get()
+
+
+    # Convert integer values to strings
+    resolution = str(resolution_slider.get())
+    batch_size = str(batch_size_entry.get())
+    gradient_steps = str(gradient_steps_entry.get())
+    max_epochs = str(max_epochs_slider.get())
+    sample_steps = str(sample_steps_entry.get())
+    grad_accum = str(grad_accum_entry.get())
+    log_step = str(log_step_entry.get())
+    save_every_n_epochs = str(save_every_n_epochs_entry.get())
+    save_ckpts_from_n_epochs = str(save_ckpts_from_n_epochs_entry.get())
+    seed = str(seed_entry.get())
 
     # Construct the command
     command = [
@@ -83,9 +94,6 @@ def launch_training():
         '--Gradient_steps', gradient_steps,
         '--Dataset_Location', dataset_location,
         '--Max_Epochs', max_epochs,
-        '--Save_every_N_epoch', save_every_n_epoch,
-        '--Steps_between_samples', steps_between_samples,
-        '--Training_Seed', training_seed,
         '--Sample_File', sample_file,
         '--clip_grad_norm', str(clip_grad_norm),
         '--disable_amp', str(disable_amp),
@@ -97,7 +105,7 @@ def launch_training():
         '--logdir', logdir,
         '--log_step', log_step,
         '--lowvram', str(lowvram),
-        '--resume_ckpt', str(Model_to_train),
+        '--resume_ckpt', str(resume_ckpt),
         '--run_name', run_name,
         '--sample_steps', sample_steps,
         '--save_ckpt_dir', save_ckpt_dir,
@@ -113,7 +121,7 @@ def launch_training():
 
     try:
         # Launch the training process
-        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        process = subprocess.Popen(command)
         while True:
             output = process.stdout.readline()
             if output == b'' and process.poll() is not None:
@@ -150,10 +158,10 @@ model_type_combobox = ttk.Combobox(tab1, values=['SD2_512_base', 'SD21'])
 model_type_combobox.grid(row=0, column=1)
 model_type_combobox.current(0)
 
-Model_to_train_label = tk.Label(tab1, text='Model to be trained:')
-Model_to_train_label.grid(row=14, column=0, sticky=tk.W)
-Model_to_train_entry = tk.Entry(tab3)
-Model_to_train_entry.grid(row=14, column=1)
+resume_ckpt_label = tk.Label(tab1, text='Model to be trained:')
+resume_ckpt_label.grid(row=14, column=0, sticky=tk.W)
+resume_ckpt_entry = tk.Entry(tab3)
+resume_ckpt_entry.grid(row=14, column=1)
 
 ckpt_folder_label = tk.Label(tab1, text='Checkpoint folder:')
 ckpt_folder_label.grid(row=14, column=2, sticky=tk.W)
@@ -219,26 +227,33 @@ match_text_to_unet_var = tk.BooleanVar()
 match_text_to_unet_checkbutton = tk.Checkbutton(tab1, text='Match text to Unet', variable=match_text_to_unet_var)
 match_text_to_unet_checkbutton.grid(row=9, column=0, sticky=tk.W)
 
+max_epochs_slider_label = tk.Label(tab1, text='Max Epochs:')
+max_epochs_slider_label.grid(row=10, column=0, sticky=tk.W)
+
+max_epochs_slider = tk.Scale(tab1, from_=10, to=300, resolution=10, orient=tk.HORIZONTAL)
+max_epochs_slider.grid(row=10, column=1)
+max_epochs_slider.set(100)
+
 text_lr_label = tk.Label(tab1, text='Text lr:')
-text_lr_label.grid(row=10, column=0, sticky=tk.W)
+text_lr_label.grid(row=11, column=0, sticky=tk.W)
 
 text_lr_entry = tk.Entry(tab1)
-text_lr_entry.grid(row=10, column=1)
+text_lr_entry.grid(row=11, column=1)
 text_lr_entry.insert(tk.END, '5e-7')
 
 schedule_label = tk.Label(tab1, text='Schedule:')
-schedule_label.grid(row=11, column=0, sticky=tk.W)
+schedule_label.grid(row=12, column=0, sticky=tk.W)
 
 schedule_combobox = ttk.Combobox(tab1, values=['constant', 'polynomial', 'linear', 'cosine'])
-schedule_combobox.grid(row=11, column=1)
+schedule_combobox.grid(row=12, column=1)
 schedule_combobox.current(0)
 
-text_lr_scheduler_label = tk.Label(tab1, text='Schedule:')
-text_lr_scheduler_label.grid(row=12, column=0, sticky=tk.W)
+text_lr_scheduler_label = tk.Label(tab1, text='Text Schedule:')
+text_lr_scheduler_label.grid(row=13, column=0, sticky=tk.W)
 
-text_lr_scheduler_label = ttk.Combobox(tab1, values=['constant', 'polynomial', 'linear', 'cosine'])
-text_lr_scheduler_label.grid(row=12, column=1)
-text_lr_scheduler_label.current(0)
+text_lr_scheduler_combobox = ttk.Combobox(tab1, values=['constant', 'polynomial', 'linear', 'cosine'])
+text_lr_scheduler_combobox.grid(row=13, column=1)
+text_lr_scheduler_combobox.current(0)
 
 # Create and position the input fields and buttons in tab2 (Advanced Options)
 sample_file_label = tk.Label(tab2, text='Sample File:')
@@ -289,6 +304,35 @@ grad_accum_label.grid(row=8, column=0, sticky=tk.W)
 
 grad_accum_entry = tk.Entry(tab2)
 grad_accum_entry.grid(row=8, column=1)
+
+
+
+lr_warmup_steps_label = tk.Label(tab2, text='lr_warmup_steps:')
+lr_warmup_steps_label.grid(row=9, column=0, sticky=tk.W)
+
+lr_warmup_steps_entry = tk.Entry(tab2)
+lr_warmup_steps_entry.grid(row=9, column=1)    
+    
+    
+lr_decay_steps_label = tk.Label(tab2, text='lr_decay_steps:')
+lr_decay_steps_label.grid(row=10, column=0, sticky=tk.W)
+
+lr_decay_steps_entry = tk.Entry(tab2)
+lr_decay_steps_entry.grid(row=10, column=1)   
+
+
+text_lr_warmup_steps_label = tk.Label(tab2, text='Text lr_warmup_steps:')
+text_lr_warmup_steps_label.grid(row=11, column=0, sticky=tk.W)
+
+text_lr_warmup_steps_entry = tk.Entry(tab2)
+text_lr_warmup_steps_entry.grid(row=11, column=1)   
+
+
+text_lr_decay_steps_label = tk.Label(tab2, text='text_lr_decay:')
+text_lr_decay_steps_label.grid(row=12, column=0, sticky=tk.W)
+
+text_lr_decay_steps_entry = tk.Entry(tab2)
+text_lr_decay_steps_entry.grid(row=12, column=1)       
 
 # Create and position the input fields and buttons in tab3 (Logging Options)
 logdir_label = tk.Label(tab3, text='Log Directory:')
