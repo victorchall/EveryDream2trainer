@@ -84,8 +84,8 @@ def main(args):
         lang_encoder_path="anas-awadalla/mpt-7b"
         tokenizer_path="anas-awadalla/mpt-7b"
     elif "mpt1b" in args.model:
-        lang_encoder_path="anas-awadalla/mpt-1b"
-        tokenizer_path="anas-awadalla/mpt-1b"
+        lang_encoder_path="anas-awadalla/mpt-1b-redpajama-200b"
+        tokenizer_path="anas-awadalla/mpt-1b-redpajama-200b"
 
     model, image_processor, tokenizer = create_model_and_transforms(
         clip_vision_encoder_path="ViT-L-14",
@@ -141,7 +141,7 @@ def main(args):
 
                 input_ids = lang_x["input_ids"].to(device)
 
-                with torch.cuda.amp.autocast(dtype=dtype):
+                with torch.cuda.amp.autocast(dtype=dtype), torch.no_grad():
                     generated_text = model.generate(
                         vision_x=vision_x,
                         lang_x=input_ids,
@@ -171,6 +171,7 @@ def main(args):
                 if not os.path.exists(name):
                     with open(f"{name}.txt", "w") as f:
                         f.write(generated_text)
+    print("Done!")
 
 if __name__ == "__main__":
     print(f"Available models:")
@@ -188,7 +189,7 @@ if __name__ == "__main__":
     parser.add_argument("--prompt", type=str, default="Output: ", help="prompt to use for generation, default is 'Output: '")
     parser.add_argument("--temperature", type=float, default=1.0, help="temperature for sampling, 1.0 is default")
     parser.add_argument("--top_k", type=int, default=0, help="top_k sampling, 0 is default")
-    parser.add_argument("--top_p", type=float, default=0.9, help="top_p sampling, 0.9 is default")
+    parser.add_argument("--top_p", type=float, default=1.0, help="top_p sampling, 1.0 is default")
     parser.add_argument("--repetition_penalty", type=float, default=1.0, help="repetition penalty, 1.0 is default")
     parser.add_argument("--length_penalty", type=float, default=1.0, help="length penalty, 1.0 is default")
     args = parser.parse_args()
