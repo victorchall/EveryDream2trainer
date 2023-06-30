@@ -748,7 +748,7 @@ def main(args):
         _, batch = next(enumerate(train_dataloader))
         generate_samples(global_step=0, batch=batch)
 
-    from plugins.base_plugin import load_plugin
+    from plugins.plugins import load_plugin
     plugins = [load_plugin(name) for name in args.plugins]
 
     try:
