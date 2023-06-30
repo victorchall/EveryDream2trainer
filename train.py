@@ -749,7 +749,10 @@ def main(args):
         generate_samples(global_step=0, batch=batch)
 
     from plugins.plugins import load_plugin
-    plugins = [load_plugin(name) for name in args.plugins]
+    if args.plugins is not None:
+        plugins = [load_plugin(name) for name in args.plugins]
+    else:
+        plugins = []
 
     try:
         write_batch_schedule(args, log_folder, train_batch, epoch = 0)
