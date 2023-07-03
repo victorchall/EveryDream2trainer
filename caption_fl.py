@@ -70,9 +70,19 @@ def get_examples(example_root, image_processor):
         print(f" ** Example: {x[0]}")
     return examples
 
+def get_dtype_for_cuda_device(device):
+    # check compute capability
+    compute_capability = torch.cuda.get_device_capability()
+    if compute_capability[0] >= 8:
+        dtype = torch.bfloat16
+    else:
+        dtype = torch.float16
+    return dtype
+
+
 def main(args):
     device = "cuda" if torch.cuda.is_available() and not args.force_cpu else "cpu"
-    dtype = torch.bfloat16 if device == "cuda" else torch.float32
+    dtype = get_dtype_for_cuda_device() if device == "cuda" else torch.float32
 
     if args.prompt:
         prompt = args.prompt
