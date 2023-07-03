@@ -82,7 +82,7 @@ def get_dtype_for_cuda_device(device):
 
 def main(args):
     device = "cuda" if torch.cuda.is_available() and not args.force_cpu else "cpu"
-    dtype = get_dtype_for_cuda_device() if device == "cuda" else torch.float32
+    dtype = get_dtype_for_cuda_device(device) if device == "cuda" else torch.float32
 
     if args.prompt:
         prompt = args.prompt
