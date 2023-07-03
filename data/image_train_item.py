@@ -203,36 +203,23 @@ class ImageTrainItem:
         randomly crops the image by a percentage of the image size on each of the four sides
         """
         width, height = image.size
-        max_crop_pixels = min(width, height) * crop_jitter
+        max_crop_pixels = int(min(width, height) * crop_jitter)
 
-        left_crop_pixels = random.uniform(0, max_crop_pixels)
-        right_crop_pixels = random.uniform(0, max_crop_pixels)
-        top_crop_pixels = random.uniform(0, max_crop_pixels)
-        bottom_crop_pixels = random.uniform(0, max_crop_pixels)
+        left_crop_pixels = int(round(random.uniform(0, max_crop_pixels)))
+        right_crop_pixels = int(round(random.uniform(0, max_crop_pixels)))
+        top_crop_pixels = int(round(random.uniform(0, max_crop_pixels)))
+        bottom_crop_pixels = int(round(random.uniform(0, max_crop_pixels)))
+
+        # print(f"{left_crop_pixels}, {right_crop_pixels}, {top_crop_pixels}, {bottom_crop_pixels}, ")
 
         left = left_crop_pixels
         right = width - right_crop_pixels
         top = top_crop_pixels
         bottom = height - bottom_crop_pixels
-        #print(f"\n ***  jitter l: {left}, t: {top}, r: {right}, b: {bottom}, orig w: {width}, h: {height}, max_crop_pixels: {max_crop_pixels}")
 
-        cropped_image = image.crop((left, top, right, bottom))
+        crop_size = image.crop((left, top, right, bottom))
 
-        cropped_width = width - int(left_crop_pixels + right_crop_pixels)
-        cropped_height = height - int(top_crop_pixels + bottom_crop_pixels)
-
-        cropped_aspect_ratio = cropped_width / cropped_height
-
-        if cropped_aspect_ratio > 1:
-            new_width = cropped_width
-            new_height = int(cropped_width / cropped_aspect_ratio)
-        else:
-            new_width = int(cropped_height * cropped_aspect_ratio)
-            new_height = cropped_height
-
-        cropped_image = cropped_image.resize((new_width, new_height))
-
-        return cropped_image
+        return crop_size
     
     def _debug_save_image(self, image, folder=""):
         base_name = os.path.basename(self.pathname)
