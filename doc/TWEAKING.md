@@ -88,6 +88,8 @@ Batch size is also another "hyperparamter" of itself and there are tradeoffs. It
 
 While very small batch sizes can impact performance negatively, at some point larger sizes have little impact on overall speed as well, so shooting for the moon is not always advisable.  Changing batch size may also impact what learning rate you use, with typically larger batch_size requiring a slightly higher learning rate.  More info is provided in the [Advanced Tweaking](ADVANCED_TWEAKING.md) document.
 
+I recommend that batch_size be no larger than 10% of your training data image count at the absolute maximum.  I.e. if you have 50 images, do not use more than batch size 5.  If your dataset is very small and has many "rare" aspect ratios, a lower batch size may be perferred as well.  There are warnings printed when rare aspect ratio images are encountered.
+
 ## __LR Scheduler__
 
 A learning rate scheduler can change your learning rate as training progresses.
