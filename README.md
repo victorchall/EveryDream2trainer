@@ -83,5 +83,7 @@ Make sure to check out the [tools repo](https://github.com/victorchall/EveryDrea
 
 [Captioning](doc/CAPTION.md) - (beta) tools to automate captioning
 
+[Plugins](doc/PLUGINS.md) - (beta) write your own plugins to execute arbitrary code during training
+
 [Contributing](doc/CONTRIBUTING.md)
 
