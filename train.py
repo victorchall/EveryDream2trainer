@@ -733,7 +733,6 @@ def main(args):
 
             del inference_pipe
         gc.collect()
-        torch.cuda.empty_cache()
 
     def make_save_path(epoch, global_step, prepend=""):
         return os.path.join(f"{log_folder}/ckpts/{prepend}{args.project_name}-ep{epoch:02}-gs{global_step:05}")
@@ -753,13 +752,19 @@ def main(args):
         plugins = [load_plugin(name) for name in args.plugins]
     else:
         plugins = []
+    
+    from plugins.plugins import PluginRunner
+    plugin_runner = PluginRunner(plugins=plugins)
 
     try:
         write_batch_schedule(args, log_folder, train_batch, epoch = 0)
 
         for epoch in range(args.max_epochs):
-            for plugin in plugins:
-                plugin.on_epoch_start(epoch, global_step)
+            plugin_runner.run_on_epoch_start(epoch=epoch,
+                                      global_step=global_step,
+                                      project_name=args.project_name,
+                                      log_folder=log_folder,
+                                      data_root=args.data_root)
 
             loss_epoch = []
             epoch_start_time = time.time()
@@ -776,6 +781,11 @@ def main(args):
 
             for step, batch in enumerate(train_dataloader):
                 step_start_time = time.time()
+                plugin_runner.run_on_step_start(epoch=epoch,
+                        global_step=global_step,
+                        project_name=args.project_name,
+                        log_folder=log_folder,
+                        batch=batch)
 
                 model_pred, target = get_model_prediction_and_target(batch["image"], batch["tokens"], args.zero_frequency_noise_ratio)
 
@@ -840,6 +850,13 @@ def main(args):
                     save_path = make_save_path(epoch, global_step)
                     __save_model(save_path, unet, text_encoder, tokenizer, noise_scheduler, vae, ed_optimizer, args.save_ckpt_dir, yaml, args.save_full_precision, args.save_optimizer, save_ckpt=not args.no_save_ckpt)
 
+                plugin_runner.run_on_step_end(epoch=epoch,
+                                      global_step=global_step,
+                                      project_name=args.project_name,
+                                      log_folder=log_folder,
+                                      data_root=args.data_root,
+                                      batch=batch)
+
                 del batch
                 global_step += 1
                 # end of step
@@ -858,9 +875,13 @@ def main(args):
             loss_epoch = sum(loss_epoch) / len(loss_epoch)
             log_writer.add_scalar(tag="loss/epoch", scalar_value=loss_epoch, global_step=global_step)
 
-            for plugin in plugins:
-                plugin.on_epoch_end(epoch, global_step)
-            gc.collect()
+            plugin_runner.run_on_epoch_end(epoch=epoch,
+                                      global_step=global_step,
+                                      project_name=args.project_name,
+                                      log_folder=log_folder,
+                                      data_root=args.data_root)
+
+            gc.collect()            
             # end of epoch
 
         # end of training
