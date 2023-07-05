@@ -751,6 +751,7 @@ def main(args):
     if args.plugins is not None:
         plugins = [load_plugin(name) for name in args.plugins]
     else:
+        logging.info("No plugins specified")
         plugins = []
     
     from plugins.plugins import PluginRunner
@@ -898,6 +899,7 @@ def main(args):
         logging.error(f"{Fore.LIGHTYELLOW_EX}Something went wrong, attempting to save model{Style.RESET_ALL}")
         save_path = make_save_path(epoch, global_step, prepend="errored-")
         __save_model(save_path, unet, text_encoder, tokenizer, noise_scheduler, vae, ed_optimizer, args.save_ckpt_dir, yaml, args.save_full_precision, args.save_optimizer, save_ckpt=not args.no_save_ckpt)
+        logging.info(f"{Fore.LIGHTYELLOW_EX}Model saved, re-raising exception and exiting.  Exception was:{Style.RESET_ALL}{Fore.LIGHTRED_EX} {ex} {Style.RESET_ALL}")
         raise ex
 
     logging.info(f"{Fore.LIGHTWHITE_EX} ***************************{Style.RESET_ALL}")
