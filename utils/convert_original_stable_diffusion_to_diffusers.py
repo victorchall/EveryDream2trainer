@@ -162,3 +162,4 @@ if __name__ == "__main__":
         pipe.controlnet.save_pretrained(args.dump_path, safe_serialization=args.to_safetensors)
     else:
         pipe.save_pretrained(args.dump_path, safe_serialization=args.to_safetensors)
+        print(f"Saved diffusers copy of model to {args.dump_path}.")
