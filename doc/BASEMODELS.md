@@ -86,9 +86,20 @@ or using the CLI arg:
 
 ## Automatic download
 
-If you don't want the hassle of downloading and converting ckpt files, you can pass a Hugging Face "repo id" for `--resume-ckpt` and the model will be automatically downloaded from Huggingface if it exists.
+If you don't want the hassle of downloading and converting ckpt files, you can pass a Hugging Face "repo id" for `resume-ckpt` and the model will be automatically downloaded from Huggingface if it exists.
 
-For example, to use [Stable Diffusion 2.1](https://huggingface.co/stabilityai/stable-diffusion-2-1), you can pass the repo id `stabilityai/stable-diffusion-2-1` for `--resume_ckpt`:
+For example, to use [Stable Diffusion 2.1](https://huggingface.co/stabilityai/stable-diffusion-2-1), you can pass the repo id `stabilityai/stable-diffusion-2-1` for `resume_ckpt`:
+
+```
+train.json
+{
+    ...
+    "resume_ckpt": "stabilityai/stable-diffusion-2-1",
+    ...
+}
+```
+
+or with the CLI arg:
 
     python train.py --resume_ckpt stabilityai/stable-diffusion-2-1 ...
 
@@ -100,7 +111,7 @@ You can check if a 🧨diffusers format model is available by checking [the "Fil
 
 ### Hugging Face login
 
-If the model requires you to sign a license agreement, you may need to login to the Hugging Face hub before downloads will work. You can do this by running the following command in the terminal window before you start training:
+If the model requires you to sign a license agreement (rare), you may need to login to the Hugging Face hub before downloads will work. You can do this by running the following command in the terminal window before you start training:
    
     huggingface-cli login
 
@@ -122,7 +133,7 @@ Replace `<token>` with the Access Token you got from [your Hugging Face User Acc
 
 ### Where are the files?
 
-By default the downloaded Hugging Face files are stored in the Hugging Face cache folder. On Windows this is at `C:\Users\username.cache\huggingface\hub`. On Linux it is at `~/.cache/huggingface/hub`. 
+By default the downloaded Hugging Face files are stored in the Hugging Face cache folder. On Windows this is at `C:\Users\username\.cache\huggingface\hub`. On Linux it is at `~/.cache/huggingface/hub`. 
 
 You can set the environment variable `HUGGINGFACE_HUB_CACHE` to change this. Eg, to put the cache on `Z:\stable-diffusion-big-files\huggingface-hub-cache` (on Windows):
 
@@ -132,4 +143,4 @@ Make sure to do this before running `train.py`.
 
 ### Downloading from a subfolder
 
-If the model you want to download is not stored in the root folder under the huggingface repo id, you can pass `--hf_repo_subfolder` to set the subfolder where it should be downloaded from.
+If the model you want to download is not stored in the root folder under the huggingface repo id (rare), you can pass `--hf_repo_subfolder` to set the subfolder where it should be downloaded from.
