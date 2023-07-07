@@ -55,7 +55,7 @@ And for any SD2.1 768 models (uses v2-v yaml and "v_prediction" prediction type)
 
 Note the `v2-inference-v.yaml` and `v_prediction`.  This is because the SD2.1 768 model uses a different yaml and prediction type than the SD1.X models. 
 
-And finally the SD2.0 512 base model (generally not recommended base model):
+And finally the SD2.0 512 base model (generally not recommended base model, no one tunes this either):
 
     python utils/convert_original_stable_diffusion_to_diffusers.py --scheduler_type ddim ^
     --original_config_file v2-inference.yaml ^
@@ -67,13 +67,22 @@ And finally the SD2.0 512 base model (generally not recommended base model):
 
 If you have other models, you need to know the base model that was used for them, **in particular use the correct yaml (original_config_file) or it will not properly convert.** Make sure to put some sort of name in the dump_path after "ckpt_cache/" so you can reference it later.
 
-All of the above is one time.  After running, you will use --resume_ckpt and just name the file without "ckpt_cache/"
+All of the above is one time.  After running, you will use `resume_ckpt` and just name the file without "ckpt_cache/"
 
 ex.
+```
+train.json
+{
+    ...
+    "resume_ckpt": "my_sd15_model",
+    ...
+}
+```
 
-    python train.py --resume_ckpt "sd_v1-5_vae" ...
-    python train.py --resume_ckpt "v2-1_768-ema-pruned" ...
-    python train.py --resume_ckpt "512-base-ema" ...
+or using the CLI arg:
+
+    python train.py --resume_ckpt "my_sd21_model" ...
+
 
 ## Automatic download
 
