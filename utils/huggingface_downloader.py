@@ -28,7 +28,12 @@ def try_download_model_from_hf(repo_id: str) -> Tuple[StableDiffusionPipeline, s
         return None
 
     # load it to download it
-    pipe, cache_folder = StableDiffusionPipeline.from_pretrained(repo_id, return_cached_folder=True)
+    #pipe, cache_folder = StableDiffusionPipeline.from_pretrained(repo_id, return_cached_folder=True)
+    cache_folder = StableDiffusionPipeline.download(repo_id)
+    pipe = StableDiffusionPipeline.from_pretrained(repo_id)
 
     is_sd1_attn, yaml_path = get_attn_yaml(cache_folder)
+    print(f"* HuggingFace Downloaded model from {repo_id} to {cache_folder}.")
+    print(f"** Using attention yaml file: {yaml_path}, is_sd1_attn: {is_sd1_attn}.")
+    pause = input("Press enter to continue...")
     return pipe, cache_folder, is_sd1_attn, yaml_path
