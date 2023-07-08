@@ -35,5 +35,5 @@ def try_download_model_from_hf(repo_id: str) -> Tuple[StableDiffusionPipeline, s
     is_sd1_attn, yaml_path = get_attn_yaml(cache_folder)
     print(f"* HuggingFace Downloaded model from {repo_id} to {cache_folder}.")
     print(f"** Using attention yaml file: {yaml_path}, is_sd1_attn: {is_sd1_attn}.")
-    pause = input("Press enter to continue...")
+
     return pipe, cache_folder, is_sd1_attn, yaml_path
