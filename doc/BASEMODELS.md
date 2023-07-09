@@ -1,35 +1,20 @@
-# Download and setup base models
+# Prepare base models
 
-In order to train, you need a base model on which to train.  This is a one-time setup to configure base models when you want to use a particular base.
+In order to train, you need a base model on which to train.  
 
-Make sure the trainer is installed properly first. See [SETUP.md](SETUP.md) for more details. 
+Make sure the trainer is installed properly first. See [SETUP.md](SETUP.md) for more details.
 
 You can either [download one manually](#manual-download), or alternatively EveryDream2 can [automatically download](#automatic-download) a model from the Hugging Face hub for you.
 
+It's strongly suggested to simple use automatic download.  The quick start here is you can simply use `resume_ckpt` of `stabilityai/stable-diffusion-2-1` to make a SD2.1 768 model, or `panopstor/EveryDream` for SD1.5 models.  If you are ok with the base SD1.5 and SD2.1 models, you can use those values and skip reading this document.
+
+See below for more details.
+
 ## Manual download
 
-First you have to download a `.ckpt` file for the base model, then you need to convert it to a "diffusers format" folder. When you finish you should see something like this, come back to reference this picture as you go through the steps below:
+First you have to download a `.ckpt` or `.safetensors` file for the base model, then you need to convert it to a "diffusers format" folder.  When you finish you should see something like this, come back to reference this picture as you go through the steps below:
 
 ![models](ckptcache.png) *(this picture is just an EXAMPLE)*
-
-### Downloading the .ckpt
-
-I suggest one of these two models:
-
-* Stable Diffusion 1.5 with improved VAE:
-
-  https://huggingface.co/panopstor/EveryDream/blob/main/sd_v1-5_vae.ckpt
-
-
-* SD2.1 768:
-
-  https://huggingface.co/stabilityai/stable-diffusion-2-1/blob/main/v2-1_768-nonema-pruned.ckpt
-
-
-* You can use SD2.0 512 as well, but typically SD1.5 is going to be better.
-  https://huggingface.co/stabilityai/stable-diffusion-2-base/blob/main/512-base-ema.ckpt
-
-Place these in the root folder of EveryDream2.
 
 ### Converting to 🧨diffusers format
 
@@ -40,22 +25,37 @@ For SD1.x models, use this (note it will spill a lot of warnings to the console,
     python utils/convert_original_stable_diffusion_to_diffusers.py --scheduler_type ddim ^
     --original_config_file v1-inference.yaml ^
     --image_size 512 ^
-    --checkpoint_path sd_v1-5_vae.ckpt ^
+    --checkpoint_path my_sd15_model.ckpt ^
+    --to_safetensors ^
     --prediction_type epsilon ^
-    --upcast_attn False ^
-    --dump_path "ckpt_cache/sd_v1-5_vae"
+    --dump_path "ckpt_cache/my_sd15_model"
 
-And the SD2.1 768 model (uses v2-v yaml and "v_prediction" prediction type):
+...where `my_sd15_model.ckpt` is the filename you want to convert to prepare for training and `my_sd15_model` is all you need to set `resume_ckpt` to in your config file.
+
+Almost the same exact thing for safetensors except one extra `from_safetensors` argument and make sure the file extension is `.safetensors`:
+
+    python utils/convert_original_stable_diffusion_to_diffusers.py --scheduler_type ddim ^
+    --original_config_file v1-inference.yaml ^
+    --image_size 512 ^
+    --checkpoint_path my_sd15_model.safetensors ^
+    --from_safetensors ^
+    --to_safetensors ^
+    --prediction_type epsilon ^
+    --dump_path "ckpt_cache/my_sd15_model"
+
+And for any SD2.1 768 models (uses v2-v yaml and "v_prediction" prediction type):
 
     python utils/convert_original_stable_diffusion_to_diffusers.py --scheduler_type ddim ^
     --original_config_file v2-inference-v.yaml ^
     --image_size 768 ^
-    --checkpoint_path v2-1_768-nonema-pruned.ckpt ^
+    --checkpoint_path my_sd21_model.ckpt ^
     --prediction_type v_prediction ^
-    --upcast_attn True ^
-    --dump_path "ckpt_cache/v2-1_768-nonema-pruned"
+    --upcast_attention True ^
+    --dump_path "ckpt_cache/my_sd21_model"
 
-And finally the SD2.0 512 base model (generally not recommended base model):
+Note the `v2-inference-v.yaml` and `v_prediction`.  This is because the SD2.1 768 model uses a different yaml and prediction type than the SD1.X models. 
+
+And finally the SD2.0 512 base model (generally not recommended base model, no one tunes this either):
 
     python utils/convert_original_stable_diffusion_to_diffusers.py --scheduler_type ddim ^
     --original_config_file v2-inference.yaml ^
@@ -67,19 +67,39 @@ And finally the SD2.0 512 base model (generally not recommended base model):
 
 If you have other models, you need to know the base model that was used for them, **in particular use the correct yaml (original_config_file) or it will not properly convert.** Make sure to put some sort of name in the dump_path after "ckpt_cache/" so you can reference it later.
 
-All of the above is one time.  After running, you will use --resume_ckpt and just name the file without "ckpt_cache/"
+All of the above is one time.  After running, you will use `resume_ckpt` and just name the file without "ckpt_cache/"
 
 ex.
+```
+train.json
+{
+    ...
+    "resume_ckpt": "my_sd15_model",
+    ...
+}
+```
 
-    python train.py --resume_ckpt "sd_v1-5_vae" ...
-    python train.py --resume_ckpt "v2-1_768-ema-pruned" ...
-    python train.py --resume_ckpt "512-base-ema" ...
+or using the CLI arg:
+
+    python train.py --resume_ckpt "my_sd21_model" ...
+
 
 ## Automatic download
 
-If you don't want the hassle of downloading and converting ckpt files, you can pass a Hugging Face "repo id" for `--resume-ckpt` and the model will be automatically downloaded from Huggingface if it exists.
+If you don't want the hassle of downloading and converting ckpt files, you can pass a Hugging Face "repo id" for `resume-ckpt` and the model will be automatically downloaded from Huggingface if it exists.
 
-For example, to use [Stable Diffusion 2.1](https://huggingface.co/stabilityai/stable-diffusion-2-1), you can pass the repo id `stabilityai/stable-diffusion-2-1` for `--resume_ckpt`:
+For example, to use [Stable Diffusion 2.1](https://huggingface.co/stabilityai/stable-diffusion-2-1), you can pass the repo id `stabilityai/stable-diffusion-2-1` for `resume_ckpt`:
+
+```
+train.json
+{
+    ...
+    "resume_ckpt": "stabilityai/stable-diffusion-2-1",
+    ...
+}
+```
+
+or with the CLI arg:
 
     python train.py --resume_ckpt stabilityai/stable-diffusion-2-1 ...
 
@@ -91,7 +111,7 @@ You can check if a 🧨diffusers format model is available by checking [the "Fil
 
 ### Hugging Face login
 
-If the model requires you to sign a license agreement, you may need to login to the Hugging Face hub before downloads will work. You can do this by running the following command in the terminal window before you start training:
+If the model requires you to sign a license agreement (rare), you may need to login to the Hugging Face hub before downloads will work. You can do this by running the following command in the terminal window before you start training:
    
     huggingface-cli login
 
@@ -113,7 +133,7 @@ Replace `<token>` with the Access Token you got from [your Hugging Face User Acc
 
 ### Where are the files?
 
-By default the downloaded Hugging Face files are stored in the Hugging Face cache folder. On Windows this is at `C:\Users\username.cache\huggingface\hub`. On Linux it is at `~/.cache/huggingface/hub`. 
+By default the downloaded Hugging Face files are stored in the Hugging Face cache folder. On Windows this is at `C:\Users\username\.cache\huggingface\hub`. On Linux it is at `~/.cache/huggingface/hub`. 
 
 You can set the environment variable `HUGGINGFACE_HUB_CACHE` to change this. Eg, to put the cache on `Z:\stable-diffusion-big-files\huggingface-hub-cache` (on Windows):
 
@@ -123,4 +143,4 @@ Make sure to do this before running `train.py`.
 
 ### Downloading from a subfolder
 
-If the model you want to download is not stored in the root folder under the huggingface repo id, you can pass `--hf_repo_subfolder` to set the subfolder where it should be downloaded from.
+If the model you want to download is not stored in the root folder under the huggingface repo id (rare), you can pass `--hf_repo_subfolder` to set the subfolder where it should be downloaded from.

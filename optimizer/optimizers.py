@@ -194,7 +194,7 @@ class EveryDreamOptimizer():
 
         return te_config, base_config
 
-    def create_lr_schedulers(self, args, optimizer_config):        
+    def create_lr_schedulers(self, args, optimizer_config):
         unet_config = optimizer_config["base"]
         te_config = optimizer_config["text_encoder_overrides"]
 
@@ -276,7 +276,7 @@ class EveryDreamOptimizer():
         decouple = True # seems bad to turn off, dadapt_adam only
         momentum = 0.0 # dadapt_sgd
         no_prox = False # ????, dadapt_adan
-        growth_rate=float("inf") # dadapt
+        growth_rate=float("inf") # dadapt various, no idea what a sane default is
 
         if local_optimizer_config is not None:
             betas = local_optimizer_config.get("betas", betas)
@@ -336,7 +336,7 @@ class EveryDreamOptimizer():
                         eps=epsilon, #unused for lion
                         d0=d0,
                         log_every=args.log_step,
-                        growth_rate=1e5,
+                        growth_rate=growth_rate,
                         decouple=decouple,
                     )
                 elif optimizer_name == "dadapt_adan":
@@ -371,7 +371,7 @@ class EveryDreamOptimizer():
                         weight_decay=weight_decay,
                         d0=d0,
                         log_every=args.log_step,
-                        growth_rate=float("inf"),
+                        growth_rate=growth_rate,
                     )
 
             else:

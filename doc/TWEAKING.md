@@ -16,22 +16,6 @@ You may wish to consider adding "sd1" or "sd2v" or similar to remember what the 
 
     --project_name "jets_sd21768v" ^
 
-
-## __Stuff you probably want on__
-
-### amp
-    --amp
-
-Enables automatic mixed precision.  Greatly improved training speed and will reduce VRAM use.  [Torch](https://pytorch.org/docs/stable/amp.html) will automatically use FP16 precision for specific model components where FP16 is sufficient precision, and FP32 otherwise.  This also enables xformers to work with the SD1.x attention head schema, which is a large speed boost for SD1.x training.  I highly suggest you always use this, but it is left as an option if you wish to disable.
-
-When amp is used with [gradient checkpointing](#gradient_checkpointing) you can run the trainer on 12GB GPUs and potentially 11GB.
-
-### useadam8bit 
-
-    --useadam8bit
-
-Uses [Tim Dettmer's reduced precision AdamW 8 Bit optimizer](https://github.com/TimDettmers/bitsandbytes).  This seems to have no noticeable impact on quality but is considerable faster and more VRAM efficient. See more below in AdamW vs AdamW 8bit.
-
 ## __Epochs__
 
 EveryDream 2.0 has done away with repeats and instead you should set your max_epochs.  Changing epochs has the same effect as changing repeats in DreamBooth or EveryDream1.  For example, if you had 50 repeats and 5 epochs, you would now set max_epochs to 250 (50x5=250).  This is a bit more intuitive as there is no more double meaning for epochs and repeats.
@@ -103,6 +87,8 @@ Batch size is also another "hyperparamter" of itself and there are tradeoffs. It
     --batch_size 4 ^
 
 While very small batch sizes can impact performance negatively, at some point larger sizes have little impact on overall speed as well, so shooting for the moon is not always advisable.  Changing batch size may also impact what learning rate you use, with typically larger batch_size requiring a slightly higher learning rate.  More info is provided in the [Advanced Tweaking](ADVANCED_TWEAKING.md) document.
+
+I recommend that batch_size be no larger than 10% of your training data image count at the absolute maximum.  I.e. if you have 50 images, do not use more than batch size 5.  If your dataset is very small and has many "rare" aspect ratios, a lower batch size may be perferred as well.  There are warnings printed when rare aspect ratio images are encountered.
 
 ## __LR Scheduler__
 

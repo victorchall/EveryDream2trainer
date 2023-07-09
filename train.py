@@ -504,10 +504,12 @@ def main(args):
         text_encoder = text_encoder.to(device, dtype=torch.float32)
 
     try:
-        torch.compile(unet)
-        torch.compile(text_encoder)
-        torch.compile(vae)
-        logging.info("Successfully compiled models")
+        #unet = torch.compile(unet)
+        #text_encoder = torch.compile(text_encoder)
+        #vae = torch.compile(vae)
+        torch.set_float32_matmul_precision('high')
+        torch.backends.cudnn.allow_tf32 = True
+        #logging.info("Successfully compiled models")
     except Exception as ex:
         logging.warning(f"Failed to compile model, continuing anyway, ex: {ex}")
         pass
@@ -731,7 +733,6 @@ def main(args):
 
             del inference_pipe
         gc.collect()
-        torch.cuda.empty_cache()
 
     def make_save_path(epoch, global_step, prepend=""):
         return os.path.join(f"{log_folder}/ckpts/{prepend}{args.project_name}-ep{epoch:02}-gs{global_step:05}")
@@ -746,10 +747,26 @@ def main(args):
         _, batch = next(enumerate(train_dataloader))
         generate_samples(global_step=0, batch=batch)
 
+    from plugins.plugins import load_plugin
+    if args.plugins is not None:
+        plugins = [load_plugin(name) for name in args.plugins]
+    else:
+        logging.info("No plugins specified")
+        plugins = []
+    
+    from plugins.plugins import PluginRunner
+    plugin_runner = PluginRunner(plugins=plugins)
+
     try:
         write_batch_schedule(args, log_folder, train_batch, epoch = 0)
 
         for epoch in range(args.max_epochs):
+            plugin_runner.run_on_epoch_start(epoch=epoch,
+                                      global_step=global_step,
+                                      project_name=args.project_name,
+                                      log_folder=log_folder,
+                                      data_root=args.data_root)
+
             loss_epoch = []
             epoch_start_time = time.time()
             images_per_sec_log_step = []
@@ -765,6 +782,11 @@ def main(args):
 
             for step, batch in enumerate(train_dataloader):
                 step_start_time = time.time()
+                plugin_runner.run_on_step_start(epoch=epoch,
+                        global_step=global_step,
+                        project_name=args.project_name,
+                        log_folder=log_folder,
+                        batch=batch)
 
                 model_pred, target = get_model_prediction_and_target(batch["image"], batch["tokens"], args.zero_frequency_noise_ratio)
 
@@ -773,7 +795,7 @@ def main(args):
                 del target, model_pred
 
                 if batch["runt_size"] > 0:
-                    loss_scale = batch["runt_size"] / args.batch_size
+                    loss_scale = (batch["runt_size"] / args.batch_size)**1.5 # further discount runts by **1.5
                     loss = loss * loss_scale
 
                 ed_optimizer.step(loss, step, global_step)
@@ -790,14 +812,14 @@ def main(args):
                 loss_epoch.append(loss_step)
 
                 if (global_step + 1) % args.log_step == 0:
-                    loss_local = sum(loss_log_step) / len(loss_log_step)
+                    loss_step = sum(loss_log_step) / len(loss_log_step)
                     lr_unet = ed_optimizer.get_unet_lr()
                     lr_textenc = ed_optimizer.get_textenc_lr()
                     loss_log_step = []
                     
                     log_writer.add_scalar(tag="hyperparameter/lr unet", scalar_value=lr_unet, global_step=global_step)
                     log_writer.add_scalar(tag="hyperparameter/lr text encoder", scalar_value=lr_textenc, global_step=global_step)
-                    log_writer.add_scalar(tag="loss/log_step", scalar_value=loss_local, global_step=global_step)
+                    log_writer.add_scalar(tag="loss/log_step", scalar_value=loss_step, global_step=global_step)
 
                     sum_img = sum(images_per_sec_log_step)
                     avg = sum_img / len(images_per_sec_log_step)
@@ -806,7 +828,7 @@ def main(args):
                         log_writer.add_scalar(tag="hyperparameter/grad scale", scalar_value=ed_optimizer.get_scale(), global_step=global_step)
                     log_writer.add_scalar(tag="performance/images per second", scalar_value=avg, global_step=global_step)
 
-                    logs = {"loss/log_step": loss_local, "lr_unet": lr_unet, "lr_te": lr_textenc, "img/s": images_per_sec}
+                    logs = {"loss/log_step": loss_step, "lr_unet": lr_unet, "lr_te": lr_textenc, "img/s": images_per_sec}
                     append_epoch_log(global_step=global_step, epoch_pbar=epoch_pbar, gpu=gpu, log_writer=log_writer, **logs)
                     torch.cuda.empty_cache()
 
@@ -829,6 +851,13 @@ def main(args):
                     save_path = make_save_path(epoch, global_step)
                     __save_model(save_path, unet, text_encoder, tokenizer, noise_scheduler, vae, ed_optimizer, args.save_ckpt_dir, yaml, args.save_full_precision, args.save_optimizer, save_ckpt=not args.no_save_ckpt)
 
+                plugin_runner.run_on_step_end(epoch=epoch,
+                                      global_step=global_step,
+                                      project_name=args.project_name,
+                                      log_folder=log_folder,
+                                      data_root=args.data_root,
+                                      batch=batch)
+
                 del batch
                 global_step += 1
                 # end of step
@@ -844,10 +873,16 @@ def main(args):
                 train_batch.shuffle(epoch_n=epoch, max_epochs = args.max_epochs)
                 write_batch_schedule(args, log_folder, train_batch, epoch + 1)
 
-            loss_local = sum(loss_epoch) / len(loss_epoch)
-            log_writer.add_scalar(tag="loss/epoch", scalar_value=loss_local, global_step=global_step)
+            loss_epoch = sum(loss_epoch) / len(loss_epoch)
+            log_writer.add_scalar(tag="loss/epoch", scalar_value=loss_epoch, global_step=global_step)
 
-            gc.collect()
+            plugin_runner.run_on_epoch_end(epoch=epoch,
+                                      global_step=global_step,
+                                      project_name=args.project_name,
+                                      log_folder=log_folder,
+                                      data_root=args.data_root)
+
+            gc.collect()            
             # end of epoch
 
         # end of training
@@ -864,6 +899,7 @@ def main(args):
         logging.error(f"{Fore.LIGHTYELLOW_EX}Something went wrong, attempting to save model{Style.RESET_ALL}")
         save_path = make_save_path(epoch, global_step, prepend="errored-")
         __save_model(save_path, unet, text_encoder, tokenizer, noise_scheduler, vae, ed_optimizer, args.save_ckpt_dir, yaml, args.save_full_precision, args.save_optimizer, save_ckpt=not args.no_save_ckpt)
+        logging.info(f"{Fore.LIGHTYELLOW_EX}Model saved, re-raising exception and exiting.  Exception was:{Style.RESET_ALL}{Fore.LIGHTRED_EX} {ex} {Style.RESET_ALL}")
         raise ex
 
     logging.info(f"{Fore.LIGHTWHITE_EX} ***************************{Style.RESET_ALL}")
@@ -914,6 +950,7 @@ if __name__ == "__main__":
     argparser.add_argument("--no_prepend_last", action="store_true", help="Do not prepend 'last-' to the final checkpoint filename")
     argparser.add_argument("--no_save_ckpt", action="store_true", help="Save only diffusers files, no .ckpts" )
     argparser.add_argument("--optimizer_config", default="optimizer.json", help="Path to a JSON configuration file for the optimizer.  Default is 'optimizer.json'")
+    argparser.add_argument('--plugins', nargs='+', help='Names of plugins to use')
     argparser.add_argument("--project_name", type=str, default="myproj", help="Project name for logs and checkpoints, ex. 'tedbennett', 'superduperV1'")
     argparser.add_argument("--resolution", type=int, default=512, help="resolution to train", choices=supported_resolutions)
     argparser.add_argument("--resume_ckpt", type=str, required=not ('resume_ckpt' in args), default="sd_v1-5_vae.ckpt", help="The checkpoint to resume from, either a local .ckpt file, a converted Diffusers format folder, or a Huggingface.co repo id such as stabilityai/stable-diffusion-2-1 ")
