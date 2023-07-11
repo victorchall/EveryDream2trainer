@@ -4,7 +4,7 @@
 
 `python caption_fl.py --data_root input --min_new_tokens 20 --max_new_tokens 30 --num_beams 3 --model "openflamingo/OpenFlamingo-9B-vitl-mpt7b"`
 
-This script uses two example image/caption pairs located in the example folder to prime the system to caption, then captions the images in the input folder. It will save a `.txt` file of the same base filename with the captoin in the same folder. 
+This script uses two example image/caption pairs located in the `/example` folder to prime the system to caption, then captions the images in the input folder. It will save a `.txt` file of the same base filename with the captoin in the same folder. 
 
 This script currently requires an AMPERE or newer GPU due to using bfloat16. 
 
