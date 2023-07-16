@@ -2,7 +2,7 @@
 
 EveryDream2 supports "chaining" together multiple training sessions with different settings.
 
-Chaining works by using a magic value for the `resumt_ckpt` argument of `findlast` to find the latest checkpoint. When you use `findlast` the trainer will search your logs for the most recent timestamp diffusers files and use that as the checkpoint to resume from. 
+Chaining works by using a magic value for the `resume_ckpt` argument of `findlast` to find the latest checkpoint. When you use `findlast` the trainer will search your logs for the most recent timestamp diffusers files and use that as the checkpoint to resume from. 
 
 For the first session, you would still need to use a base model, such as `"resume_ckpt": "sd_1-5_vae"` and then copy the config json file and change subsequent sessions to `"resume_ckpt": "findlast"` along with any other modifications you wish to make.
 
