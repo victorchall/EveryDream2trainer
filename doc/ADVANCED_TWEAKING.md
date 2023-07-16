@@ -151,6 +151,10 @@ Test results: https://huggingface.co/panopstor/ff7r-stable-diffusion/blob/main/z
 
 Very tentatively, I suggest closer to 0.10 for short term training, and lower values of around 0.02 to 0.03 for longer runs (50k+ steps).  Early indications seem to suggest values like 0.10 can cause divergance over time. 
 
+## Zero terminal SNR
+
+Set `zero_frequency_noise_ratio` to -1.
+
 ## Keeping images together (custom batching)
 
 If you have a subset of your dataset that expresses the same style or concept, training quality may be improved by putting all of these images through the trainer together in the same batch or batches, instead of the default behaviour (which is to shuffle them randomly throughout the entire dataset).
