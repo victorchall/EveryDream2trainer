@@ -350,6 +350,9 @@ def setup_args(args):
     if not args.shuffle_tags:
         args.shuffle_tags = False
 
+    if not args.keep_tags:
+        args.keep_tags = 0
+
     args.clip_skip = max(min(4, args.clip_skip), 0)
 
     if args.useadam8bit:
@@ -779,6 +782,7 @@ def main(args):
         tokenizer=tokenizer,
         seed = seed,
         shuffle_tags=args.shuffle_tags,
+        keep_tags=args.keep_tags,
         rated_dataset=args.rated_dataset,
         rated_dataset_dropout_target=(1.0 - (args.rated_dataset_target_dropout_percent / 100.0))
     )
@@ -1326,6 +1330,7 @@ if __name__ == "__main__":
     argparser.add_argument("--save_optimizer", action="store_true", default=False, help="saves optimizer state with ckpt, useful for resuming training later")
     argparser.add_argument("--seed", type=int, default=555, help="seed used for samples and shuffling, use -1 for random")
     argparser.add_argument("--shuffle_tags", action="store_true", default=False, help="randomly shuffles CSV tags in captions, for booru datasets")
+    argparser.add_argument("--keep_tags", type=int, default=0, help="Number of tags to keep when shuffle, def: 0 (shuffle all)")
     argparser.add_argument("--useadam8bit", action="store_true", default=False, help="deprecated, use --optimizer_config and optimizer.json instead")
     argparser.add_argument("--wandb", action="store_true", default=False, help="enable wandb logging instead of tensorboard, requires env var WANDB_API_KEY")
     argparser.add_argument("--validation_config", default=None, help="Path to a JSON configuration file for the validator.  Default is no validation.")
