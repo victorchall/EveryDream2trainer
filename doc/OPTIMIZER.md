@@ -38,7 +38,7 @@ Lucidrains' [implementation](https://github.com/lucidrains/lion-pytorch) of the 
 
 Recommended settings for lion based on the paper are as follows:
 
-    "optimizer": "adamw8bit",
+    "optimizer": "lion",
         "lr": 1e-7,
         "lr_scheduler": "constant",
         "betas": [0.9, 0.999],
