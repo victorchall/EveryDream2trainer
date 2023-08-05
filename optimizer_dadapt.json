@@ -46,6 +46,7 @@
         "decouple": true
     },
     "text_encoder_freezing": {
-        "unfreeze_last_n_layers": 6
-    }
+        "unfreeze_last_n_layers": null
+    },
+    "apply_grad_scaler_step_tweaks": true
 }
