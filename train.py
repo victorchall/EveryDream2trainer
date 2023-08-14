@@ -934,7 +934,7 @@ def main(args):
 
         if input_perturbation > 0:
             # add some extra noise
-            new_noise = noise + args.input_pertubation * torch.randn_like(noise)
+            new_noise = noise + args.input_perturbation * torch.randn_like(noise)
             noisy_latents = noise_scheduler.add_noise(latents, new_noise, timesteps)
         else:
             noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
