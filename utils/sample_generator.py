@@ -87,7 +87,8 @@ class SampleGenerator:
                  default_seed: int,
                  default_sample_steps: int,
                  use_xformers: bool,
-                 use_penultimate_clip_layer: bool):
+                 use_penultimate_clip_layer: bool,
+                 guidance_rescale: float = 0):
         self.log_folder = log_folder
         self.log_writer = log_writer
         self.batch_size = batch_size
@@ -96,6 +97,7 @@ class SampleGenerator:
         self.show_progress_bars = False
         self.generate_pretrain_samples = False
         self.use_penultimate_clip_layer = use_penultimate_clip_layer
+        self.guidance_rescale = guidance_rescale
 
         self.default_resolution = default_resolution
         self.default_seed = default_seed
@@ -228,6 +230,7 @@ class SampleGenerator:
                                   generator=generators,
                                   width=size[0],
                                   height=size[1],
+                                  guidance_rescale=self.guidance_rescale
                                   ).images
 
                     for image in images:
