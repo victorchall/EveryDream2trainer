@@ -7,7 +7,7 @@ pip install torch==2.0.1+cu118 torchvision==0.15.2+cu118 --extra-index-url "http
 pip install -U transformers==4.29.2
 pip install -U diffusers[torch]==0.18.0
 pip install pynvml==11.4.1
-pip install -U https://github.com/victorchall/everydream-whls/raw/main/bitsandbytes-0.38.1-py2.py3-none-any.whl
+pip install -U pip install -U https://github.com/jllllll/bitsandbytes-windows-webui/releases/download/wheels/bitsandbytes-0.41.1-py3-none-win_amd64.whl
 pip install ftfy==6.1.1
 pip install aiohttp==3.8.4
 pip install tensorboard>=2.11.0
