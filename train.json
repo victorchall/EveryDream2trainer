@@ -24,7 +24,7 @@
   "optimizer_config": "optimizer.json",
   "project_name": "project_abc",
   "resolution": 512,
-  "resume_ckpt": "sd_v1-5_vae",
+  "resume_ckpt": "panopstor/EveryDream",
   "run_name": null,
   "sample_prompts": "sample_prompts.txt",
   "sample_steps": 300,
