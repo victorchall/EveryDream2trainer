@@ -985,9 +985,12 @@ def main(args):
 
                 if model_info["is_ema"]:
                     current_unet, current_text_encoder = unet_ema, text_encoder_ema
-                    extra_info = "ema_"
+                    extra_info = "_ema"
                 else:
                     current_unet, current_text_encoder = unet, text_encoder
+
+                torch.cuda.empty_cache()
+
 
                 if model_info["swap_required"]:
                     with torch.no_grad():
