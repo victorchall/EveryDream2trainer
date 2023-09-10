@@ -1001,6 +1001,7 @@ def main(args):
                         current_text_encoder = text_encoder_ema.to(device)
                         del text_encoder_ema
                         gc.collect()
+                        torch.cuda.empty_cache()
 
 
 
@@ -1028,6 +1029,7 @@ def main(args):
                         del current_text_encoder
 
                 gc.collect()
+                torch.cuda.empty_cache()
 
     def make_save_path(epoch, global_step, prepend=""):
         return os.path.join(f"{log_folder}/ckpts/{prepend}{args.project_name}-ep{epoch:02}-gs{global_step:05}")
