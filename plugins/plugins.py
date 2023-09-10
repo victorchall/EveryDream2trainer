@@ -44,7 +44,7 @@ class Timer:
     def __exit__(self, type, value, traceback):
         elapsed_time = time.time() - self.start
         if elapsed_time > self.warn_seconds:
-            logging.warning(f'Execution of {self.label} took {elapsed_time} seconds which is longer than the limit of {self.limit} seconds')
+            logging.warning(f'Execution of {self.label} took {elapsed_time} seconds which is longer than the limit of {self.warn_seconds} seconds')
 
 
 class PluginRunner:
