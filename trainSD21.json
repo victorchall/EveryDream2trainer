@@ -39,5 +39,15 @@
   "write_schedule": false,
   "rated_dataset": false,
   "rated_dataset_target_dropout_percent": 50,
-  "zero_frequency_noise_ratio": 0.02
+  "zero_frequency_noise_ratio": 0.02,
+  "enable_zero_terminal_snr": false,
+  "load_settings_every_epoch": false,
+  "min_snr_gamma": null,
+  "ema_decay_rate": null,
+  "ema_decay_target": null,
+  "ema_decay_interval": null,
+  "ema_decay_device": null,
+  "ema_decay_sample_raw_training": false,
+  "ema_decay_sample_ema_model": false,
+  "ema_decay_resume_model" : null
 }
