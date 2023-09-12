@@ -181,7 +181,7 @@ class SampleGenerator:
                 self.sample_requests = self._make_random_caption_sample_requests()
 
     @torch.no_grad()
-    def generate_samples(self, pipe: StableDiffusionPipeline, global_step: int):
+    def generate_samples(self, pipe: StableDiffusionPipeline, global_step: int, extra_info: str = ""):
         """
         generates samples at different cfg scales and saves them to disk
         """
@@ -269,15 +269,15 @@ class SampleGenerator:
                     prompt = prompts[prompt_idx]
                     clean_prompt = clean_filename(prompt)
 
-                    result.save(f"{self.log_folder}/samples/gs{global_step:05}-{sample_index}-{clean_prompt[:100]}.jpg", format="JPEG", quality=95, optimize=True, progressive=False)
-                    with open(f"{self.log_folder}/samples/gs{global_step:05}-{sample_index}-{clean_prompt[:100]}.txt", "w", encoding='utf-8') as f:
+                    result.save(f"{self.log_folder}/samples/gs{global_step:05}-{sample_index}-{extra_info}{clean_prompt[:100]}.jpg", format="JPEG", quality=95, optimize=True, progressive=False)
+                    with open(f"{self.log_folder}/samples/gs{global_step:05}-{sample_index}-{extra_info}{clean_prompt[:100]}.txt", "w", encoding='utf-8') as f:
                         f.write(str(batch[prompt_idx]))
 
                     tfimage = transforms.ToTensor()(result)
                     if batch[prompt_idx].wants_random_caption:
-                        self.log_writer.add_image(tag=f"sample_{sample_index}", img_tensor=tfimage, global_step=global_step)
+                        self.log_writer.add_image(tag=f"sample_{sample_index}{extra_info}", img_tensor=tfimage, global_step=global_step)
                     else:
-                        self.log_writer.add_image(tag=f"sample_{sample_index}_{clean_prompt[:100]}", img_tensor=tfimage, global_step=global_step)
+                        self.log_writer.add_image(tag=f"sample_{sample_index}_{extra_info}{clean_prompt[:100]}", img_tensor=tfimage, global_step=global_step)
                     sample_index += 1
 
                     del result

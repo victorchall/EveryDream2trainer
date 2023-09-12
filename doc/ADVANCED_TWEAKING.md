@@ -149,11 +149,7 @@ Based on [Nicholas Guttenberg's blog post](https://www.crosslabs.org//blog/diffu
 
 Test results: https://huggingface.co/panopstor/ff7r-stable-diffusion/blob/main/zero_freq_test_biggs.webp
 
-Very tentatively, I suggest closer to 0.10 for short term training, and lower values of around 0.02 to 0.03 for longer runs (50k+ steps).  Early indications seem to suggest values like 0.10 can cause divergance over time. 
-
-## Zero terminal SNR
-
-Set `zero_frequency_noise_ratio` to -1.
+Very tentatively, I suggest closer to 0.10 for short term training, and lower values of around 0.02 to 0.03 for longer runs (50k+ steps).  Early indications seem to suggest values like 0.10 can cause divergance over time.
 
 ## Keeping images together (custom batching)
 
@@ -205,3 +201,37 @@ Clips the gradient normals to a maximum value.  Default is None (no clipping).  
 
 Default is no gradient normal clipping. There are also other ways to deal with gradient explosion, such as increasing optimizer epsilon.
 
+## Zero Terminal SNR
+**Parameter:** `--enable_zero_terminal_snr`  
+**Default:** `False`  
+To enable zero terminal SNR.
+
+## Dynamic Configuration Loading
+**Parameter:** `--load_settings_every_epoch`  
+**Default:** `False`  
+Most of the parameters in the train.json file CANNOT be modified during training. Activate this to have the `train.json` configuration file reloaded at the start of each epoch. The following parameter can be changed and will be applied after the start of a new epoch:
+- `--save_every_n_epochs`
+- `--save_ckpts_from_n_epochs`
+- `--save_full_precision`
+- `--save_optimizer`
+- `--zero_frequency_noise_ratio`
+- `--min_snr_gamma`
+- `--clip_skip`
+
+## Min-SNR-Gamma Parameter
+**Parameter:** `--min_snr_gamma`  
+**Recommended Values:** 5, 1, 20  
+**Default:** `None`  
+To enable min-SNR-Gamma. For an in-depth understanding, consult this [research paper](https://arxiv.org/abs/2303.09556).
+
+## EMA Decay Features
+The Exponential Moving Average (EMA) model is copied from the base model at the start and is updated every interval of steps by a small contribution from training.
+In this mode, the EMA model will be saved alongside the regular checkpoint from training. Normal training checkpoint can be loaded with `--resume_ckpt`, and the EMA model can be loaded with `--ema_decay_resume_model`.
+**Parameters:**  
+- `--ema_decay_rate`: Determines the EMA decay rate. It defines how much the EMA model is updated from training at each update. Values should be close to 1 but not exceed it. Activating this parameter triggers the EMA decay feature.
+- `--ema_decay_target`: Set the EMA decay target value within the (0,1) range. The `ema_decay_rate` is computed based on the relation: decay_rate to the power of (total_steps/decay_interval) equals decay_target. Enabling this parameter will override `ema_decay_rate` and will enable EMA decay feature.
+- `--ema_decay_interval`: Set the interval in steps between EMA decay updates. The update occurs at each `global_steps` modulo `decay_interval`.
+- `--ema_decay_device`: Choose between `cpu` and `cuda` for EMA decay. Opting for 'cpu' takes around 4 seconds per update and uses approximately 3.2GB RAM, while 'cuda' is much faster but requires a similar amount of VRAM.
+- `--ema_decay_sample_raw_training`: Activate to display samples from the trained model, mirroring conventional training. They will not be presented by default with EMA decay enabled.
+- `--ema_decay_sample_ema_model`: Turn on to exhibit samples from the EMA model. EMA models will be used for samples generations by default with EMA decay enabled, unless disabled.
+- `--ema_decay_resume_model`: Indicate the EMA decay checkpoint to continue from, working like `--resume_ckpt` but will load EMA model. Using `findlast` will only load EMA version and not regular training.
