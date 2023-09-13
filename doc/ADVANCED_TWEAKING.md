@@ -227,11 +227,41 @@ To enable min-SNR-Gamma. For an in-depth understanding, consult this [research p
 ## EMA Decay Features
 The Exponential Moving Average (EMA) model is copied from the base model at the start and is updated every interval of steps by a small contribution from training.
 In this mode, the EMA model will be saved alongside the regular checkpoint from training. Normal training checkpoint can be loaded with `--resume_ckpt`, and the EMA model can be loaded with `--ema_decay_resume_model`.
+For more information, consult the [research paper](https://arxiv.org/abs/2101.08482) or continue reading the tuning notes below. 
 **Parameters:**  
 - `--ema_decay_rate`: Determines the EMA decay rate. It defines how much the EMA model is updated from training at each update. Values should be close to 1 but not exceed it. Activating this parameter triggers the EMA decay feature.
-- `--ema_decay_target`: Set the EMA decay target value within the (0,1) range. The `ema_decay_rate` is computed based on the relation: decay_rate to the power of (total_steps/decay_interval) equals decay_target. Enabling this parameter will override `ema_decay_rate` and will enable EMA decay feature.
-- `--ema_decay_interval`: Set the interval in steps between EMA decay updates. The update occurs at each `global_steps` modulo `decay_interval`.
-- `--ema_decay_device`: Choose between `cpu` and `cuda` for EMA decay. Opting for 'cpu' takes around 4 seconds per update and uses approximately 3.2GB RAM, while 'cuda' is much faster but requires a similar amount of VRAM.
-- `--ema_decay_sample_raw_training`: Activate to display samples from the trained model, mirroring conventional training. They will not be presented by default with EMA decay enabled.
-- `--ema_decay_sample_ema_model`: Turn on to exhibit samples from the EMA model. EMA models will be used for samples generations by default with EMA decay enabled, unless disabled.
-- `--ema_decay_resume_model`: Indicate the EMA decay checkpoint to continue from, working like `--resume_ckpt` but will load EMA model. Using `findlast` will only load EMA version and not regular training.
+- `--ema_decay_target`: Set the EMA decay target value within the (0,1) range. The `ema_decay_rate` is computed based on the relation: decay_rate to the power of (total_steps/decay_interval) equals decay_target. Enabling this parameter will override `ema_decay_rate` and will enable EMA feature.
+- `--ema_update_interval`: Set the interval in steps between EMA updates. The update occurs at each optimizer step.  If you use grad_accum, actual update interval will be multipled by your grad_accum value.
+- `--ema_device`: Choose between `cpu` and `cuda` for EMA. Opting for 'cpu' takes around 4 seconds per update and uses approximately 3.2GB RAM, while 'cuda' is much faster but requires a similar amount of VRAM.
+- `--ema_sample_raw_training`: Activate to display samples from the trained model, mirroring conventional training. They will not be presented by default with EMA decay enabled.
+- `--ema_sample_ema_model`: Turn on to exhibit samples from the EMA model. EMA models will be used for samples generations by default with EMA decay enabled, unless disabled.
+- `--ema_resume_model`: Indicate the EMA decay checkpoint to continue from, working like `--resume_ckpt` but will load EMA model. Using `findlast` will only load EMA version and not regular training.
+
+## Notes on tuning EMA.
+
+The purpose of EMA is to reduce the effect of the data from the tail end of training from having an overly powerful effect on the model.  Normally trainig is stopped abruptly and the final images seen by the trainer may have a stronger effect than images seen earlier in training.  *This may have a similar to lowering the learning rate near the end of training, but is not mathematically equivalent.*  An alternative method to EMA would be to use a cosine learning rate schedule. 
+
+Training with EMA turned on has no effect on the non-EMA model if all other settings are identical, though practical considerations (mainly VRAM limits) may cause you to change other settings which can affect the non-EMA model, such as lowering batch size to free enough VRAM for the EMA model if using gpu. 
+
+A standard implementation of EMA uses a decay rate of 0.9999, GPU device, and an interval of 1 (every optimizer step).  This value can have a strong effect, leading to what appears to be an undertrained EMA model compared to the non-EMA model.  A value of 0.999 seems to produce an EMA model nearly identical to the non-EMA model and should be considered a low value.  Somewhere in the 0.999-0.9999 range is suggested when using GPU and interval 1. 
+
+EMA uses an additional ~3.2GB of RAM (for SD1.x models) to store an extra copy of the model weights in memory. For even 24GB consumer GPUs this is substantial, but EMA CPU offloading together with using a higher `ema_update_interval` can make it more practical.  It can be practical on a 24GB GPU if you also enable gradient checkpointing, which is not normally suggested for 24GB GPUs as it is not necessary.  Gradient checkpointing saves a bit more than 3.2GB itself.  The other options is to use CPU offloading by setting `ema_device: "cpu"`.  The EMA copy of the model will be stored in main system memory instead of the GPU, but at a cost of slower sampling and updating.  CPU offloading is a requirement for GPUs with 16GB or less VRAM, and even 24GB GPU users may wish to consider it.  If you are using a 40GB+ GPU you should use GPU. 
+
+When using a higher interval to make cpu offloading practical and reasonably fast, the decay rate should be lowered.  For instance, with an interval of 50, you may wish to lower the decay rate to 0.99 or possibly lower.  This is because the EMA model is updated less frequently and the decay rate is effectively higher than the set value under otherwise "normal" EMA training regime. The higher interval also reduces accuracy of the EMA model compared to the reference implementation which would normally update EMA every optimizer step. 
+
+I would suggest you pick an interval and stick with it, and then tune your decay_rate by generating samples from both EMA and non EMA using the options or after training using your favorite inference app and compare the results. 
+It is expected the EMA model will look "behind" on training, but should still be recognizable as the same subject matter.  If it is not, you may wish to try a lower decay rate.  If it is too close to the non-EMA model, you may wish to try a higher decay rate.
+
+Using the GPU for ema incurs only a small speed penalty of around 5-10% with all else being equal, though if you change other parameters such as lowering batch size or enabling gradient checkpointing flag to free VRAM for EMA those options may incur a slightly higher speed penalities. 
+
+Generally, I recommend picking a device and approriate interval given your device choice first and stick with those values, then tweak the `ema_decay_rate` up or down according to how you want the EMA model to look vs. your non-EMA model.  From there, if your EMA model seems to "lag behind" the non-EMA model by "too much" (subjectively judged), you can decrease decay rate. If it identical or nearly identical, use a slightly higher value. 
+
+## ema_strength_target
+
+This arg is a non-standard way of calculating the actual decay rate used. It attempts to calculate a value for decay rate based on your `ema_update_interval` and the total length of training, compensating for both.  Values of 0.01-0.15 should work, with higher values leading to a EMA model that deviates more from the non-EMA model similar to how decay rate works.  It attempts to be more of a "strength" value of EMA, or "how much" (as a factor, i.e. 0.10 = 10% "strength") of the EMA model are kept for the totality of training.  
+
+While the calculation makes sense in how it compensates for inteval and total training length, it is not a standard way of calculating decay rate and there will not be information online about how to use it. I recommend not using this feature and instead picking a device and approriate interval given your device choice first, then tuning your decay rate by hand, find "good" values, then don't mess with them, but you can try this feature out if you want.  
+
+    --ema_strength_target 0.10 ^
+
+If you use `ema_strength_target` the actual calculated `ema_decay_rate` used will be printed in your logs, and you should pay attention to this value and use it to inform your future decisions on EMA tuning.

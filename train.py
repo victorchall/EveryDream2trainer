@@ -235,10 +235,10 @@ def setup_args(args):
         # find the last checkpoint in the logdir
         args.resume_ckpt = find_last_checkpoint(args.logdir)
 
-    if (args.ema_decay_resume_model != None) and (args.ema_decay_resume_model == "findlast"):
+    if (args.ema_resume_model != None) and (args.ema_resume_model == "findlast"):
         logging.info(f"{Fore.LIGHTCYAN_EX} Finding last EMA decay checkpoint in logdir: {args.logdir}{Style.RESET_ALL}")
 
-        args.ema_decay_resume_model = find_last_checkpoint(args.logdir, is_ema=True)
+        args.ema_resume_model = find_last_checkpoint(args.logdir, is_ema=True)
 
     if args.lowvram:
         set_args_12gb(args)
@@ -521,8 +521,6 @@ def main(args):
 
 
         if args.ema_decay_rate != None:
-
-
             pipeline_ema = StableDiffusionPipeline(
                 vae=vae,
                 text_encoder=text_encoder_ema,
@@ -542,7 +540,6 @@ def main(args):
                 sd_ckpt_path_ema = f"{os.path.basename(save_path)}_ema.ckpt"
 
                 save_ckpt_file(diffusers_model_path, sd_ckpt_path_ema)
-
 
 
         pipeline = StableDiffusionPipeline(
@@ -571,11 +568,11 @@ def main(args):
             ed_optimizer.save(save_path)
 
 
-    use_ema_dacay_training = (args.ema_decay_rate != None) or (args.ema_decay_target != None)
-    ema_decay_model_loaded_from_file = False
+    use_ema_dacay_training = (args.ema_decay_rate != None) or (args.ema_strength_target != None)
+    ema_model_loaded_from_file = False
 
     if use_ema_dacay_training:
-        ema_device = torch.device(args.ema_decay_device)
+        ema_device = torch.device(args.ema_device)
 
     optimizer_state_path = None
     try:
@@ -601,22 +598,22 @@ def main(args):
             unet = pipe.unet
             del pipe
 
-        if use_ema_dacay_training and args.ema_decay_resume_model:
-            print(f"Loading EMA model: {args.ema_decay_resume_model}")
-            ema_decay_model_loaded_from_file=True
-            hf_cache_path = get_hf_ckpt_cache_path(args.ema_decay_resume_model)
+        if use_ema_dacay_training and args.ema_resume_model:
+            print(f"Loading EMA model: {args.ema_resume_model}")
+            ema_model_loaded_from_file=True
+            hf_cache_path = get_hf_ckpt_cache_path(args.ema_resume_model)
 
-            if os.path.exists(hf_cache_path) or os.path.exists(args.ema_decay_resume_model):
+            if os.path.exists(hf_cache_path) or os.path.exists(args.ema_resume_model):
                 ema_model_root_folder, ema_is_sd1attn, ema_yaml = convert_to_hf(args.resume_ckpt)
                 text_encoder_ema = CLIPTextModel.from_pretrained(ema_model_root_folder, subfolder="text_encoder")
                 unet_ema = UNet2DConditionModel.from_pretrained(ema_model_root_folder, subfolder="unet")
 
             else:
-                # try to download from HF using ema_decay_resume_model as a repo id
-                ema_downloaded = try_download_model_from_hf(repo_id=args.ema_decay_resume_model)
+                # try to download from HF using ema_resume_model as a repo id
+                ema_downloaded = try_download_model_from_hf(repo_id=args.ema_resume_model)
                 if ema_downloaded is None:
                     raise ValueError(
-                        f"No local file/folder for ema_decay_resume_model {args.ema_decay_resume_model}, and no matching huggingface.co repo could be downloaded")
+                        f"No local file/folder for ema_resume_model {args.ema_resume_model}, and no matching huggingface.co repo could be downloaded")
                 ema_pipe, ema_model_root_folder, ema_is_sd1attn, ema_yaml = ema_downloaded
                 text_encoder_ema = ema_pipe.text_encoder
                 unet_ema = ema_pipe.unet
@@ -686,11 +683,11 @@ def main(args):
 
 
     if use_ema_dacay_training:
-        if not ema_decay_model_loaded_from_file:
+        if not ema_model_loaded_from_file:
             logging.info(f"EMA decay enabled, creating EMA model.")
 
             with torch.no_grad():
-                if args.ema_decay_device == device:
+                if args.ema_device == device:
                     unet_ema = deepcopy(unet)
                     text_encoder_ema = deepcopy(text_encoder)
                 else:
@@ -779,16 +776,16 @@ def main(args):
 
 
     if use_ema_dacay_training:
-        if args.ema_decay_target != None:
-            # Value in range (0,1). decay_rate will be calculated from equation: decay_rate^(total_steps/decay_interval)=decay_target. Using this parameter will enable the feature and overide decay_target.
+        args.ema_update_interval = args.ema_update_interval * args.grad_accum
+        if args.ema_strength_target != None:
             total_number_of_steps: float = epoch_len * args.max_epochs
-            total_number_of_ema_update: float = total_number_of_steps / args.ema_decay_interval
-            args.ema_decay_rate = args.ema_decay_target ** (1 / total_number_of_ema_update)
+            total_number_of_ema_update: float = total_number_of_steps / args.ema_update_interval
+            args.ema_decay_rate = args.ema_strength_target ** (1 / total_number_of_ema_update)
 
-            logging.info(f"ema_decay_target is {args.ema_decay_target}, calculated ema_decay_rate will be: {args.ema_decay_rate}.")
+            logging.info(f"ema_strength_target is {args.ema_strength_target}, calculated ema_decay_rate will be: {args.ema_decay_rate}.")
 
         logging.info(
-            f"EMA decay enabled, with ema_decay_rate {args.ema_decay_rate}, ema_decay_interval: {args.ema_decay_interval}, ema_decay_device: {args.ema_decay_device}.")
+            f"EMA decay enabled, with ema_decay_rate {args.ema_decay_rate}, ema_update_interval: {args.ema_update_interval}, ema_device: {args.ema_device}.")
 
 
     ed_optimizer = EveryDreamOptimizer(args,
@@ -973,10 +970,10 @@ def main(args):
 
             models_info = []
 
-            if (args.ema_decay_rate is None) or args.ema_decay_sample_raw_training:
+            if (args.ema_decay_rate is None) or args.ema_sample_raw_training:
                 models_info.append({"is_ema": False, "swap_required": False})
 
-            if (args.ema_decay_rate is not None) and args.ema_decay_sample_ema_model:
+            if (args.ema_decay_rate is not None) and args.ema_sample_ema_model:
                 models_info.append({"is_ema": True, "swap_required": ema_device != device})
 
             for model_info in models_info:
@@ -1107,7 +1104,7 @@ def main(args):
                 ed_optimizer.step(loss, step, global_step)
 
                 if args.ema_decay_rate != None:
-                    if ((global_step + 1) % args.ema_decay_interval) == 0:
+                    if ((global_step + 1) % args.ema_update_interval) == 0:
                         # debug_start_time = time.time() # Measure time
 
                         if args.disable_unet_training != True:
@@ -1256,7 +1253,7 @@ if __name__ == "__main__":
     argparser.add_argument("--disable_unet_training", action="store_true", default=False, help="disables training of unet (def: False) NOT RECOMMENDED")
     argparser.add_argument("--disable_xformers", action="store_true", default=False, help="disable xformers, may reduce performance (def: False)")
     argparser.add_argument("--flip_p", type=float, default=0.0, help="probability of flipping image horizontally (def: 0.0) use 0.0 to 1.0, ex 0.5, not good for specific faces!")
-    argparser.add_argument("--gpuid", type=int, default=0, help="id of gpu to use for training, (def: 0) (ex: 1 to use GPU_ID 1)")
+    argparser.add_argument("--gpuid", type=int, default=0, help="id of gpu to use for training, (def: 0) (ex: 1 to use GPU_ID 1), use nvidia-smi to find your GPU ids")
     argparser.add_argument("--gradient_checkpointing", action="store_true", default=False, help="enable gradient checkpointing to reduce VRAM use, may reduce performance (def: False)")
     argparser.add_argument("--grad_accum", type=int, default=1, help="Gradient accumulation factor (def: 1), (ex, 2)")
     argparser.add_argument("--logdir", type=str, default="logs", help="folder to save logs to (def: logs)")
@@ -1293,14 +1290,14 @@ if __name__ == "__main__":
     argparser.add_argument("--zero_frequency_noise_ratio", type=float, default=0.02, help="adds zero frequency noise, for improving contrast (def: 0.0) use 0.0 to 0.15")
     argparser.add_argument("--enable_zero_terminal_snr", action="store_true", default=None, help="Use zero terminal SNR noising beta schedule")
     argparser.add_argument("--load_settings_every_epoch", action="store_true", default=None, help="Will load 'train.json' at start of every epoch. Disabled by default and enabled when used.")
-    argparser.add_argument("--min_snr_gamma", type=int, default=None, help="min-SNR-gamma parameteris the loss function into individual tasks. Recommended values: 5, 1, 20. Disabled by default and enabled when used. More info: https://arxiv.org/abs/2303.09556")
-    argparser.add_argument("--ema_decay_rate", type=float, default=None, help="EMA decay rate. EMA model will be updated with (1 - ema_decay_rate) from training, and the ema_decay_rate from previous EMA, every interval. Values less than 1 and not so far from 1. Using this parameter will enable the feature.")
-    argparser.add_argument("--ema_decay_target", type=float, default=None, help="EMA decay target value in range (0,1). ema_decay_rate will be calculated from equation: decay_rate^(total_steps/decay_interval)=decay_target. Using this parameter will enable the feature and overide ema_decay_rate.")
-    argparser.add_argument("--ema_decay_interval", type=int, default=500, help="How many steps between every EMA decay update. EMA model will be update on every global_steps modulo decay_interval.")
-    argparser.add_argument("--ema_decay_device", type=str, default='cpu', help="EMA decay device values: cpu, cuda. Using 'cpu' is taking around 4 seconds per update vs fraction of a second on 'cuda'. Using 'cuda' will reserve around 3.2GB VRAM for a model, with 'cpu' RAM will be used.")
-    argparser.add_argument("--ema_decay_sample_raw_training", action="store_true", default=False, help="Will show samples from trained model, just like regular training. Can be used with: --ema_decay_sample_ema_model")
-    argparser.add_argument("--ema_decay_sample_ema_model", action="store_true", default=False, help="Will show samples from EMA model. Can be used with: --ema_decay_sample_raw_training")
-    argparser.add_argument("--ema_decay_resume_model", type=str, default=None, help="The EMA decay checkpoint to resume from for EMA decay, either a local .ckpt file, a converted Diffusers format folder, or a Huggingface.co repo id such as stabilityai/stable-diffusion-2-1-ema-decay")
+    argparser.add_argument("--min_snr_gamma", type=int, default=None, help="min-SNR-gamma parameter is the loss function into individual tasks. Recommended values: 5, 1, 20. Disabled by default and enabled when used. More info: https://arxiv.org/abs/2303.09556")
+    argparser.add_argument("--ema_decay_rate", type=float, default=None, help="EMA decay rate. EMA model will be updated with (1 - ema_rate) from training, and the ema_rate from previous EMA, every interval. Values less than 1 and not so far from 1. Using this parameter will enable the feature.")
+    argparser.add_argument("--ema_strength_target", type=float, default=None, help="EMA decay target value in range (0,1). emarate will be calculated from equation: 'ema_decay_rate=ema_strength_target^(total_steps/ema_update_interval)'. Using this parameter will enable the ema feature and overide ema_decay_rate.")
+    argparser.add_argument("--ema_update_interval", type=int, default=500, help="How many steps between optimizer steps that EMA decay updates. EMA model will be update on every step modulo grad_accum times ema_update_interval.")
+    argparser.add_argument("--ema_device", type=str, default='cpu', help="EMA decay device values: cpu, cuda. Using 'cpu' is taking around 4 seconds per update vs fraction of a second on 'cuda'. Using 'cuda' will reserve around 3.2GB VRAM for a model, with 'cpu' the system RAM will be used.")
+    argparser.add_argument("--ema_sample_nonema_model", action="store_true", default=False, help="Will show samples from non-EMA trained model, just like regular training. Can be used with: --ema_sample_ema_model")
+    argparser.add_argument("--ema_sample_ema_model", action="store_true", default=False, help="Will show samples from EMA model. May be slower when using ema cpu offloading. Can be used with: --ema_sample_nonema_model")
+    argparser.add_argument("--ema_resume_model", type=str, default=None, help="The EMA decay checkpoint to resume from for EMA decay, either a local .ckpt file, a converted Diffusers format folder, or a Huggingface.co repo id such as stabilityai/stable-diffusion-2-1-ema-decay")
 
 
     # load CLI args to overwrite existing config args
