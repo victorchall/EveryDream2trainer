@@ -45,9 +45,9 @@
   "min_snr_gamma": null,
   "ema_decay_rate": null,
   "ema_decay_target": null,
-  "ema_decay_interval": null,
-  "ema_decay_device": null,
-  "ema_decay_sample_raw_training": false,
-  "ema_decay_sample_ema_model": false,
-  "ema_decay_resume_model" : null
+  "ema_update_interval": null,
+  "ema_device": null,
+  "ema_sample_raw_training": false,
+  "ema_sample_ema_model": false,
+  "ema_resume_model" : null
 }
