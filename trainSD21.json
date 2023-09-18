@@ -44,7 +44,7 @@
   "load_settings_every_epoch": false,
   "min_snr_gamma": null,
   "ema_decay_rate": null,
-  "ema_decay_target": null,
+  "ema_strength_target": null,
   "ema_update_interval": null,
   "ema_device": null,
   "ema_sample_raw_training": false,
