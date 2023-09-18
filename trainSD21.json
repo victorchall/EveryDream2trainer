@@ -47,7 +47,7 @@
   "ema_strength_target": null,
   "ema_update_interval": null,
   "ema_device": null,
-  "ema_sample_raw_training": false,
+  "ema_sample_nonema_model": false,
   "ema_sample_ema_model": false,
   "ema_resume_model" : null
 }
