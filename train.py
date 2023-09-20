@@ -473,7 +473,6 @@ def log_args(log_writer, args):
     log_writer.add_text("config", arglog)
 
 def update_ema(model, ema_model, decay, default_device, ema_device):
-
     with torch.no_grad():
         original_model_on_proper_device = model
         need_to_delete_original = False
@@ -984,7 +983,7 @@ def main(args):
 
             models_info = []
 
-            if (args.ema_decay_rate is None) or args.ema_sample_raw_training:
+            if (args.ema_decay_rate is None) or args.ema_sample_nonema_model:
                 models_info.append({"is_ema": False, "swap_required": False})
 
             if (args.ema_decay_rate is not None) and args.ema_sample_ema_model:
@@ -1054,8 +1053,6 @@ def main(args):
         return os.path.join(log_folder, "ckpts", basename)
 
 
-
-
     # Pre-train validation to establish a starting point on the loss graph
     if validator:
         validator.do_validation(global_step=0,
@@ -1108,6 +1105,7 @@ def main(args):
                 data_root=args.data_root
             )
 
+
             loss_epoch = []
             epoch_start_time = time.time()
             images_per_sec_log_step = []
@@ -1123,6 +1121,7 @@ def main(args):
             for step, batch in enumerate(train_dataloader):
 
                 step_start_time = time.time()
+
                 plugin_runner.run_on_step_start(epoch=epoch,
                         local_step=step,
                         global_step=global_step,
