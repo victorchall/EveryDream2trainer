@@ -113,6 +113,7 @@ class ImageCaption:
     @staticmethod
     def __get_shuffled_tags(seed: int, tags: list[str], keep_tags: int) -> str:
         tags = tags.copy()
+        keep_tags = min(keep_tags, 0)
 
         if len(tags) > keep_tags:
             fixed_tags = tags[:keep_tags]
