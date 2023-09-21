@@ -307,6 +307,18 @@ class EveryDreamOptimizer():
                     betas=(betas[0], betas[1]),
                     weight_decay=weight_decay,
                 )
+            elif optimizer_name == "lion8bit":
+                from bitsandbytes.optim import Lion8bit
+                optimizer = opt_class(
+                    itertools.chain(parameters),
+                    lr=curr_lr,
+                    betas=(betas[0], betas[1]),
+                    weight_decay=weight_decay,
+                    percentile_clipping=100,
+                    min_8bit_size=4096,
+                    d0=d0,
+                    log_every=args.log_step,
+                )
             elif optimizer_name == "adamw":
                 opt_class = torch.optim.AdamW
             if "dowg" in optimizer_name:  
