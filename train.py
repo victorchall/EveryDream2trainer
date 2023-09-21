@@ -898,8 +898,7 @@ def main(args):
     assert len(train_batch) > 0, "train_batch is empty, check that your data_root is correct"
 
     # actual prediction function - shared between train and validate
-    def get_model_prediction_and_target(image, tokens, zero_frequency_noise_ratio=0.0, return_loss=False):
-    def get_model_prediction_and_target(image, tokens, zero_frequency_noise_ratio=0.0, input_perturbation=0.0):
+    def get_model_prediction_and_target(image, tokens, zero_frequency_noise_ratio=0.0, input_perturbation=0.0, return_loss=False):
         with torch.no_grad():
             with autocast(enabled=args.amp):
                 pixel_values = image.to(memory_format=torch.contiguous_format).to(unet.device)
@@ -1135,11 +1134,12 @@ def main(args):
                         global_step=global_step,
                         project_name=args.project_name,
                         log_folder=log_folder,
-                        batch=batch)
+                        batch=batch,
+                        ed_state=make_current_ed_state())
 
                 model_pred, target, loss = get_model_prediction_and_target(batch["image"], batch["tokens"],
-                                                                     args.zero_frequency_noise_ratio,
-                                                                     args.input_perturbation,
+                                                                     zero_frequency_noise_ratio=args.zero_frequency_noise_ratio,
+                                                                     input_perturbation=args.input_perturbation,
                                                                      return_loss=True)
 
                 del target, model_pred
