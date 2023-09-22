@@ -16,3 +16,4 @@ speedtest-cli
 tensorboard==2.12.0
 wandb
 safetensors
+prodigyopt
