@@ -159,7 +159,6 @@ def save_model(save_path, ed_state: EveryDreamTrainingState, global_step: int, s
         logging.warning("  No model to save, something likely blew up on startup, not saving")
         return
 
-
     if args.ema_decay_rate != None:
         pipeline_ema = StableDiffusionPipeline(
             vae=ed_state.vae,
@@ -1208,7 +1207,7 @@ def main(args):
                     save_model(save_path, global_step=global_step, ed_state=make_current_ed_state(),
                                save_ckpt_dir=None, yaml_name=None,
                                save_full_precision=args.save_full_precision,
-                               save_optimizer_flag=args.save_optimizer, save_ckpt=False)
+                               save_optimizer_flag=args.save_optimizer, save_ckpt=not args.no_save_ckpt)
 
                 plugin_runner.run_on_step_end(epoch=epoch,
                                       global_step=global_step,
