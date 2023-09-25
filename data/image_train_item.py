@@ -56,7 +56,7 @@ class ImageCaption:
     def rating(self) -> float:
         return self.__rating
 
-    def get_shuffled_caption(self, seed: int) -> str:
+    def get_shuffled_caption(self, seed: int, keep_tags: int) -> str:
         """
         returns the caption a string with a random selection of the tags in random order
         :param seed used to initialize the randomizer
@@ -74,7 +74,7 @@ class ImageCaption:
             if self.__use_weights:
                 tags_caption = self.__get_weighted_shuffled_tags(seed, self.__tags, self.__tag_weights, max_target_tag_length)
             else:
-                tags_caption = self.__get_shuffled_tags(seed, self.__tags)
+                tags_caption = self.__get_shuffled_tags(seed, self.__tags, keep_tags)
 
             return self.__main_prompt + ", " + tags_caption
         return self.__main_prompt
@@ -111,8 +111,16 @@ class ImageCaption:
         return caption
 
     @staticmethod
-    def __get_shuffled_tags(seed: int, tags: list[str]) -> str:
-        random.Random(seed).shuffle(tags)
+    def __get_shuffled_tags(seed: int, tags: list[str], keep_tags: int) -> str:
+        tags = tags.copy()
+        keep_tags = min(keep_tags, 0)
+
+        if len(tags) > keep_tags:
+            fixed_tags = tags[:keep_tags]
+            rest = tags[keep_tags:]
+            random.Random(seed).shuffle(rest)
+            tags = fixed_tags + rest
+
         return ", ".join(tags)
 
 class ImageTrainItem:

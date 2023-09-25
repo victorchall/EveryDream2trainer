@@ -6,7 +6,7 @@ Start with the [Low VRAM guide](TWEAKING.md) if you are having trouble training 
 
 ## Resolution
 
-You can train resolutions from 512 to 1024 in 64 pixel increments.  General results from the community indicate you can push the base model a bit beyond what it was designed for *with enough training*.  This will work out better when you have a lot of training data (hundreds+) and enable slightly higher resolution at inference time without seeing repeats in your generated images.  This does cost speed of training and higher VRAM use!  Ex. 768 takes a significant amount more VRAM than 512, so you will need to compensate for that by reducing ```batch_size```.
+You can train resolutions from 512 to 1024 in 64 pixel increments.  General results from the community indicate you can push the base model a bit beyond what it was designed for *with enough training*.  This will work out better when you have a lot of training data (hundreds+) and enable slightly higher resolution at inference time without seeing repeats in your generated images.  This does cost speed of training and higher VRAM use!  Ex. 768 takes a significant amount of additional VRAM than 512, so you will need to compensate for that by reducing ```batch_size```.
 
     --resolution 640 ^
 
@@ -14,21 +14,21 @@ For instance, if training from the base 1.5 model, you can try trying at 576, 64
 
 If you are training on a base model that is 768, such as "SD 2.1 768-v", you should also probably use 768 as a base number and adjust from there.
 
-Some results from the community seem to indicate training at a higher resolution on SD1.x models may increase how fast the model learns, and it may be a good idea to slightly reduce your learning rate as you increase resolution.  My suspcision is that the higher resolutions increase the gradients as more information is presented to the model per image.  
+Some results from the community seem to indicate training at a higher resolution on SD1.x models may increase how fast the model learns, and it may be a good idea to slightly reduce your learning rate as you increase resolution.  My suspicion is that the higher resolutions increase the gradients as more information is presented to the model per image.  
 
- You may need to experiment with LR as you increase resolution. I don't have a perfect rule of thumb here, but I might suggest if you train SD1.5 which is a 512 model at resolution 768 you reduce your LR by about half.  ED2 tends to prefer ~2e-6 to ~5e-6 for normal 512 training on SD1.X models around batch 6-8, so if you train SD1.X at 768 consider 1e-6 to 2.5e-6 instead.  
+ You may need to experiment with the LR as you increase resolution. I don't have a perfect rule of thumb here, but I might suggest if you train SD1.5 which is a 512 model at resolution 768 you reduce your LR by about half.  ED2 tends to prefer ~2e-6 to ~5e-6 for normal 512 training on SD1.X models around batch 6-8, so if you train SD1.X at 768 consider 1e-6 to 2.5e-6 instead.  
 
 ## Log and ckpt save folders
 
 If you want to use a nondefault location for saving logs or ckpt files, these:
 
-Logdir defaults to the "logs" folder in the trainer directory.  If you wan to save all logs (including diffuser copies of ckpts, sample images, and tensbooard events) use this:
+Logdir defaults to the "logs" folder in the trainer directory.  If you want to save all logs (including diffuser copies of ckpts, sample images, and tensbooard events) use this:
 
     --logdir "/workspace/mylogs"
 
 Remember to use the same folder when you launch tensorboard (```tensorboard --logdir "/worksapce/mylogs"```) or it won't find your logs.
 
-By default the CKPT format copies of ckpts that are peroidically saved are saved in the trainer root folder.  If you want to save them elsewhere, use this:
+By default the CKPT format copies of ckpts that are periodically saved are saved in the trainer root folder.  If you want to save them elsewhere, use this:
 
     --save_ckpt_dir "r:\webui\models\stable-diffusion"
 
@@ -125,11 +125,11 @@ Seed can be used to make training either more or less deterministic.  The seed v
 
 To use a random seed, use -1:
 
-    -- seed -1
+    --seed -1
 
 Default behavior is to use a fixed seed of 555. The seed you set is fixed for all samples if you set a value other than -1.  If you set a seed it is also incrememted for shuffling your training data every epoch (i.e. 555, 556, 557, etc).  This makes training more deterministic.  I suggest a fixed seed when you are trying A/B test tweaks to your general training setup, or when you want all your test samples to use the same seed. 
 
-Fixed seed should be using when performing A/B tests or hyperparameter sweeps.  Random seed (-1) may be better if you are stopping and resuming training often so every restart is using random values for all of the various randomness sources used in training such as noising and data shuffling.
+Fixed seed should be used when performing A/B tests or hyperparameter sweeps.  Random seed (-1) may be better if you are stopping and resuming training often so every restart is using random values for all of the various randomness sources used in training such as noising and data shuffling.
 
 ## Shuffle tags
 
@@ -138,6 +138,12 @@ For those training booru tagged models, you can use this arg to randomly (but de
     --shuffle_tags ^
 
 This simply chops the captions in to parts based on the commas and shuffles the order. 
+
+In case you want to keep static the first N tags, you can also add this parameter (`--shuffle_tags` must also be set):
+
+    --keep_tags 4 ^
+
+The above example will keep static the 4 first additional tags, and shuffle the rest.
 
 ## Zero frequency noise
 
@@ -149,7 +155,11 @@ Based on [Nicholas Guttenberg's blog post](https://www.crosslabs.org//blog/diffu
 
 Test results: https://huggingface.co/panopstor/ff7r-stable-diffusion/blob/main/zero_freq_test_biggs.webp
 
-Very tentatively, I suggest closer to 0.10 for short term training, and lower values of around 0.02 to 0.03 for longer runs (50k+ steps).  Early indications seem to suggest values like 0.10 can cause divergance over time.
+Very tentatively, I suggest closer to 0.10 for short term training, and lower values of around 0.02 to 0.03 for longer runs (50k+ steps).  Early indications seem to suggest values like 0.10 can cause divergence over time. 
+
+## Zero terminal SNR
+
+Set `zero_frequency_noise_ratio` to -1.
 
 ## Keeping images together (custom batching)
 
