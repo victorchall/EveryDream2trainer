@@ -1209,7 +1209,7 @@ def main(args):
                 if needs_save:
                     save_path = make_save_path(epoch, global_step)
                     save_model(save_path, global_step=global_step, ed_state=make_current_ed_state(),
-                               save_ckpt_dir=None, yaml_name=None,
+                               save_ckpt_dir=args.save_ckpt_dir, yaml_name=None,
                                save_full_precision=args.save_full_precision,
                                save_optimizer_flag=args.save_optimizer, save_ckpt=not args.no_save_ckpt)
 
