@@ -131,57 +131,65 @@ def main(args):
         for file in files:
             #get file extension
             ext = os.path.splitext(file)[1]
-            if ext.lower() in SUPPORTED_EXT:
-                start_time = time.time()
+            full_file_path = os.path.join(root, file)
 
-                full_file_path = os.path.join(root, file)
-                image = Image.open(full_file_path)
+            if not ext.lower() in SUPPORTED_EXT:
+                print(f"* extension not supported:   {file}")
+                continue
 
-                vision_x = [vx[1][0] for vx in examples]
-                vision_x.append(image_processor(image).unsqueeze(0))
-                vision_x = torch.cat(vision_x, dim=0)
-                vision_x = vision_x.unsqueeze(1).unsqueeze(0)
-                vision_x = vision_x.to(device, dtype=dtype)
+            caption_file_name = f"{os.path.splitext(full_file_path)[0]}.txt"
+            if os.path.exists(caption_file_name):
+                print(f"* caption file exists:   {caption_file_name}")
+                continue
 
-                lang_x = tokenizer(
-                    [prompt], # blank for image captioning
-                    return_tensors="pt",
+            start_time = time.time()
+
+            image = Image.open(full_file_path)
+
+            vision_x = [vx[1][0] for vx in examples]
+            vision_x.append(image_processor(image).unsqueeze(0))
+            vision_x = torch.cat(vision_x, dim=0)
+            vision_x = vision_x.unsqueeze(1).unsqueeze(0)
+            vision_x = vision_x.to(device, dtype=dtype)
+
+            lang_x = tokenizer(
+                [prompt], # blank for image captioning
+                return_tensors="pt",
+            )
+            lang_x.to(device)
+
+            input_ids = lang_x["input_ids"].to(device)
+
+            with torch.cuda.amp.autocast(dtype=dtype), torch.no_grad():
+                generated_text = model.generate(
+                    vision_x=vision_x,
+                    lang_x=input_ids,
+                    attention_mask=lang_x["attention_mask"], 
+                    max_new_tokens=args.max_new_tokens,
+                    min_new_tokens=args.min_new_tokens,
+                    num_beams=args.num_beams,
+                    temperature=args.temperature,
+                    top_k=args.top_k,
+                    top_p=args.top_p,
+                    repetition_penalty=args.repetition_penalty,
                 )
-                lang_x.to(device)
+            del vision_x
+            del lang_x
 
-                input_ids = lang_x["input_ids"].to(device)
+            # trim and clean
+            generated_text = tokenizer.decode(generated_text[0][len(input_ids[0]):], skip_special_tokens=True)
+            generated_text = generated_text.split(output_prompt)[0]
+            generated_text = remove_duplicates(generated_text)
 
-                with torch.cuda.amp.autocast(dtype=dtype), torch.no_grad():
-                    generated_text = model.generate(
-                        vision_x=vision_x,
-                        lang_x=input_ids,
-                        attention_mask=lang_x["attention_mask"],
-                        max_new_tokens=args.max_new_tokens,
-                        min_new_tokens=args.min_new_tokens,
-                        num_beams=args.num_beams,
-                        temperature=args.temperature,
-                        top_k=args.top_k,
-                        top_p=args.top_p,
-                        repetition_penalty=args.repetition_penalty,
-                    )
-                del vision_x
-                del lang_x
+            exec_time = time.time() - start_time
+            print(f"* Caption:   {generated_text}")
 
-                # trim and clean
-                generated_text = tokenizer.decode(generated_text[0][len(input_ids[0]):], skip_special_tokens=True)
-                generated_text = generated_text.split(output_prompt)[0]
-                generated_text = remove_duplicates(generated_text)
+            print(f"  Time for last caption: {exec_time} sec.  GPU memory used: {get_gpu_memory_map()} MB")
 
-                exec_time = time.time() - start_time
-                print(f"* Caption:   {generated_text}")
-                
-                print(f"  Time for last caption: {exec_time} sec.  GPU memory used: {get_gpu_memory_map()} MB")
-
-                name = os.path.splitext(full_file_path)[0]
-                if not os.path.exists(name):
-                    with open(f"{name}.txt", "w") as f:
-                        f.write(generated_text)
+            with open(caption_file_name, "w") as f:
+                f.write(generated_text)
     print("Done!")
+
 
 if __name__ == "__main__":
     print(f"Available models:")
