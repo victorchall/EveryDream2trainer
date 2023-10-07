@@ -314,8 +314,10 @@ class ImageTrainItem:
                 image_aspect = width / height
                 target_wh = min(self.aspects, key=lambda aspects:abs(aspects[0]/aspects[1] - image_aspect))
 
-                self.is_undersized = (width * height) < (target_wh[0]*1.02 * target_wh[1]*1.02)
+                self.is_undersized = (width != target_wh[0] and height != target_wh[1]) and (width * height) < (target_wh[0]*1.02 * target_wh[1]*1.02)
+
                 self.target_wh = target_wh
+                self.image_size = image.size
         except Exception as e:
             self.error = e
 
