@@ -26,7 +26,7 @@ In optimizer.json, the following "text_encoder_freezing" section is *required*:
         "freeze_embeddings": false,
         "freeze_final_layer_norm": true
     }
-In addition, you'll need a very high LR on the TE - start with 1e-4.
+In addition, you'll need a very high LR on the TE - maybe even as high as 1e-3. I recommend using the LR finder method.
 
 """
 

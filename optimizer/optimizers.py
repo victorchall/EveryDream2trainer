@@ -146,17 +146,15 @@ class EveryDreamOptimizer():
 
         if args.disable_textenc_training:
             optimizer_te = None
+            for p in text_encoder_params:
+                p.requires_grad = False
         else:
-            # prevent OOM on TE-only training
-            if args.disable_unet_training:
-                for p in unet_params:
-                    p.requires_grad = False
-                params_to_use = itertools.chain(unet_params, text_encoder_params)
-            else:
-                params_to_use = text_encoder_params
-            optimizer_te = self._create_optimizer("text encoder", args, self.te_config, params_to_use)
+            optimizer_te = self._create_optimizer("text encoder", args, self.te_config, text_encoder_params)
+
         if args.disable_unet_training:
             optimizer_unet = None
+            for p in unet_params:
+                p.requires_grad = False
         else:
             optimizer_unet = self._create_optimizer("unet", args, self.base_config, unet_params)
 
@@ -455,26 +453,25 @@ class EveryDreamOptimizer():
             unfreeze_final_layer_norm = not self.te_freeze_config["freeze_final_layer_norm"]
 
         parameters = itertools.chain([])
-        if unfreeze_embeddings:
-            parameters = itertools.chain(parameters, text_encoder.text_model.embeddings.parameters())
-        else:
+        if not unfreeze_embeddings:
             print(" ❄️ freezing embeddings")
+            for param in text_encoder.text_model.embeddings.parameters():
+                param.requires_grad = False
 
-        if unfreeze_last_n_layers >= num_layers:
-            parameters = itertools.chain(parameters, text_encoder.text_model.encoder.layers.parameters())
-        else:
+        if unfreeze_last_n_layers < num_layers:
             # freeze the specified CLIP text encoder layers
             layers = text_encoder.text_model.encoder.layers
             first_layer_to_unfreeze = num_layers - unfreeze_last_n_layers
             print(f" ❄️ freezing text encoder layers 1-{first_layer_to_unfreeze} out of {num_layers} layers total")
-            parameters = itertools.chain(parameters, layers[first_layer_to_unfreeze:].parameters())
+            for param in layers[:first_layer_to_unfreeze].parameters():
+                param.requires_grad = False
 
-        if unfreeze_final_layer_norm:
-            parameters = itertools.chain(parameters, text_encoder.text_model.final_layer_norm.parameters())
-        else:
+        if not unfreeze_final_layer_norm:
             print(" ❄️ freezing final layer norm")
+            for param in text_encoder.text_model.final_layer_norm.parameters():
+                param.requires_grad = False
 
-        return parameters
+        return filter(lambda p: p.requires_grad, text_encoder.text_model.parameters())
 
 
 def log_optimizer(label: str, optimizer: torch.optim.Optimizer, betas, epsilon, weight_decay, lr):
