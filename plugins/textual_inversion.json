@@ -1,7 +1,8 @@
 
 {
   "documentation": {
-    "tokens": "a list of token - initializer_word pairs defining textual inversion tokens to train, and their initial values. tokens can be multi-word, but they must be written in captions exactly the given if the training is to have any effect. initializer_word should be already close to the target being trained, but it must tokenize to a single token."
+    "tokens": "a list of token - initializer_word pairs defining textual inversion tokens to train, and their initial values. tokens can be multi-word, but they must be written in captions exactly the given if the training is to have any effect. initializer_word should be already close to the target being trained, but it must tokenize to a single token.",
+    "example": "the example below trains `hat*`, `dancing shoes` and `cane` as custom tokens, if you have training data where the captions include those tokens."
   },
   "tokens": [
     { "token": "hat*", "initializer_word": "hat" },

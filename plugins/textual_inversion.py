@@ -8,21 +8,33 @@ from colorama import Fore
 from plugins.plugins import BasePlugin
 from train import EveryDreamTrainingState
 
-""" config file format:
+""" 
+This plugin adds custom tokens to the tokenizer and trains just these tokens, with the rest of the text encoder
+disabled/frozen.
 
-{
-  'tokens': [
-    { 'token': 'hat*', 'initializer': 'hat' },
-    { 'token': 'dancing shoes', 'initializer_word': 'shoes' }, # multi word string ok
-  ]
-}
+token/initialization config is in textual_inversion.json, same folder as this .py file.
+
+For pure Textual Inversion training:
+  "disable_textenc_training": false,
+  "disable_unet_training": true
+(Or you could unet training on too if you want, I didn't test this.)
+  
+
+In optimizer.json, the following "text_encoder_freezing" section is *required*:
+    "text_encoder_freezing": {
+        "unfreeze_last_n_layers": 0,
+        "freeze_embeddings": false,
+        "freeze_final_layer_norm": true
+    }
+In addition, you'll need a very high LR on the TE - start with 1e-4.
+
 """
 
 class TextualInversionPlugin(BasePlugin):
 
     def __init__(self):
         path = os.path.join(os.path.dirname(__file__), "textual_inversion.json")
-        print(f"Textual Inversion plugin instantiated, loading data from {path}...")
+        logging.info(f" * Textual Inversion plugin instantiated, loading config from {path}")
         with open(path, 'rt') as f:
             self.config = json.load(f)
 
@@ -37,9 +49,10 @@ class TextualInversionPlugin(BasePlugin):
         if (optimizer_config is None or
             'text_encoder_freezing' not in optimizer_config or
             optimizer_config['text_encoder_freezing'].get('freeze_embeddings') != False or
-            optimizer_config['text_encoder_freezing'].get('unfreeze_last_n_layers', 0) < num_te_layers
+            optimizer_config['text_encoder_freezing'].get('freeze_final_layer_norm') != True or
+            optimizer_config['text_encoder_freezing'].get('unfreeze_last_n_layers', num_te_layers) > 0
         ):
-            required_js_fragment = {"text_encoder_freezing": {"freeze_embeddings": False, "unfreeze_last_n_layers": num_te_layers}}
+            required_js_fragment = {"text_encoder_freezing": {"freeze_embeddings": False, "unfreeze_last_n_layers": 0, "freeze_final_layer_norm": True}}
             logging.error(f" * {Fore.LIGHTRED_EX}Textual Inversion plugin REQUIRES the following json fragment in your optimizer config:{Fore.RESET}")
             logging.error(f" * {Fore.LIGHTRED_EX}  {json.dumps(required_js_fragment)}{Fore.RESET}")
             raise RuntimeError("Misconfigured optimizer config")
@@ -85,11 +98,10 @@ class TextualInversionPlugin(BasePlugin):
     def on_step_end(self, **kwargs):
         ed_state: EveryDreamTrainingState = kwargs['ed_state']
         # reset all embeddings except the ones we're training to their original state
-        index_no_updates = torch.isin(
-            torch.arange(len(ed_state.tokenizer)),
-            torch.Tensor(self.training_token_ids),
-            invert=True
-        )
+        index_no_updates = torch.ones((len(ed_state.tokenizer),), dtype=torch.bool)
+        for i in self.training_token_ids:
+            index_no_updates[i] = False
+
         with (torch.no_grad()):
             ed_state.text_encoder.get_input_embeddings().weight[
                 index_no_updates

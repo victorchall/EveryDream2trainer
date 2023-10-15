@@ -445,9 +445,8 @@ class EveryDreamOptimizer():
             unfreeze_last_n_layers = num_layers
         else:
             # something specified:
-            assert(unfreeze_last_n_layers > 0)
             if unfreeze_last_n_layers < num_layers:
-                # if we're unfreezing layers then by default we ought to freeze the embeddings
+                # if we're freezing any layers then by default we ought to freeze the embeddings
                 unfreeze_embeddings = False
 
         if "freeze_embeddings" in self.te_freeze_config:
