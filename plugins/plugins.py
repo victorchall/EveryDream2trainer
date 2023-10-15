@@ -9,6 +9,8 @@ class BasePlugin:
         pass
     def on_epoch_end(self, **kwargs):
         pass
+    def on_model_load(self, **kwargs):
+        pass
     def on_training_start(self, **kwargs):
         pass
     def on_training_end(self, **kwargs):
@@ -59,6 +61,11 @@ class PluginRunner:
         self.epoch_warn_seconds = epoch_warn_seconds
         self.step_warn_seconds = step_warn_seconds
         self.training_warn_seconds = training_warn_seconds
+
+    def run_on_model_load(self, **kwargs):
+        for plugin in self.plugins:
+            with Timer(warn_seconds=self.epoch_warn_seconds, label=f'{plugin.__class__.__name__}'):
+                plugin.on_model_load(**kwargs)
 
     def run_on_epoch_end(self, **kwargs):
         for plugin in self.plugins:

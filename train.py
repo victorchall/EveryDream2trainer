@@ -105,15 +105,15 @@ def convert_to_hf(ckpt_path):
 
 class EveryDreamTrainingState:
     def __init__(self,
-                 optimizer: EveryDreamOptimizer,
-                 train_batch: EveryDreamBatch,
                  unet: UNet2DConditionModel,
                  text_encoder: CLIPTextModel,
                  tokenizer: CLIPTokenizer,
-                 scheduler,
                  vae: AutoencoderKL,
-                 unet_ema: Optional[UNet2DConditionModel],
-                 text_encoder_ema: Optional[CLIPTextModel]
+                 optimizer: Optional[EveryDreamOptimizer] = None,
+                 train_batch: Optional[EveryDreamBatch] = None,
+                 scheduler = None,
+                 unet_ema: Optional[UNet2DConditionModel] = None,
+                 text_encoder_ema: Optional[CLIPTextModel] = None
                  ):
         self.optimizer = optimizer
         self.train_batch = train_batch
@@ -583,6 +583,26 @@ def main(args):
         if 'cuda' in original_device.type:
             torch.cuda.empty_cache()
 
+    from plugins.plugins import load_plugin
+    if args.plugins is not None:
+        plugins = [load_plugin(name) for name in args.plugins]
+    else:
+        logging.info("No plugins specified")
+        plugins = []
+
+    from plugins.plugins import PluginRunner
+    plugin_runner = PluginRunner(plugins=plugins)
+
+    def make_current_ed_state() -> EveryDreamTrainingState:
+        return EveryDreamTrainingState(optimizer=ed_optimizer,
+                                       train_batch=train_batch,
+                                       unet=unet,
+                                       text_encoder=text_encoder,
+                                       tokenizer=tokenizer,
+                                       scheduler=noise_scheduler,
+                                       vae=vae,
+                                       unet_ema=unet_ema,
+                                       text_encoder_ema=text_encoder_ema)
 
     use_ema_dacay_training = (args.ema_decay_rate != None) or (args.ema_strength_target != None)
     ema_model_loaded_from_file = False
@@ -692,8 +712,12 @@ def main(args):
     else:
         text_encoder = text_encoder.to(device, dtype=torch.float32)
 
-
-
+    from plugins.plugins import load_plugin
+    if args.plugins is not None:
+        plugins = [load_plugin(name) for name in args.plugins]
+    else:
+        logging.info("No plugins specified")
+        plugins = []
 
     if use_ema_dacay_training:
         if not ema_model_loaded_from_file:
@@ -734,6 +758,13 @@ def main(args):
     if os.path.exists(os.path.join(os.curdir, optimizer_config_path)):
         with open(os.path.join(os.curdir, optimizer_config_path), "r") as f:
             optimizer_config = json.load(f)
+
+    from plugins.plugins import PluginRunner
+    plugin_runner = PluginRunner(plugins=plugins)
+    plugin_runner.run_on_model_load(
+        ed_state=EveryDreamTrainingState(unet=unet, text_encoder=text_encoder, tokenizer=tokenizer, vae=vae),
+        optimizer_config=optimizer_config
+    )
 
     if args.wandb:
         wandb.tensorboard.patch(root_logdir=log_folder, pytorch=False, tensorboard_x=False, save=False)
@@ -790,7 +821,6 @@ def main(args):
 
     epoch_len = math.ceil(len(train_batch) / args.batch_size)
 
-
     if use_ema_dacay_training:
         args.ema_update_interval = args.ema_update_interval * args.grad_accum
         if args.ema_strength_target != None:
@@ -821,6 +851,16 @@ def main(args):
                                        use_penultimate_clip_layer=(args.clip_skip >= 2),
                                        guidance_rescale=0.7 if args.enable_zero_terminal_snr else 0
                                        )
+    def make_current_ed_state() -> EveryDreamTrainingState:
+        return EveryDreamTrainingState(optimizer=ed_optimizer,
+                                       train_batch=train_batch,
+                                       unet=unet,
+                                       text_encoder=text_encoder,
+                                       tokenizer=tokenizer,
+                                       scheduler=noise_scheduler,
+                                       vae=vae,
+                                       unet_ema=unet_ema,
+                                       text_encoder_ema=text_encoder_ema)
 
     """
     Train the model
@@ -1066,31 +1106,12 @@ def main(args):
         _, batch = next(enumerate(train_dataloader))
         generate_samples(global_step=0, batch=batch)
 
-    from plugins.plugins import load_plugin
-    if args.plugins is not None:
-        plugins = [load_plugin(name) for name in args.plugins]
-    else:
-        logging.info("No plugins specified")
-        plugins = []
-
-    from plugins.plugins import PluginRunner
-    plugin_runner = PluginRunner(plugins=plugins)
-
-    def make_current_ed_state() -> EveryDreamTrainingState:
-        return EveryDreamTrainingState(optimizer=ed_optimizer,
-                                       train_batch=train_batch,
-                                       unet=unet,
-                                       text_encoder=text_encoder,
-                                       tokenizer=tokenizer,
-                                       scheduler=noise_scheduler,
-                                       vae=vae,
-                                       unet_ema=unet_ema,
-                                       text_encoder_ema=text_encoder_ema)
-
     epoch = None
     try:
         write_batch_schedule(args, log_folder, train_batch, epoch = 0)
-        plugin_runner.run_on_training_start(log_folder=log_folder, project_name=args.project_name)
+        plugin_runner.run_on_training_start(log_folder=log_folder,
+                                            project_name=args.project_name,
+                                            ed_state=make_current_ed_state())
 
         for epoch in range(args.max_epochs):
 

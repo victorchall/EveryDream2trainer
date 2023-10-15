@@ -147,7 +147,14 @@ class EveryDreamOptimizer():
         if args.disable_textenc_training:
             optimizer_te = None
         else:
-            optimizer_te = self._create_optimizer("text encoder", args, self.te_config, text_encoder_params)
+            # prevent OOM on TE-only training
+            if args.disable_unet_training:
+                for p in unet_params:
+                    p.requires_grad = False
+                params_to_use = itertools.chain(unet_params, text_encoder_params)
+            else:
+                params_to_use = text_encoder_params
+            optimizer_te = self._create_optimizer("text encoder", args, self.te_config, params_to_use)
         if args.disable_unet_training:
             optimizer_unet = None
         else:
