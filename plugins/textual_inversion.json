@@ -5,6 +5,7 @@
   },
   "tokens": [
     { "token": "hat*", "initializer_word": "hat" },
-    { "token": "dancing shoes", "initializer_word": "shoes" }
+    { "token": "dancing shoes", "initializer_word": "shoes" },
+    { "token": "cane", "initializer_word": "cane" }
   ]
 }
