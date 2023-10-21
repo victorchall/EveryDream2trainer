@@ -67,6 +67,11 @@ class PluginRunner:
             with Timer(warn_seconds=self.epoch_warn_seconds, label=f'{plugin.__class__.__name__}'):
                 plugin.on_model_load(**kwargs)
 
+    def run_on_model_save(self, **kwargs):
+        for plugin in self.plugins:
+            with Timer(warn_seconds=self.epoch_warn_seconds, label=f'{plugin.__class__.__name__}'):
+                plugin.on_model_save(**kwargs)
+
     def run_on_epoch_end(self, **kwargs):
         for plugin in self.plugins:
             with Timer(warn_seconds=self.epoch_warn_seconds, label=f'{plugin.__class__.__name__}'):

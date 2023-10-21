@@ -7,6 +7,7 @@ from colorama import Fore
 
 from plugins.plugins import BasePlugin
 from train import EveryDreamTrainingState
+from utils.sample_generator import clean_filename
 
 """ 
 This plugin adds custom tokens to the tokenizer and trains just these tokens, with the rest of the text encoder
@@ -37,6 +38,10 @@ class TextualInversionPlugin(BasePlugin):
         logging.info(f" * Textual Inversion plugin instantiated, loading config from {path}")
         with open(path, 'rt') as f:
             self.config = json.load(f)
+        self.this_batch_tokens = None
+        self.training_tokens = None
+        self.training_token_ids = None
+        self.original_text_embeddings = None
 
     def on_model_load(self, **kwargs):
         ed_state: EveryDreamTrainingState = kwargs.get('ed_state')
@@ -91,18 +96,39 @@ class TextualInversionPlugin(BasePlugin):
             input_embeddings.weight.data[token_id] = initializer_embedding
 
         overwriting_token_ids = [get_token_ids(t)[0] for t in tokens_to_overwrite]
+        self.training_tokens = tokens_to_add + tokens_to_overwrite
         self.training_token_ids = added_token_ids + overwriting_token_ids
         self.original_text_embeddings = ed_state.text_encoder.get_input_embeddings().weight.data.detach().clone()
 
 
+    def on_step_start(self, **kwargs):
+        batch = kwargs['batch']
+        tokens = batch['tokens']  # a torch.stack
+        self.this_batch_tokens = torch.unique(torch.flatten(tokens)).tolist()
+
     def on_step_end(self, **kwargs):
         ed_state: EveryDreamTrainingState = kwargs['ed_state']
-        # reset all embeddings except the ones we're training to their original state
-        index_no_updates = torch.ones((len(ed_state.tokenizer),), dtype=torch.bool)
-        for i in self.training_token_ids:
-            index_no_updates[i] = False
 
+        # reset the embeddings that have been touched this step, except the ones we're training, to their original state
         with (torch.no_grad()):
-            ed_state.text_encoder.get_input_embeddings().weight[
-                index_no_updates
-            ] = self.original_text_embeddings[index_no_updates]
+            embeddings = ed_state.text_encoder.get_input_embeddings()
+            embeddings_to_restore = [t for t in self.this_batch_tokens if t not in self.training_token_ids]
+            for t in embeddings_to_restore:
+                embeddings.weight[t] = self.original_text_embeddings[t]
+
+    def on_model_save(self, **kwargs):
+        ed_state: EveryDreamTrainingState = kwargs['ed_state']
+        embeddings = ed_state.text_encoder.get_input_embeddings()
+        save_folder = kwargs['save_folder']
+        for token_id, token in zip(self.training_token_ids, self.training_tokens):
+            _save_embedding(token=token, embedding=embeddings.weight[token_id], save_folder=save_folder)
+
+def _save_embedding(token, embedding, save_folder):
+    dict_to_save = {token: embedding}
+    token_name_safe = clean_filename(token)
+    ti_folder = os.path.join(save_folder, 'textual_inversions')
+    os.makedirs(ti_folder, exist_ok=True)
+    save_path = os.path.join(ti_folder, token_name_safe + '.bin')
+    logging.info(f"Saving textual inversion for '{token}' to {save_path}")
+    torch.save(dict_to_save, save_path)
+

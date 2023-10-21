@@ -57,6 +57,7 @@ from data.data_loader import DataLoaderMultiAspect
 from data.every_dream import EveryDreamBatch, build_torch_dataloader
 from data.every_dream_validation import EveryDreamValidator
 from data.image_train_item import ImageTrainItem, DEFAULT_BATCH_ID
+from plugins.plugins import PluginRunner
 from utils.huggingface_downloader import try_download_model_from_hf
 from utils.convert_diff_to_ckpt import convert as converter
 from utils.isolate_rng import isolate_rng
@@ -125,6 +126,8 @@ class EveryDreamTrainingState:
         self.unet_ema = unet_ema
         self.text_encoder_ema = text_encoder_ema
 
+# global plugin runner instance
+plugin_runner: PluginRunner = None
 
 @torch.no_grad()
 def save_model(save_path, ed_state: EveryDreamTrainingState, global_step: int, save_ckpt_dir, yaml_name,
@@ -159,7 +162,7 @@ def save_model(save_path, ed_state: EveryDreamTrainingState, global_step: int, s
         logging.warning("  No model to save, something likely blew up on startup, not saving")
         return
 
-    if args.ema_decay_rate != None:
+    if ed_state.unet_ema is not None or ed_state.text_encoder_ema is not None:
         pipeline_ema = StableDiffusionPipeline(
             vae=ed_state.vae,
             text_encoder=ed_state.text_encoder_ema,
@@ -203,6 +206,11 @@ def save_model(save_path, ed_state: EveryDreamTrainingState, global_step: int, s
     if save_optimizer_flag:
         logging.info(f" Saving optimizer state to {save_path}")
         ed_state.optimizer.save(save_path)
+
+    plugin_runner.run_on_model_save(
+        ed_state=ed_state,
+        diffusers_save_path=diffusers_model_path
+    )
 
 
 def setup_local_logger(args):
@@ -590,9 +598,6 @@ def main(args):
         logging.info("No plugins specified")
         plugins = []
 
-    from plugins.plugins import PluginRunner
-    plugin_runner = PluginRunner(plugins=plugins)
-
     def make_current_ed_state() -> EveryDreamTrainingState:
         return EveryDreamTrainingState(optimizer=ed_optimizer,
                                        train_batch=train_batch,
@@ -759,7 +764,6 @@ def main(args):
         with open(os.path.join(os.curdir, optimizer_config_path), "r") as f:
             optimizer_config = json.load(f)
 
-    from plugins.plugins import PluginRunner
     plugin_runner = PluginRunner(plugins=plugins)
     plugin_runner.run_on_model_load(
         ed_state=EveryDreamTrainingState(unet=unet, text_encoder=text_encoder, tokenizer=tokenizer, vae=vae),
