@@ -41,6 +41,7 @@ class EveryDreamBatch(Dataset):
                  seed=555,
                  tokenizer=None,
                  shuffle_tags=False,
+                 keep_tags=0,
                  rated_dataset=False,
                  rated_dataset_dropout_target=0.5,
                  name='train'
@@ -54,6 +55,7 @@ class EveryDreamBatch(Dataset):
         self.tokenizer = tokenizer
         self.max_token_length = self.tokenizer.model_max_length
         self.shuffle_tags = shuffle_tags
+        self.keep_tags = keep_tags
         self.seed = seed
         self.rated_dataset = rated_dataset
         self.rated_dataset_dropout_target = rated_dataset_dropout_target
@@ -94,7 +96,7 @@ class EveryDreamBatch(Dataset):
         )
 
         if self.shuffle_tags or train_item["shuffle_tags"]:
-            example["caption"] = train_item["caption"].get_shuffled_caption(self.seed)
+            example["caption"] = train_item["caption"].get_shuffled_caption(self.seed, keep_tags=self.keep_tags)
         else:
             example["caption"] = train_item["caption"].get_caption()
 

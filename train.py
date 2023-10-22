@@ -159,7 +159,6 @@ def save_model(save_path, ed_state: EveryDreamTrainingState, global_step: int, s
         logging.warning("  No model to save, something likely blew up on startup, not saving")
         return
 
-
     if args.ema_decay_rate != None:
         pipeline_ema = StableDiffusionPipeline(
             vae=ed_state.vae,
@@ -349,6 +348,9 @@ def setup_args(args):
 
     if not args.shuffle_tags:
         args.shuffle_tags = False
+
+    if not args.keep_tags:
+        args.keep_tags = 0
 
     args.clip_skip = max(min(4, args.clip_skip), 0)
 
@@ -779,6 +781,7 @@ def main(args):
         tokenizer=tokenizer,
         seed = seed,
         shuffle_tags=args.shuffle_tags,
+        keep_tags=args.keep_tags,
         rated_dataset=args.rated_dataset,
         rated_dataset_dropout_target=(1.0 - (args.rated_dataset_target_dropout_percent / 100.0))
     )
@@ -1208,15 +1211,15 @@ def main(args):
                     last_epoch_saved_time = time.time()
                     logging.info(f"Saving model, {args.ckpt_every_n_minutes} mins at step {global_step}")
                     needs_save = True
-                if epoch > 0 and epoch % args.save_every_n_epochs == 0 and step == 0 and epoch < args.max_epochs - 1 and epoch >= args.save_ckpts_from_n_epochs:
+                if epoch > 0 and epoch % args.save_every_n_epochs == 0 and step == 0 and epoch < args.max_epochs and epoch >= args.save_ckpts_from_n_epochs:
                     logging.info(f" Saving model, {args.save_every_n_epochs} epochs at step {global_step}")
                     needs_save = True
                 if needs_save:
                     save_path = make_save_path(epoch, global_step)
                     save_model(save_path, global_step=global_step, ed_state=make_current_ed_state(),
-                               save_ckpt_dir=None, yaml_name=None,
+                               save_ckpt_dir=args.save_ckpt_dir, yaml_name=None,
                                save_full_precision=args.save_full_precision,
-                               save_optimizer_flag=args.save_optimizer, save_ckpt=False)
+                               save_optimizer_flag=args.save_optimizer, save_ckpt=not args.no_save_ckpt)
 
                 plugin_runner.run_on_step_end(epoch=epoch,
                                       global_step=global_step,
@@ -1335,6 +1338,7 @@ if __name__ == "__main__":
     argparser.add_argument("--save_optimizer", action="store_true", default=False, help="saves optimizer state with ckpt, useful for resuming training later")
     argparser.add_argument("--seed", type=int, default=555, help="seed used for samples and shuffling, use -1 for random")
     argparser.add_argument("--shuffle_tags", action="store_true", default=False, help="randomly shuffles CSV tags in captions, for booru datasets")
+    argparser.add_argument("--keep_tags", type=int, default=0, help="Number of tags to keep when shuffle, def: 0 (shuffle all)")
     argparser.add_argument("--useadam8bit", action="store_true", default=False, help="deprecated, use --optimizer_config and optimizer.json instead")
     argparser.add_argument("--wandb", action="store_true", default=False, help="enable wandb logging instead of tensorboard, requires env var WANDB_API_KEY")
     argparser.add_argument("--validation_config", default=None, help="Path to a JSON configuration file for the validator.  Default is no validation.")
