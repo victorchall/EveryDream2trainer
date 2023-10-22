@@ -764,6 +764,7 @@ def main(args):
         with open(os.path.join(os.curdir, optimizer_config_path), "r") as f:
             optimizer_config = json.load(f)
 
+    global plugin_runner
     plugin_runner = PluginRunner(plugins=plugins)
     plugin_runner.run_on_model_load(
         ed_state=EveryDreamTrainingState(unet=unet, text_encoder=text_encoder, tokenizer=tokenizer, vae=vae),
