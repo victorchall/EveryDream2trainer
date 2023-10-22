@@ -1,6 +1,8 @@
 import json
 import logging
+import math
 import os
+import torch
 
 from plugins.plugins import BasePlugin
 
@@ -15,17 +17,26 @@ class Accumulnator(BasePlugin):
             begin_grad_accum = config['begin_grad_accum']
             end_epoch = config['end_epoch']
             end_grad_accum = config['end_grad_accum']
+
+            # spread the grad accums
             curve = config['curve']
-            if curve != 'linear':
-                raise NotImplementedError("Only 'linear' curve is implemented for now")
+            if curve == 'linear':
+                accums = torch.linspace(start=begin_grad_accum,
+                                        end=end_grad_accum,
+                                        steps=end_epoch-begin_epoch).tolist()
+            elif curve == 'log':
+                accums = torch.logspace(start=math.log(begin_grad_accum, 2),
+                                        end=math.log(end_grad_accum, 2),
+                                        base=2,
+                                        steps=10).tolist()
+            else:
+                raise NotImplementedError(f"curve not {curve} not recognized")
 
             accums_per_epoch = {}
             for i in range(begin_epoch):
                 accums_per_epoch[i] = begin_grad_accum
-            grad_accum_step = (end_grad_accum-begin_grad_accum)/(end_epoch-begin_epoch)
             for i in range(end_grad_accum-begin_grad_accum):
-                grad_accum = round(grad_accum_step * i)
-                accums_per_epoch[i+begin_epoch] = grad_accum
+                accums_per_epoch[i+begin_epoch] = round(accums[i])
             self.per_epoch_grad_accum = accums_per_epoch
 
 
