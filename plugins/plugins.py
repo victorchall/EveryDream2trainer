@@ -11,6 +11,8 @@ class BasePlugin:
         pass
     def on_model_load(self, **kwargs):
         pass
+    def on_model_save(self, **kwargs):
+        pass
     def on_training_start(self, **kwargs):
         pass
     def on_training_end(self, **kwargs):
