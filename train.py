@@ -1245,7 +1245,7 @@ def main(args):
                                            project_name=args.project_name,
                                            log_folder=log_folder,
                                            data_root=args.data_root,
-                                           update_arg_callback=update_arg)
+                                           arg_update_callback=update_arg)
 
             epoch_pbar.update(1)
             if epoch < args.max_epochs - 1:
