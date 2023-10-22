@@ -55,6 +55,12 @@ class Timer:
 
 class PluginRunner:
 
+    _instance: 'PluginRunner' = None
+
+    @classmethod
+    def get_global_instance(cls) -> 'PluginRunner':
+        return cls._instance
+
     def __init__(self, plugins: list, epoch_warn_seconds=5, step_warn_seconds=0.5, training_warn_seconds=20):
         """
         plugins: list of plugins to run
@@ -62,10 +68,10 @@ class PluginRunner:
         step_warn_seconds: warn if any step start/end call takes longer than this
         training_warn_seconds: warn if any training start/end call take longer than this
         """
-        global g_plugin_runner
-        if g_plugin_runner is not None:
+        if self.__class__._instance is not None:
             raise RuntimeError("Multiple PluginRunner instances created - this is not supported")
-        g_plugin_runner = self
+        self.__class__._instance = self
+
         self.plugins = plugins
         self.epoch_warn_seconds = epoch_warn_seconds
         self.step_warn_seconds = step_warn_seconds
@@ -110,7 +116,4 @@ class PluginRunner:
         for plugin in self.plugins:
             with Timer(warn_seconds=self.step_warn_seconds, label=f'{plugin.__class__.__name__}'):
                 plugin.on_step_end(**kwargs)
-
-
-g_plugin_runner: Optional[PluginRunner] = None
 
