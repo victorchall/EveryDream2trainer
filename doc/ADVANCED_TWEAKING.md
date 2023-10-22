@@ -6,7 +6,7 @@ Start with the [Low VRAM guide](TWEAKING.md) if you are having trouble training 
 
 ## Resolution
 
-You can train resolutions from 512 to 1024 in 64 pixel increments.  General results from the community indicate you can push the base model a bit beyond what it was designed for *with enough training*.  This will work out better when you have a lot of training data (hundreds+) and enable slightly higher resolution at inference time without seeing repeats in your generated images.  This does cost speed of training and higher VRAM use!  Ex. 768 takes a significant amount more VRAM than 512, so you will need to compensate for that by reducing ```batch_size```.
+You can train resolutions from 512 to 1024 in 64 pixel increments.  General results from the community indicate you can push the base model a bit beyond what it was designed for *with enough training*.  This will work out better when you have a lot of training data (hundreds+) and enable slightly higher resolution at inference time without seeing repeats in your generated images.  This does cost speed of training and higher VRAM use!  Ex. 768 takes a significant amount of additional VRAM than 512, so you will need to compensate for that by reducing ```batch_size```.
 
     --resolution 640 ^
 
@@ -14,21 +14,21 @@ For instance, if training from the base 1.5 model, you can try trying at 576, 64
 
 If you are training on a base model that is 768, such as "SD 2.1 768-v", you should also probably use 768 as a base number and adjust from there.
 
-Some results from the community seem to indicate training at a higher resolution on SD1.x models may increase how fast the model learns, and it may be a good idea to slightly reduce your learning rate as you increase resolution.  My suspcision is that the higher resolutions increase the gradients as more information is presented to the model per image.  
+Some results from the community seem to indicate training at a higher resolution on SD1.x models may increase how fast the model learns, and it may be a good idea to slightly reduce your learning rate as you increase resolution.  My suspicion is that the higher resolutions increase the gradients as more information is presented to the model per image.  
 
- You may need to experiment with LR as you increase resolution. I don't have a perfect rule of thumb here, but I might suggest if you train SD1.5 which is a 512 model at resolution 768 you reduce your LR by about half.  ED2 tends to prefer ~2e-6 to ~5e-6 for normal 512 training on SD1.X models around batch 6-8, so if you train SD1.X at 768 consider 1e-6 to 2.5e-6 instead.  
+ You may need to experiment with the LR as you increase resolution. I don't have a perfect rule of thumb here, but I might suggest if you train SD1.5 which is a 512 model at resolution 768 you reduce your LR by about half.  ED2 tends to prefer ~2e-6 to ~5e-6 for normal 512 training on SD1.X models around batch 6-8, so if you train SD1.X at 768 consider 1e-6 to 2.5e-6 instead.  
 
 ## Log and ckpt save folders
 
 If you want to use a nondefault location for saving logs or ckpt files, these:
 
-Logdir defaults to the "logs" folder in the trainer directory.  If you wan to save all logs (including diffuser copies of ckpts, sample images, and tensbooard events) use this:
+Logdir defaults to the "logs" folder in the trainer directory.  If you want to save all logs (including diffuser copies of ckpts, sample images, and tensbooard events) use this:
 
     --logdir "/workspace/mylogs"
 
 Remember to use the same folder when you launch tensorboard (```tensorboard --logdir "/worksapce/mylogs"```) or it won't find your logs.
 
-By default the CKPT format copies of ckpts that are peroidically saved are saved in the trainer root folder.  If you want to save them elsewhere, use this:
+By default the CKPT format copies of ckpts that are periodically saved are saved in the trainer root folder.  If you want to save them elsewhere, use this:
 
     --save_ckpt_dir "r:\webui\models\stable-diffusion"
 
@@ -125,11 +125,11 @@ Seed can be used to make training either more or less deterministic.  The seed v
 
 To use a random seed, use -1:
 
-    -- seed -1
+    --seed -1
 
 Default behavior is to use a fixed seed of 555. The seed you set is fixed for all samples if you set a value other than -1.  If you set a seed it is also incrememted for shuffling your training data every epoch (i.e. 555, 556, 557, etc).  This makes training more deterministic.  I suggest a fixed seed when you are trying A/B test tweaks to your general training setup, or when you want all your test samples to use the same seed. 
 
-Fixed seed should be using when performing A/B tests or hyperparameter sweeps.  Random seed (-1) may be better if you are stopping and resuming training often so every restart is using random values for all of the various randomness sources used in training such as noising and data shuffling.
+Fixed seed should be used when performing A/B tests or hyperparameter sweeps.  Random seed (-1) may be better if you are stopping and resuming training often so every restart is using random values for all of the various randomness sources used in training such as noising and data shuffling.
 
 ## Shuffle tags
 
@@ -138,6 +138,12 @@ For those training booru tagged models, you can use this arg to randomly (but de
     --shuffle_tags ^
 
 This simply chops the captions in to parts based on the commas and shuffles the order. 
+
+In case you want to keep static the first N tags, you can also add this parameter (`--shuffle_tags` must also be set):
+
+    --keep_tags 4 ^
+
+The above example will keep static the 4 first additional tags, and shuffle the rest.
 
 ## Zero frequency noise
 
@@ -149,7 +155,7 @@ Based on [Nicholas Guttenberg's blog post](https://www.crosslabs.org//blog/diffu
 
 Test results: https://huggingface.co/panopstor/ff7r-stable-diffusion/blob/main/zero_freq_test_biggs.webp
 
-Very tentatively, I suggest closer to 0.10 for short term training, and lower values of around 0.02 to 0.03 for longer runs (50k+ steps).  Early indications seem to suggest values like 0.10 can cause divergance over time. 
+Very tentatively, I suggest closer to 0.10 for short term training, and lower values of around 0.02 to 0.03 for longer runs (50k+ steps).  Early indications seem to suggest values like 0.10 can cause divergence over time. 
 
 ## Zero terminal SNR
 
@@ -205,3 +211,67 @@ Clips the gradient normals to a maximum value.  Default is None (no clipping).  
 
 Default is no gradient normal clipping. There are also other ways to deal with gradient explosion, such as increasing optimizer epsilon.
 
+## Zero Terminal SNR
+**Parameter:** `--enable_zero_terminal_snr`  
+**Default:** `False`  
+To enable zero terminal SNR.
+
+## Dynamic Configuration Loading
+**Parameter:** `--load_settings_every_epoch`  
+**Default:** `False`  
+Most of the parameters in the train.json file CANNOT be modified during training. Activate this to have the `train.json` configuration file reloaded at the start of each epoch. The following parameter can be changed and will be applied after the start of a new epoch:
+- `--save_every_n_epochs`
+- `--save_ckpts_from_n_epochs`
+- `--save_full_precision`
+- `--save_optimizer`
+- `--zero_frequency_noise_ratio`
+- `--min_snr_gamma`
+- `--clip_skip`
+
+## Min-SNR-Gamma Parameter
+**Parameter:** `--min_snr_gamma`  
+**Recommended Values:** 5, 1, 20  
+**Default:** `None`  
+To enable min-SNR-Gamma. For an in-depth understanding, consult this [research paper](https://arxiv.org/abs/2303.09556).
+
+## EMA Decay Features
+The Exponential Moving Average (EMA) model is copied from the base model at the start and is updated every interval of steps by a small contribution from training.
+In this mode, the EMA model will be saved alongside the regular checkpoint from training. Normal training checkpoint can be loaded with `--resume_ckpt`, and the EMA model can be loaded with `--ema_decay_resume_model`.
+For more information, consult the [research paper](https://arxiv.org/abs/2101.08482) or continue reading the tuning notes below. 
+**Parameters:**  
+- `--ema_decay_rate`: Determines the EMA decay rate. It defines how much the EMA model is updated from training at each update. Values should be close to 1 but not exceed it. Activating this parameter triggers the EMA decay feature.
+- `--ema_strength_target`: Set the EMA strength target value within the (0,1) range. The `ema_decay_rate` is computed based on the relation: decay_rate to the power of (total_steps/decay_interval) equals decay_target. Enabling this parameter will override `ema_decay_rate` and will enable EMA feature. See [ema_strength_target](#ema_strength_target) for more information.
+- `--ema_update_interval`: Set the interval in steps between EMA updates. The update occurs at each optimizer step.  If you use grad_accum, actual update interval will be multipled by your grad_accum value.
+- `--ema_device`: Choose between `cpu` and `cuda` for EMA. Opting for 'cpu' takes around 4 seconds per update and uses approximately 3.2GB RAM, while 'cuda' is much faster but requires a similar amount of VRAM.
+- `--ema_sample_nonema_model`: Activate to display samples from the non-ema trained model, mirroring conventional training. They will not be presented by default with EMA decay enabled.
+- `--ema_sample_ema_model`: Turn on to exhibit samples from the EMA model. EMA models will be used for samples generations by default with EMA decay enabled, unless disabled.
+- `--ema_resume_model`: Indicate the EMA decay checkpoint to continue from, working like `--resume_ckpt` but will load EMA model. Using `findlast` will only load EMA version and not regular training.
+
+## Notes on tuning EMA.
+
+The purpose of EMA is to reduce the effect of the data from the tail end of training from having an overly powerful effect on the model.  Normally trainig is stopped abruptly and the final images seen by the trainer may have a stronger effect than images seen earlier in training.  *This may have a similar to lowering the learning rate near the end of training, but is not mathematically equivalent.*  An alternative method to EMA would be to use a cosine learning rate schedule. 
+
+Training with EMA turned on has no effect on the non-EMA model if all other settings are identical, though practical considerations (mainly VRAM limits) may cause you to change other settings which can affect the non-EMA model, such as lowering batch size to free enough VRAM for the EMA model if using gpu. 
+
+A standard implementation of EMA uses a decay rate of 0.9999, GPU device, and an interval of 1 (every optimizer step).  This value can have a strong effect, leading to what appears to be an undertrained EMA model compared to the non-EMA model.  A value of 0.999 seems to produce an EMA model nearly identical to the non-EMA model and should be considered a low value.  Somewhere in the 0.999-0.9999 range is suggested when using GPU and interval 1. 
+
+EMA uses an additional ~3.2GB of RAM (for SD1.x models) to store an extra copy of the model weights in memory. For even 24GB consumer GPUs this is substantial, but EMA CPU offloading together with using a higher `ema_update_interval` can make it more practical.  It can be practical on a 24GB GPU if you also enable gradient checkpointing, which is not normally suggested for 24GB GPUs as it is not necessary.  Gradient checkpointing saves a bit more than 3.2GB itself.  The other options is to use CPU offloading by setting `ema_device: "cpu"`.  The EMA copy of the model will be stored in main system memory instead of the GPU, but at a cost of slower sampling and updating.  CPU offloading is a requirement for GPUs with 16GB or less VRAM, and even 24GB GPU users may wish to consider it.  If you are using a 40GB+ GPU you should use GPU. 
+
+When using a higher interval to make cpu offloading practical and reasonably fast, the decay rate should be lowered.  For instance, with an interval of 50, you may wish to lower the decay rate to 0.99 or possibly lower.  This is because the EMA model is updated less frequently and the decay rate is effectively higher than the set value under otherwise "normal" EMA training regime. The higher interval also reduces accuracy of the EMA model compared to the reference implementation which would normally update EMA every optimizer step. 
+
+I would suggest you pick an interval and stick with it, and then tune your decay_rate by generating samples from both EMA and non EMA using the options or after training using your favorite inference app and compare the results. 
+It is expected the EMA model will look "behind" on training, but should still be recognizable as the same subject matter.  If it is not, you may wish to try a lower decay rate.  If it is too close to the non-EMA model, you may wish to try a higher decay rate.
+
+Using the GPU for ema incurs only a small speed penalty of around 5-10% with all else being equal, though if you change other parameters such as lowering batch size or enabling gradient checkpointing flag to free VRAM for EMA those options may incur a slightly higher speed penalities. 
+
+Generally, I recommend picking a device and approriate interval given your device choice first and stick with those values, then tweak the `ema_decay_rate` up or down according to how you want the EMA model to look vs. your non-EMA model.  From there, if your EMA model seems to "lag behind" the non-EMA model by "too much" (subjectively judged), you can decrease decay rate. If it identical or nearly identical, use a slightly higher value. 
+
+## ema_strength_target
+
+This arg is a non-standard way of calculating the actual decay rate used. It attempts to calculate a value for decay rate based on your `ema_update_interval` and the total length of training, compensating for both.  Values of 0.01-0.15 should work, with higher values leading to a EMA model that deviates more from the non-EMA model similar to how decay rate works.  It attempts to be more of a "strength" value of EMA, or "how much" (as a factor, i.e. 0.10 = 10% "strength") of the EMA model are kept for the totality of training.  
+
+While the calculation makes sense in how it compensates for inteval and total training length, it is not a standard way of calculating decay rate and there will not be information online about how to use it. I recommend not using this feature and instead picking a device and approriate interval given your device choice first, then tuning your decay rate by hand, find "good" values, then don't mess with them, but you can try this feature out if you want.  
+
+    --ema_strength_target 0.10 ^
+
+If you use `ema_strength_target` the actual calculated `ema_decay_rate` used will be printed in your logs, and you should pay attention to this value and use it to inform your future decisions on EMA tuning.

@@ -65,3 +65,4 @@ The effect of the limit is that the caption will always be truncated when the ma
 exceeded. This process does not consider if the cutoff is in the middle of a tag or even in the middle of a
 word if it is translated into several tokens.
 
+To mitigate this token limitation (when not using weighted shuffling), the `--keep_tags n` parameter can be employed. This ensures that the first n tags following the initial chunk remain static, while the remaining tags are shuffled. 

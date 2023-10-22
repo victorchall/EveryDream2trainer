@@ -276,6 +276,7 @@ class EveryDreamOptimizer():
         decouple = True # seems bad to turn off, dadapt_adam only
         momentum = 0.0 # dadapt_sgd
         no_prox = False # ????, dadapt_adan
+        use_bias_correction = True # suggest by prodigy github
         growth_rate=float("inf") # dadapt various, no idea what a sane default is
 
         if local_optimizer_config is not None:
@@ -307,6 +308,30 @@ class EveryDreamOptimizer():
                     betas=(betas[0], betas[1]),
                     weight_decay=weight_decay,
                 )
+            elif optimizer_name == "lion8bit":
+                from bitsandbytes.optim import Lion8bit
+                opt_class = Lion8bit
+                optimizer = opt_class(
+                    itertools.chain(parameters),
+                    lr=curr_lr,
+                    betas=(betas[0], betas[1]),
+                    weight_decay=weight_decay,
+                    percentile_clipping=100,
+                    min_8bit_size=4096,
+                )
+            elif optimizer_name == "prodigy":
+                from prodigyopt import Prodigy
+                opt_class = Prodigy
+                safeguard_warmup = True # per recommendation from prodigy documentation
+                optimizer = opt_class(
+                    itertools.chain(parameters),
+                    lr=curr_lr,
+                    weight_decay=weight_decay,
+                    use_bias_correction=use_bias_correction,
+                    growth_rate=growth_rate,
+                    d0=d0,
+                    safeguard_warmup=safeguard_warmup 
+                )
             elif optimizer_name == "adamw":
                 opt_class = torch.optim.AdamW
             if "dowg" in optimizer_name:  
@@ -317,7 +342,7 @@ class EveryDreamOptimizer():
                 elif optimizer_name == "scalar_dowg":
                     opt_class = dowg.ScalarDoWG
                 else:
-                    raise ValueError(f"Unknown DoWG optimizer {optimizer_name}. Available options are coordinate_dowg and scalar_dowg")
+                    raise ValueError(f"Unknown DoWG optimizer {optimizer_name}. Available options are 'coordinate_dowg' and 'scalar_dowg'")
             elif optimizer_name in ["dadapt_adam", "dadapt_lion", "dadapt_sgd"]:
                 import dadaptation
 

@@ -27,6 +27,7 @@ import gc
 import random
 import traceback
 import shutil
+from typing import Optional
 
 import torch.nn.functional as F
 from torch.cuda.amp import autocast
@@ -61,6 +62,7 @@ from utils.convert_diff_to_ckpt import convert as converter
 from utils.isolate_rng import isolate_rng
 from utils.check_git import check_git
 from optimizer.optimizers import EveryDreamOptimizer
+from copy import deepcopy
 
 if torch.cuda.is_available():
     from utils.gpu import GPU
@@ -100,6 +102,108 @@ def convert_to_hf(ckpt_path):
     else:
         is_sd1attn, yaml = get_attn_yaml(ckpt_path)
         return ckpt_path, is_sd1attn, yaml
+
+class EveryDreamTrainingState:
+    def __init__(self,
+                 optimizer: EveryDreamOptimizer,
+                 train_batch: EveryDreamBatch,
+                 unet: UNet2DConditionModel,
+                 text_encoder: CLIPTextModel,
+                 tokenizer: CLIPTokenizer,
+                 scheduler,
+                 vae: AutoencoderKL,
+                 unet_ema: Optional[UNet2DConditionModel],
+                 text_encoder_ema: Optional[CLIPTextModel]
+                 ):
+        self.optimizer = optimizer
+        self.train_batch = train_batch
+        self.unet = unet
+        self.text_encoder = text_encoder
+        self.tokenizer = tokenizer
+        self.scheduler = scheduler
+        self.vae = vae
+        self.unet_ema = unet_ema
+        self.text_encoder_ema = text_encoder_ema
+
+
+@torch.no_grad()
+def save_model(save_path, ed_state: EveryDreamTrainingState, global_step: int, save_ckpt_dir, yaml_name,
+               save_full_precision=False, save_optimizer_flag=False, save_ckpt=True):
+    """
+    Save the model to disk
+    """
+
+    def save_ckpt_file(diffusers_model_path, sd_ckpt_path):
+        nonlocal save_ckpt_dir
+        nonlocal save_full_precision
+        nonlocal yaml_name
+
+        if save_ckpt_dir is not None:
+            sd_ckpt_full = os.path.join(save_ckpt_dir, sd_ckpt_path)
+        else:
+            sd_ckpt_full = os.path.join(os.curdir, sd_ckpt_path)
+            save_ckpt_dir = os.curdir
+
+        half = not save_full_precision
+
+        logging.info(f" * Saving SD model to {sd_ckpt_full}")
+        converter(model_path=diffusers_model_path, checkpoint_path=sd_ckpt_full, half=half)
+
+        if yaml_name and yaml_name != "v1-inference.yaml":
+            yaml_save_path = f"{os.path.join(save_ckpt_dir, os.path.basename(diffusers_model_path))}.yaml"
+            logging.info(f" * Saving yaml to {yaml_save_path}")
+            shutil.copyfile(yaml_name, yaml_save_path)
+
+
+    if global_step is None or global_step == 0:
+        logging.warning("  No model to save, something likely blew up on startup, not saving")
+        return
+
+    if args.ema_decay_rate != None:
+        pipeline_ema = StableDiffusionPipeline(
+            vae=ed_state.vae,
+            text_encoder=ed_state.text_encoder_ema,
+            tokenizer=ed_state.tokenizer,
+            unet=ed_state.unet_ema,
+            scheduler=ed_state.scheduler,
+            safety_checker=None, # save vram
+            requires_safety_checker=None, # avoid nag
+            feature_extractor=None, # must be none of no safety checker
+        )
+
+        diffusers_model_path = save_path + "_ema"
+        logging.info(f" * Saving diffusers EMA model to {diffusers_model_path}")
+        pipeline_ema.save_pretrained(diffusers_model_path)
+
+        if save_ckpt:
+            sd_ckpt_path_ema = f"{os.path.basename(save_path)}_ema.ckpt"
+
+            save_ckpt_file(diffusers_model_path, sd_ckpt_path_ema)
+
+
+    pipeline = StableDiffusionPipeline(
+        vae=ed_state.vae,
+        text_encoder=ed_state.text_encoder,
+        tokenizer=ed_state.tokenizer,
+        unet=ed_state.unet,
+        scheduler=ed_state.scheduler,
+        safety_checker=None,  # save vram
+        requires_safety_checker=None,  # avoid nag
+        feature_extractor=None,  # must be none of no safety checker
+    )
+
+    diffusers_model_path = save_path
+    logging.info(f" * Saving diffusers model to {diffusers_model_path}")
+    pipeline.save_pretrained(diffusers_model_path)
+
+    if save_ckpt:
+        sd_ckpt_path = f"{os.path.basename(save_path)}.ckpt"
+        save_ckpt_file(diffusers_model_path, sd_ckpt_path)
+
+    if save_optimizer_flag:
+        logging.info(f" Saving optimizer state to {save_path}")
+        ed_state.optimizer.save(save_path)
+
 
 def setup_local_logger(args):
     """
@@ -186,7 +290,7 @@ def set_args_12gb(args):
         logging.info("  - Overiding resolution to max 512")
         args.resolution = 512
 
-def find_last_checkpoint(logdir):
+def find_last_checkpoint(logdir, is_ema=False):
     """
     Finds the last checkpoint in the logdir, recursively
     """
@@ -196,6 +300,12 @@ def find_last_checkpoint(logdir):
     for root, dirs, files in os.walk(logdir):
         for file in files:
             if os.path.basename(file) == "model_index.json":
+
+                if is_ema and (not root.endswith("_ema")):
+                    continue
+                elif (not is_ema) and root.endswith("_ema"):
+                    continue
+
                 curr_date = os.path.getmtime(os.path.join(root,file))
 
                 if last_date is None or curr_date > last_date:
@@ -228,11 +338,19 @@ def setup_args(args):
         # find the last checkpoint in the logdir
         args.resume_ckpt = find_last_checkpoint(args.logdir)
 
+    if (args.ema_resume_model != None) and (args.ema_resume_model == "findlast"):
+        logging.info(f"{Fore.LIGHTCYAN_EX} Finding last EMA decay checkpoint in logdir: {args.logdir}{Style.RESET_ALL}")
+
+        args.ema_resume_model = find_last_checkpoint(args.logdir, is_ema=True)
+
     if args.lowvram:
         set_args_12gb(args)
 
     if not args.shuffle_tags:
         args.shuffle_tags = False
+
+    if not args.keep_tags:
+        args.keep_tags = 0
 
     args.clip_skip = max(min(4, args.clip_skip), 0)
 
@@ -356,6 +474,74 @@ def log_args(log_writer, args):
         arglog += f"{arg}={value}, "
     log_writer.add_text("config", arglog)
 
+def update_ema(model, ema_model, decay, default_device, ema_device):
+    with torch.no_grad():
+        original_model_on_proper_device = model
+        need_to_delete_original = False
+        if ema_device != default_device:
+            original_model_on_other_device = deepcopy(model)
+            original_model_on_proper_device = original_model_on_other_device.to(ema_device, dtype=model.dtype)
+            del original_model_on_other_device
+            need_to_delete_original = True
+
+        params = dict(original_model_on_proper_device.named_parameters())
+        ema_params = dict(ema_model.named_parameters())
+
+        for name in ema_params:
+            #ema_params[name].data.mul_(decay).add_(params[name].data, alpha=1 - decay)
+            ema_params[name].data = ema_params[name] * decay + params[name].data * (1.0 - decay)
+
+        if need_to_delete_original:
+            del(original_model_on_proper_device)
+
+def compute_snr(timesteps, noise_scheduler):
+    """
+    Computes SNR as per https://github.com/TiankaiHang/Min-SNR-Diffusion-Training/blob/521b624bd70c67cee4bdf49225915f5945a872e3/guided_diffusion/gaussian_diffusion.py#L847-L849
+    """
+    minimal_value = 1e-9
+    alphas_cumprod = noise_scheduler.alphas_cumprod
+    # Use .any() to check if any elements in the tensor are zero
+    if (alphas_cumprod[:-1] == 0).any():
+        logging.warning(
+            f"Alphas cumprod has zero elements! Resetting to {minimal_value}.."
+        )
+        alphas_cumprod[alphas_cumprod[:-1] == 0] = minimal_value
+    sqrt_alphas_cumprod = alphas_cumprod**0.5
+    sqrt_one_minus_alphas_cumprod = (1.0 - alphas_cumprod) ** 0.5
+    # Expand the tensors.
+    # Adapted from https://github.com/TiankaiHang/Min-SNR-Diffusion-Training/blob/521b624bd70c67cee4bdf49225915f5945a872e3/guided_diffusion/gaussian_diffusion.py#L1026
+    sqrt_alphas_cumprod = sqrt_alphas_cumprod.to(device=timesteps.device)[
+        timesteps
+    ].float()
+    while len(sqrt_alphas_cumprod.shape) < len(timesteps.shape):
+        sqrt_alphas_cumprod = sqrt_alphas_cumprod[..., None]
+    alpha = sqrt_alphas_cumprod.expand(timesteps.shape)
+
+    sqrt_one_minus_alphas_cumprod = sqrt_one_minus_alphas_cumprod.to(
+        device=timesteps.device
+    )[timesteps].float()
+    while len(sqrt_one_minus_alphas_cumprod.shape) < len(timesteps.shape):
+        sqrt_one_minus_alphas_cumprod = sqrt_one_minus_alphas_cumprod[..., None]
+    sigma = sqrt_one_minus_alphas_cumprod.expand(timesteps.shape)
+
+    # Compute SNR, first without epsilon
+    snr = (alpha / sigma) ** 2
+    # Check if the first element in SNR tensor is zero
+    if torch.any(snr == 0):
+        snr[snr == 0] = minimal_value
+    return snr
+
+def load_train_json_from_file(args, report_load = False):
+    try:
+        if report_load:
+            print(f"Loading training config from {args.config}.")
+
+        with open(args.config, 'rt') as f:
+            read_json = json.load(f)
+
+        args.__dict__.update(read_json)
+    except Exception as config_read:
+        print(f"Error on loading training config from {args.config}.")
 
 def main(args):
     """
@@ -384,57 +570,28 @@ def main(args):
         device = 'cpu'
         gpu = None
 
+
     log_folder = os.path.join(args.logdir, f"{args.project_name}_{log_time}")
 
     if not os.path.exists(log_folder):
         os.makedirs(log_folder)
 
-    @torch.no_grad()
-    def __save_model(save_path, unet, text_encoder, tokenizer, scheduler, vae, ed_optimizer, save_ckpt_dir, yaml_name,
-                     save_full_precision=False, save_optimizer_flag=False, save_ckpt=True):
-        """
-        Save the model to disk
-        """
-        global global_step
-        if global_step is None or global_step == 0:
-            logging.warning("  No model to save, something likely blew up on startup, not saving")
-            return
-        logging.info(f" * Saving diffusers model to {save_path}")
-        pipeline = StableDiffusionPipeline(
-            vae=vae,
-            text_encoder=text_encoder,
-            tokenizer=tokenizer,
-            unet=unet,
-            scheduler=scheduler,
-            safety_checker=None, # save vram
-            requires_safety_checker=None, # avoid nag
-            feature_extractor=None, # must be none of no safety checker
-        )
-        pipeline.save_pretrained(save_path)
-        sd_ckpt_path = f"{os.path.basename(save_path)}.ckpt"
+    def release_memory(model_to_delete, original_device):
+        del model_to_delete
+        gc.collect()
 
-        if save_ckpt:
-            if save_ckpt_dir is not None:
-                sd_ckpt_full = os.path.join(save_ckpt_dir, sd_ckpt_path)
-            else:
-                sd_ckpt_full = os.path.join(os.curdir, sd_ckpt_path)
-                save_ckpt_dir = os.curdir
+        if 'cuda' in original_device.type:
+            torch.cuda.empty_cache()
 
-            half = not save_full_precision
 
-            logging.info(f" * Saving SD model to {sd_ckpt_full}")
-            converter(model_path=save_path, checkpoint_path=sd_ckpt_full, half=half)
+    use_ema_dacay_training = (args.ema_decay_rate != None) or (args.ema_strength_target != None)
+    ema_model_loaded_from_file = False
 
-            if yaml_name and yaml_name != "v1-inference.yaml":
-                yaml_save_path = f"{os.path.join(save_ckpt_dir, os.path.basename(save_path))}.yaml"
-                logging.info(f" * Saving yaml to {yaml_save_path}")
-                shutil.copyfile(yaml_name, yaml_save_path)
-
-        if save_optimizer_flag:
-            logging.info(f" Saving optimizer state to {save_path}")
-            ed_optimizer.save(save_path)
+    if use_ema_dacay_training:
+        ema_device = torch.device(args.ema_device)
 
     optimizer_state_path = None
+
     try:
         # check for a local file
         hf_cache_path = get_hf_ckpt_cache_path(args.resume_ckpt)
@@ -443,10 +600,6 @@ def main(args):
             text_encoder = CLIPTextModel.from_pretrained(model_root_folder, subfolder="text_encoder")
             vae = AutoencoderKL.from_pretrained(model_root_folder, subfolder="vae")
             unet = UNet2DConditionModel.from_pretrained(model_root_folder, subfolder="unet")
-
-            optimizer_state_path = os.path.join(args.resume_ckpt, "optimizer.pt")
-            if not os.path.exists(optimizer_state_path):
-                optimizer_state_path = None
         else:
             # try to download from HF using resume_ckpt as a repo id
             downloaded = try_download_model_from_hf(repo_id=args.resume_ckpt)
@@ -457,16 +610,52 @@ def main(args):
             vae = pipe.vae
             unet = pipe.unet
             del pipe
-        
-        if args.zero_frequency_noise_ratio == -1.0:
-            # use zero terminal SNR, currently backdoor way to enable it by setting ZFN to -1, still in testing
+
+        if use_ema_dacay_training and args.ema_resume_model:
+            print(f"Loading EMA model: {args.ema_resume_model}")
+            ema_model_loaded_from_file=True
+            hf_cache_path = get_hf_ckpt_cache_path(args.ema_resume_model)
+
+            if os.path.exists(hf_cache_path) or os.path.exists(args.ema_resume_model):
+                ema_model_root_folder, ema_is_sd1attn, ema_yaml = convert_to_hf(args.resume_ckpt)
+                text_encoder_ema = CLIPTextModel.from_pretrained(ema_model_root_folder, subfolder="text_encoder")
+                unet_ema = UNet2DConditionModel.from_pretrained(ema_model_root_folder, subfolder="unet")
+
+            else:
+                # try to download from HF using ema_resume_model as a repo id
+                ema_downloaded = try_download_model_from_hf(repo_id=args.ema_resume_model)
+                if ema_downloaded is None:
+                    raise ValueError(
+                        f"No local file/folder for ema_resume_model {args.ema_resume_model}, and no matching huggingface.co repo could be downloaded")
+                ema_pipe, ema_model_root_folder, ema_is_sd1attn, ema_yaml = ema_downloaded
+                text_encoder_ema = ema_pipe.text_encoder
+                unet_ema = ema_pipe.unet
+                del ema_pipe
+
+            # Make sure EMA model is on proper device, and memory released if moved
+            unet_ema_current_device = next(unet_ema.parameters()).device
+            if ema_device != unet_ema_current_device:
+                unet_ema_on_wrong_device = unet_ema
+                unet_ema = unet_ema.to(ema_device)
+                release_memory(unet_ema_on_wrong_device, unet_ema_current_device)
+
+            # Make sure EMA model is on proper device, and memory released if moved
+            text_encoder_ema_current_device = next(text_encoder_ema.parameters()).device
+            if ema_device != text_encoder_ema_current_device:
+                text_encoder_ema_on_wrong_device = text_encoder_ema
+                text_encoder_ema = text_encoder_ema.to(ema_device)
+                release_memory(text_encoder_ema_on_wrong_device, text_encoder_ema_current_device)
+
+
+        if args.enable_zero_terminal_snr:
+            # Use zero terminal SNR
             from utils.unet_utils import enforce_zero_terminal_snr
             temp_scheduler = DDIMScheduler.from_pretrained(model_root_folder, subfolder="scheduler")
             trained_betas = enforce_zero_terminal_snr(temp_scheduler.betas).numpy().tolist()
-            reference_scheduler = DDIMScheduler.from_pretrained(model_root_folder, subfolder="scheduler", trained_betas=trained_betas)
+            inference_scheduler = DDIMScheduler.from_pretrained(model_root_folder, subfolder="scheduler", trained_betas=trained_betas)
             noise_scheduler = DDPMScheduler.from_pretrained(model_root_folder, subfolder="scheduler", trained_betas=trained_betas)
         else:
-            reference_scheduler = DDIMScheduler.from_pretrained(model_root_folder, subfolder="scheduler")
+            inference_scheduler = DDIMScheduler.from_pretrained(model_root_folder, subfolder="scheduler")
             noise_scheduler = DDPMScheduler.from_pretrained(model_root_folder, subfolder="scheduler")
 
         tokenizer = CLIPTokenizer.from_pretrained(model_root_folder, subfolder="tokenizer", use_fast=False)
@@ -502,6 +691,32 @@ def main(args):
         text_encoder = text_encoder.to(device, dtype=torch.float16)
     else:
         text_encoder = text_encoder.to(device, dtype=torch.float32)
+
+
+
+
+    if use_ema_dacay_training:
+        if not ema_model_loaded_from_file:
+            logging.info(f"EMA decay enabled, creating EMA model.")
+
+            with torch.no_grad():
+                if args.ema_device == device:
+                    unet_ema = deepcopy(unet)
+                    text_encoder_ema = deepcopy(text_encoder)
+                else:
+                    unet_ema_first = deepcopy(unet)
+                    text_encoder_ema_first = deepcopy(text_encoder)
+                    unet_ema = unet_ema_first.to(ema_device, dtype=unet.dtype)
+                    text_encoder_ema = text_encoder_ema_first.to(ema_device, dtype=text_encoder.dtype)
+                    del unet_ema_first
+                    del text_encoder_ema_first
+        else:
+            # Make sure correct types are used for models
+            unet_ema = unet_ema.to(ema_device, dtype=unet.dtype)
+            text_encoder_ema = text_encoder_ema.to(ema_device, dtype=text_encoder.dtype)
+    else:
+        unet_ema = None
+        text_encoder_ema = None
 
     try:
         #unet = torch.compile(unet)
@@ -566,6 +781,7 @@ def main(args):
         tokenizer=tokenizer,
         seed = seed,
         shuffle_tags=args.shuffle_tags,
+        keep_tags=args.keep_tags,
         rated_dataset=args.rated_dataset,
         rated_dataset_dropout_target=(1.0 - (args.rated_dataset_target_dropout_percent / 100.0))
     )
@@ -573,6 +789,20 @@ def main(args):
     torch.cuda.benchmark = False
 
     epoch_len = math.ceil(len(train_batch) / args.batch_size)
+
+
+    if use_ema_dacay_training:
+        args.ema_update_interval = args.ema_update_interval * args.grad_accum
+        if args.ema_strength_target != None:
+            total_number_of_steps: float = epoch_len * args.max_epochs
+            total_number_of_ema_update: float = total_number_of_steps / args.ema_update_interval
+            args.ema_decay_rate = args.ema_strength_target ** (1 / total_number_of_ema_update)
+
+            logging.info(f"ema_strength_target is {args.ema_strength_target}, calculated ema_decay_rate will be: {args.ema_decay_rate}.")
+
+        logging.info(
+            f"EMA decay enabled, with ema_decay_rate {args.ema_decay_rate}, ema_update_interval: {args.ema_update_interval}, ema_device: {args.ema_device}.")
+
 
     ed_optimizer = EveryDreamOptimizer(args,
                                        optimizer_config,
@@ -588,7 +818,8 @@ def main(args):
                                        batch_size=max(1,args.batch_size//2),
                                        default_sample_steps=args.sample_steps,
                                        use_xformers=is_xformers_available() and not args.disable_xformers,
-                                       use_penultimate_clip_layer=(args.clip_skip >= 2)
+                                       use_penultimate_clip_layer=(args.clip_skip >= 2),
+                                       guidance_rescale=0.7 if args.enable_zero_terminal_snr else 0
                                        )
 
     """
@@ -620,7 +851,9 @@ def main(args):
                 logging.error(f"{Fore.LIGHTRED_EX} CTRL-C received, attempting to save model to {interrupted_checkpoint_path}{Style.RESET_ALL}")
                 logging.error(f"{Fore.LIGHTRED_EX} ************************************************************************{Style.RESET_ALL}")
                 time.sleep(2) # give opportunity to ctrl-C again to cancel save
-                __save_model(interrupted_checkpoint_path, unet, text_encoder, tokenizer, noise_scheduler, vae, ed_optimizer, args.save_ckpt_dir, args.save_full_precision, args.save_optimizer, save_ckpt=not args.no_save_ckpt)
+                save_model(interrupted_checkpoint_path, global_step=global_step, ed_state=make_current_ed_state(),
+                           save_ckpt_dir=args.save_ckpt_dir, yaml_name=yaml, save_full_precision=args.save_full_precision,
+                           save_optimizer_flag=args.save_optimizer, save_ckpt=not args.no_save_ckpt)
             exit(_SIGTERM_EXIT_CODE)
         else:
             # non-main threads (i.e. dataloader workers) should exit cleanly
@@ -668,7 +901,7 @@ def main(args):
     assert len(train_batch) > 0, "train_batch is empty, check that your data_root is correct"
 
     # actual prediction function - shared between train and validate
-    def get_model_prediction_and_target(image, tokens, zero_frequency_noise_ratio=0.0):
+    def get_model_prediction_and_target(image, tokens, zero_frequency_noise_ratio=0.0, return_loss=False):
         with torch.no_grad():
             with autocast(enabled=args.amp):
                 pixel_values = image.to(memory_format=torch.contiguous_format).to(unet.device)
@@ -676,12 +909,13 @@ def main(args):
             del pixel_values
             latents = latents[0].sample() * 0.18215
 
-            if zero_frequency_noise_ratio > 0.0:
+            if zero_frequency_noise_ratio != None:
+                if zero_frequency_noise_ratio < 0:
+                    zero_frequency_noise_ratio = 0
+
                 # see https://www.crosslabs.org//blog/diffusion-with-offset-noise
                 zero_frequency_noise = zero_frequency_noise_ratio * torch.randn(latents.shape[0], latents.shape[1], 1, 1, device=latents.device)
                 noise = torch.randn_like(latents) + zero_frequency_noise
-            else:
-                noise = torch.randn_like(latents)
 
             bsz = latents.shape[0]
 
@@ -712,9 +946,35 @@ def main(args):
             #print(f"types: {type(noisy_latents)} {type(timesteps)} {type(encoder_hidden_states)}")
             model_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
 
-        return model_pred, target
+        if return_loss:
+            if args.min_snr_gamma is None:
+                loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+
+            else:
+                snr = compute_snr(timesteps, noise_scheduler)
+
+                mse_loss_weights = (
+                        torch.stack(
+                            [snr, args.min_snr_gamma * torch.ones_like(timesteps)], dim=1
+                        ).min(dim=1)[0]
+                        / snr
+                )
+                mse_loss_weights[snr == 0] = 1.0
+                loss = F.mse_loss(model_pred.float(), target.float(), reduction="none")
+                loss = loss.mean(dim=list(range(1, len(loss.shape)))) * mse_loss_weights
+                loss = loss.mean()
+
+            return model_pred, target, loss
+
+        else:
+            return model_pred, target
 
     def generate_samples(global_step: int, batch):
+        nonlocal unet
+        nonlocal text_encoder
+        nonlocal unet_ema
+        nonlocal text_encoder_ema
+
         with isolate_rng():
             prev_sample_steps = sample_generator.sample_steps
             sample_generator.reload_config()
@@ -723,19 +983,78 @@ def main(args):
                 print(f" * SampleGenerator config changed, now generating images samples every " +
                       f"{sample_generator.sample_steps} training steps (next={next_sample_step})")
             sample_generator.update_random_captions(batch["captions"])
-            inference_pipe = sample_generator.create_inference_pipe(unet=unet,
-                                                                    text_encoder=text_encoder,
-                                                                    tokenizer=tokenizer,
-                                                                    vae=vae,
-                                                                    diffusers_scheduler_config=reference_scheduler.config
-                                                                    ).to(device)
-            sample_generator.generate_samples(inference_pipe, global_step)
 
-            del inference_pipe
-        gc.collect()
+            models_info = []
+
+            if (args.ema_decay_rate is None) or args.ema_sample_nonema_model:
+                models_info.append({"is_ema": False, "swap_required": False})
+
+            if (args.ema_decay_rate is not None) and args.ema_sample_ema_model:
+                models_info.append({"is_ema": True, "swap_required": ema_device != device})
+
+            for model_info in models_info:
+
+                extra_info: str = ""
+
+                if model_info["is_ema"]:
+                    current_unet, current_text_encoder = unet_ema, text_encoder_ema
+                    extra_info = "_ema"
+                else:
+                    current_unet, current_text_encoder = unet, text_encoder
+
+                torch.cuda.empty_cache()
+
+
+                if model_info["swap_required"]:
+                    with torch.no_grad():
+                        unet_unloaded = unet.to(ema_device)
+                        del unet
+                        text_encoder_unloaded = text_encoder.to(ema_device)
+                        del text_encoder
+
+                        current_unet = unet_ema.to(device)
+                        del unet_ema
+                        current_text_encoder = text_encoder_ema.to(device)
+                        del text_encoder_ema
+                        gc.collect()
+                        torch.cuda.empty_cache()
+
+
+
+                inference_pipe = sample_generator.create_inference_pipe(unet=current_unet,
+                                                                        text_encoder=current_text_encoder,
+                                                                        tokenizer=tokenizer,
+                                                                        vae=vae,
+                                                                        diffusers_scheduler_config=inference_scheduler.config
+                                                                        ).to(device)
+                sample_generator.generate_samples(inference_pipe, global_step, extra_info=extra_info)
+
+                # Cleanup
+                del inference_pipe
+
+                if model_info["swap_required"]:
+                    with torch.no_grad():
+                        unet = unet_unloaded.to(device)
+                        del unet_unloaded
+                        text_encoder = text_encoder_unloaded.to(device)
+                        del text_encoder_unloaded
+
+                        unet_ema = current_unet.to(ema_device)
+                        del current_unet
+                        text_encoder_ema = current_text_encoder.to(ema_device)
+                        del current_text_encoder
+
+                gc.collect()
+                torch.cuda.empty_cache()
 
     def make_save_path(epoch, global_step, prepend=""):
-        return os.path.join(f"{log_folder}/ckpts/{prepend}{args.project_name}-ep{epoch:02}-gs{global_step:05}")
+        basename = f"{prepend}{args.project_name}"
+        if epoch is not None:
+            basename += f"-ep{epoch:02}"
+        if global_step is not None:
+            basename += f"-gs{global_step:05}"
+        return os.path.join(log_folder, "ckpts", basename)
+
 
     # Pre-train validation to establish a starting point on the loss graph
     if validator:
@@ -753,25 +1072,47 @@ def main(args):
     else:
         logging.info("No plugins specified")
         plugins = []
-    
+
     from plugins.plugins import PluginRunner
     plugin_runner = PluginRunner(plugins=plugins)
 
+    def make_current_ed_state() -> EveryDreamTrainingState:
+        return EveryDreamTrainingState(optimizer=ed_optimizer,
+                                       train_batch=train_batch,
+                                       unet=unet,
+                                       text_encoder=text_encoder,
+                                       tokenizer=tokenizer,
+                                       scheduler=noise_scheduler,
+                                       vae=vae,
+                                       unet_ema=unet_ema,
+                                       text_encoder_ema=text_encoder_ema)
+
+    epoch = None
     try:
         write_batch_schedule(args, log_folder, train_batch, epoch = 0)
+        plugin_runner.run_on_training_start(log_folder=log_folder, project_name=args.project_name)
 
         for epoch in range(args.max_epochs):
-            plugin_runner.run_on_epoch_start(epoch=epoch,
-                                      global_step=global_step,
-                                      project_name=args.project_name,
-                                      log_folder=log_folder,
-                                      data_root=args.data_root)
+
+            if args.load_settings_every_epoch:
+                load_train_json_from_file(args)
+
+            epoch_len = math.ceil(len(train_batch) / args.batch_size)
+
+            plugin_runner.run_on_epoch_start(
+                epoch=epoch,
+                global_step=global_step,
+                epoch_length=epoch_len,
+                project_name=args.project_name,
+                log_folder=log_folder,
+                data_root=args.data_root
+            )
+
 
             loss_epoch = []
             epoch_start_time = time.time()
             images_per_sec_log_step = []
 
-            epoch_len = math.ceil(len(train_batch) / args.batch_size)
             steps_pbar = tqdm(range(epoch_len), position=1, leave=False, dynamic_ncols=True)
             steps_pbar.set_description(f"{Fore.LIGHTCYAN_EX}Steps{Style.RESET_ALL}")
 
@@ -781,16 +1122,18 @@ def main(args):
             )
 
             for step, batch in enumerate(train_dataloader):
+
                 step_start_time = time.time()
+
                 plugin_runner.run_on_step_start(epoch=epoch,
+                        local_step=step,
                         global_step=global_step,
                         project_name=args.project_name,
                         log_folder=log_folder,
-                        batch=batch)
+                        batch=batch,
+                        ed_state=make_current_ed_state())
 
-                model_pred, target = get_model_prediction_and_target(batch["image"], batch["tokens"], args.zero_frequency_noise_ratio)
-
-                loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+                model_pred, target, loss = get_model_prediction_and_target(batch["image"], batch["tokens"], args.zero_frequency_noise_ratio, return_loss=True)
 
                 del target, model_pred
 
@@ -799,6 +1142,21 @@ def main(args):
                     loss = loss * loss_scale
 
                 ed_optimizer.step(loss, step, global_step)
+
+                if args.ema_decay_rate != None:
+                    if ((global_step + 1) % args.ema_update_interval) == 0:
+                        # debug_start_time = time.time() # Measure time
+
+                        if args.disable_unet_training != True:
+                            update_ema(unet, unet_ema, args.ema_decay_rate, default_device=device, ema_device=ema_device)
+
+                        if args.disable_textenc_training != True:
+                            update_ema(text_encoder, text_encoder_ema, args.ema_decay_rate, default_device=device, ema_device=ema_device)
+
+                        # debug_end_time = time.time() # Measure time
+                        # debug_elapsed_time = debug_end_time - debug_start_time # Measure time
+                        # print(f"Command update_EMA unet and TE took {debug_elapsed_time:.3f} seconds.") # Measure time
+
 
                 loss_step = loss.detach().item()
 
@@ -816,7 +1174,7 @@ def main(args):
                     lr_unet = ed_optimizer.get_unet_lr()
                     lr_textenc = ed_optimizer.get_textenc_lr()
                     loss_log_step = []
-                    
+
                     log_writer.add_scalar(tag="hyperparameter/lr unet", scalar_value=lr_unet, global_step=global_step)
                     log_writer.add_scalar(tag="hyperparameter/lr text encoder", scalar_value=lr_textenc, global_step=global_step)
                     log_writer.add_scalar(tag="loss/log_step", scalar_value=loss_step, global_step=global_step)
@@ -840,23 +1198,29 @@ def main(args):
 
                 min_since_last_ckpt =  (time.time() - last_epoch_saved_time) / 60
 
+                needs_save = False
                 if args.ckpt_every_n_minutes is not None and (min_since_last_ckpt > args.ckpt_every_n_minutes):
                     last_epoch_saved_time = time.time()
                     logging.info(f"Saving model, {args.ckpt_every_n_minutes} mins at step {global_step}")
-                    save_path = make_save_path(epoch, global_step)
-                    __save_model(save_path, unet, text_encoder, tokenizer, noise_scheduler, vae, ed_optimizer, args.save_ckpt_dir, yaml, args.save_full_precision, args.save_optimizer, save_ckpt=not args.no_save_ckpt)
-
-                if epoch > 0 and epoch % args.save_every_n_epochs == 0 and step == 0 and epoch < args.max_epochs - 1 and epoch >= args.save_ckpts_from_n_epochs:
+                    needs_save = True
+                if epoch > 0 and epoch % args.save_every_n_epochs == 0 and step == 0 and epoch < args.max_epochs and epoch >= args.save_ckpts_from_n_epochs:
                     logging.info(f" Saving model, {args.save_every_n_epochs} epochs at step {global_step}")
+                    needs_save = True
+                if needs_save:
                     save_path = make_save_path(epoch, global_step)
-                    __save_model(save_path, unet, text_encoder, tokenizer, noise_scheduler, vae, ed_optimizer, args.save_ckpt_dir, yaml, args.save_full_precision, args.save_optimizer, save_ckpt=not args.no_save_ckpt)
+                    save_model(save_path, global_step=global_step, ed_state=make_current_ed_state(),
+                               save_ckpt_dir=args.save_ckpt_dir, yaml_name=None,
+                               save_full_precision=args.save_full_precision,
+                               save_optimizer_flag=args.save_optimizer, save_ckpt=not args.no_save_ckpt)
 
                 plugin_runner.run_on_step_end(epoch=epoch,
                                       global_step=global_step,
+                                      local_step=step,
                                       project_name=args.project_name,
                                       log_folder=log_folder,
                                       data_root=args.data_root,
-                                      batch=batch)
+                                      batch=batch,
+                                      ed_state=make_current_ed_state())
 
                 del batch
                 global_step += 1
@@ -873,8 +1237,9 @@ def main(args):
                 train_batch.shuffle(epoch_n=epoch, max_epochs = args.max_epochs)
                 write_batch_schedule(args, log_folder, train_batch, epoch + 1)
 
-            loss_epoch = sum(loss_epoch) / len(loss_epoch)
-            log_writer.add_scalar(tag="loss/epoch", scalar_value=loss_epoch, global_step=global_step)
+            if len(loss_epoch) > 0:
+                loss_epoch = sum(loss_epoch) / len(loss_epoch)
+                log_writer.add_scalar(tag="loss/epoch", scalar_value=loss_epoch, global_step=global_step)
 
             plugin_runner.run_on_epoch_end(epoch=epoch,
                                       global_step=global_step,
@@ -882,13 +1247,18 @@ def main(args):
                                       log_folder=log_folder,
                                       data_root=args.data_root)
 
-            gc.collect()            
+            gc.collect()
             # end of epoch
 
         # end of training
         epoch = args.max_epochs
+
+        plugin_runner.run_on_training_end()
+
         save_path = make_save_path(epoch, global_step, prepend=("" if args.no_prepend_last else "last-"))
-        __save_model(save_path, unet, text_encoder, tokenizer, noise_scheduler, vae, ed_optimizer, args.save_ckpt_dir, yaml, args.save_full_precision, args.save_optimizer, save_ckpt=not args.no_save_ckpt)
+        save_model(save_path, global_step=global_step, ed_state=make_current_ed_state(),
+                   save_ckpt_dir=args.save_ckpt_dir, yaml_name=yaml, save_full_precision=args.save_full_precision,
+                   save_optimizer_flag=args.save_optimizer, save_ckpt=not args.no_save_ckpt)
 
         total_elapsed_time = time.time() - training_start_time
         logging.info(f"{Fore.CYAN}Training complete{Style.RESET_ALL}")
@@ -898,7 +1268,9 @@ def main(args):
     except Exception as ex:
         logging.error(f"{Fore.LIGHTYELLOW_EX}Something went wrong, attempting to save model{Style.RESET_ALL}")
         save_path = make_save_path(epoch, global_step, prepend="errored-")
-        __save_model(save_path, unet, text_encoder, tokenizer, noise_scheduler, vae, ed_optimizer, args.save_ckpt_dir, yaml, args.save_full_precision, args.save_optimizer, save_ckpt=not args.no_save_ckpt)
+        save_model(save_path, global_step=global_step, ed_state=make_current_ed_state(),
+                   save_ckpt_dir=args.save_ckpt_dir, yaml_name=yaml, save_full_precision=args.save_full_precision,
+                   save_optimizer_flag=args.save_optimizer, save_ckpt=not args.no_save_ckpt)
         logging.info(f"{Fore.LIGHTYELLOW_EX}Model saved, re-raising exception and exiting.  Exception was:{Style.RESET_ALL}{Fore.LIGHTRED_EX} {ex} {Style.RESET_ALL}")
         raise ex
 
@@ -914,14 +1286,7 @@ if __name__ == "__main__":
     argparser.add_argument("--config", type=str, required=False, default=None, help="JSON config file to load options from")
     args, argv = argparser.parse_known_args()
 
-    if args.config is not None:
-        print(f"Loading training config from {args.config}.")
-        with open(args.config, 'rt') as f:
-            args.__dict__.update(json.load(f))
-            if len(argv) > 0:
-                print(f"Config .json loaded but there are additional CLI arguments -- these will override values in {args.config}.")
-    else:
-        print("No config file specified, using command line args")
+    load_train_json_from_file(args, report_load=True)
 
     argparser = argparse.ArgumentParser(description="EveryDream2 Training options")
     argparser.add_argument("--amp", action="store_true",  default=True, help="deprecated, use --disable_amp if you wish to disable AMP")
@@ -936,7 +1301,7 @@ if __name__ == "__main__":
     argparser.add_argument("--disable_unet_training", action="store_true", default=False, help="disables training of unet (def: False) NOT RECOMMENDED")
     argparser.add_argument("--disable_xformers", action="store_true", default=False, help="disable xformers, may reduce performance (def: False)")
     argparser.add_argument("--flip_p", type=float, default=0.0, help="probability of flipping image horizontally (def: 0.0) use 0.0 to 1.0, ex 0.5, not good for specific faces!")
-    argparser.add_argument("--gpuid", type=int, default=0, help="id of gpu to use for training, (def: 0) (ex: 1 to use GPU_ID 1)")
+    argparser.add_argument("--gpuid", type=int, default=0, help="id of gpu to use for training, (def: 0) (ex: 1 to use GPU_ID 1), use nvidia-smi to find your GPU ids")
     argparser.add_argument("--gradient_checkpointing", action="store_true", default=False, help="enable gradient checkpointing to reduce VRAM use, may reduce performance (def: False)")
     argparser.add_argument("--grad_accum", type=int, default=1, help="Gradient accumulation factor (def: 1), (ex, 2)")
     argparser.add_argument("--logdir", type=str, default="logs", help="folder to save logs to (def: logs)")
@@ -964,15 +1329,27 @@ if __name__ == "__main__":
     argparser.add_argument("--save_optimizer", action="store_true", default=False, help="saves optimizer state with ckpt, useful for resuming training later")
     argparser.add_argument("--seed", type=int, default=555, help="seed used for samples and shuffling, use -1 for random")
     argparser.add_argument("--shuffle_tags", action="store_true", default=False, help="randomly shuffles CSV tags in captions, for booru datasets")
+    argparser.add_argument("--keep_tags", type=int, default=0, help="Number of tags to keep when shuffle, def: 0 (shuffle all)")
     argparser.add_argument("--useadam8bit", action="store_true", default=False, help="deprecated, use --optimizer_config and optimizer.json instead")
     argparser.add_argument("--wandb", action="store_true", default=False, help="enable wandb logging instead of tensorboard, requires env var WANDB_API_KEY")
     argparser.add_argument("--validation_config", default=None, help="Path to a JSON configuration file for the validator.  Default is no validation.")
     argparser.add_argument("--write_schedule", action="store_true", default=False, help="write schedule of images and their batches to file (def: False)")
     argparser.add_argument("--rated_dataset", action="store_true", default=False, help="enable rated image set training, to less often train on lower rated images through the epochs")
     argparser.add_argument("--rated_dataset_target_dropout_percent", type=int, default=50, help="how many images (in percent) should be included in the last epoch (Default 50)")
-    argparser.add_argument("--zero_frequency_noise_ratio", type=float, default=0.02, help="adds zero frequency noise, for improving contrast (def: 0.0) use 0.0 to 0.15, set to -1 to use zero terminal SNR noising beta schedule instead")
+    argparser.add_argument("--zero_frequency_noise_ratio", type=float, default=0.02, help="adds zero frequency noise, for improving contrast (def: 0.0) use 0.0 to 0.15")
+    argparser.add_argument("--enable_zero_terminal_snr", action="store_true", default=None, help="Use zero terminal SNR noising beta schedule")
+    argparser.add_argument("--load_settings_every_epoch", action="store_true", default=None, help="Will load 'train.json' at start of every epoch. Disabled by default and enabled when used.")
+    argparser.add_argument("--min_snr_gamma", type=int, default=None, help="min-SNR-gamma parameter is the loss function into individual tasks. Recommended values: 5, 1, 20. Disabled by default and enabled when used. More info: https://arxiv.org/abs/2303.09556")
+    argparser.add_argument("--ema_decay_rate", type=float, default=None, help="EMA decay rate. EMA model will be updated with (1 - ema_rate) from training, and the ema_rate from previous EMA, every interval. Values less than 1 and not so far from 1. Using this parameter will enable the feature.")
+    argparser.add_argument("--ema_strength_target", type=float, default=None, help="EMA decay target value in range (0,1). emarate will be calculated from equation: 'ema_decay_rate=ema_strength_target^(total_steps/ema_update_interval)'. Using this parameter will enable the ema feature and overide ema_decay_rate.")
+    argparser.add_argument("--ema_update_interval", type=int, default=500, help="How many steps between optimizer steps that EMA decay updates. EMA model will be update on every step modulo grad_accum times ema_update_interval.")
+    argparser.add_argument("--ema_device", type=str, default='cpu', help="EMA decay device values: cpu, cuda. Using 'cpu' is taking around 4 seconds per update vs fraction of a second on 'cuda'. Using 'cuda' will reserve around 3.2GB VRAM for a model, with 'cpu' the system RAM will be used.")
+    argparser.add_argument("--ema_sample_nonema_model", action="store_true", default=False, help="Will show samples from non-EMA trained model, just like regular training. Can be used with: --ema_sample_ema_model")
+    argparser.add_argument("--ema_sample_ema_model", action="store_true", default=False, help="Will show samples from EMA model. May be slower when using ema cpu offloading. Can be used with: --ema_sample_nonema_model")
+    argparser.add_argument("--ema_resume_model", type=str, default=None, help="The EMA decay checkpoint to resume from for EMA decay, either a local .ckpt file, a converted Diffusers format folder, or a Huggingface.co repo id such as stabilityai/stable-diffusion-2-1-ema-decay")
+
 
     # load CLI args to overwrite existing config args
     args = argparser.parse_args(args=argv, namespace=args)
-    
+
     main(args)

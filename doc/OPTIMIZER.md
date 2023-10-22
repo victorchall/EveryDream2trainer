@@ -29,12 +29,13 @@ For each of the `unet` and `text_encoder` sections, you can set the following pr
 Standard full precision AdamW optimizer exposed by PyTorch.  Not recommended.  Slower and uses more memory than adamw8bit.  Widely documented on the web.
 
 * adamw8bit
+* lion8bit
 
-Tim Dettmers / bitsandbytes AdamW 8bit optimizer.  This is the default and recommended setting.  Widely documented on the web.
+Tim Dettmers / bitsandbytes AdamW and Lion 8bit optimizer.  adamw8bit is the default and recommended setting as it is well understood, and lion8bit is very vram efficient.  Widely documented on the web.
 
 * lion
 
-Lucidrains' [implementation](https://github.com/lucidrains/lion-pytorch) of the [lion optimizer](https://arxiv.org/abs/2302.06675).  Click links to read more.  `Epsilon` is not used by lion.
+Lucidrains' [implementation](https://github.com/lucidrains/lion-pytorch) of the [lion optimizer](https://arxiv.org/abs/2302.06675).  Click links to read more.  `Epsilon` is not used by lion. You should prefer lion8bit over this optimizer as it is more memory efficient. 
 
 Recommended settings for lion based on the paper are as follows:
 
@@ -61,7 +62,13 @@ Available optimizer values for Dadaptation are:
 
 * dadapt_lion, dadapt_adam, dadapt_sgd
 
-These are fairly experimental but tested as working.  Gradient checkpointing may be required even on 24GB GPUs.  Performance is slower than the compiled and optimized AdamW8bit optimizer unless you increae gradient accumulation as it seems the accumulation steps process slowly with the current implementation of D-Adaption
+These are fairly experimental but tested as working.  Gradient checkpointing may be required even on 24GB GPUs.  Performance is slower than the compiled and optimized AdamW8bit optimizer unless you increae gradient accumulation as it seems the accumulation steps process slowly with the current implementation of D-Adaption. 
+
+ #### Prodigy 
+
+Another adaptive optimizer.  It is not very VRAM efficient. [Github](https://github.com/konstmish/prodigy), [Paper](https://arxiv.org/pdf/2306.06101.pdf)
+
+* prodigy
 
 ## Optimizer parameters
 

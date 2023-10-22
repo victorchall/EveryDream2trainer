@@ -90,7 +90,8 @@ class SampleGenerator:
                  default_seed: int,
                  default_sample_steps: int,
                  use_xformers: bool,
-                 use_penultimate_clip_layer: bool):
+                 use_penultimate_clip_layer: bool,
+                 guidance_rescale: float = 0):
         self.log_folder = log_folder
         self.log_writer = log_writer
         self.batch_size = batch_size
@@ -99,6 +100,7 @@ class SampleGenerator:
         self.show_progress_bars = False
         self.generate_pretrain_samples = False
         self.use_penultimate_clip_layer = use_penultimate_clip_layer
+        self.guidance_rescale = guidance_rescale
 
         self.default_resolution = default_resolution
         self.default_seed = default_seed
@@ -182,7 +184,7 @@ class SampleGenerator:
                 self.sample_requests = self._make_random_caption_sample_requests()
 
     @torch.no_grad()
-    def generate_samples(self, pipe: StableDiffusionPipeline, global_step: int):
+    def generate_samples(self, pipe: StableDiffusionPipeline, global_step: int, extra_info: str = ""):
         """
         generates samples at different cfg scales and saves them to disk
         """
@@ -231,6 +233,7 @@ class SampleGenerator:
                                   generator=generators,
                                   width=size[0],
                                   height=size[1],
+                                  guidance_rescale=self.guidance_rescale
                                   ).images
 
                     for image in images:
@@ -269,15 +272,15 @@ class SampleGenerator:
                     prompt = prompts[prompt_idx]
                     clean_prompt = clean_filename(prompt)
 
-                    result.save(f"{self.log_folder}/samples/gs{global_step:05}-{sample_index}-{clean_prompt[:100]}.jpg", format="JPEG", quality=95, optimize=True, progressive=False)
-                    with open(f"{self.log_folder}/samples/gs{global_step:05}-{sample_index}-{clean_prompt[:100]}.txt", "w", encoding='utf-8') as f:
+                    result.save(f"{self.log_folder}/samples/gs{global_step:05}-{sample_index}-{extra_info}{clean_prompt[:100]}.jpg", format="JPEG", quality=95, optimize=True, progressive=False)
+                    with open(f"{self.log_folder}/samples/gs{global_step:05}-{sample_index}-{extra_info}{clean_prompt[:100]}.txt", "w", encoding='utf-8') as f:
                         f.write(str(batch[prompt_idx]))
 
                     tfimage = transforms.ToTensor()(result)
                     if batch[prompt_idx].wants_random_caption:
-                        self.log_writer.add_image(tag=f"sample_{sample_index}", img_tensor=tfimage, global_step=global_step)
+                        self.log_writer.add_image(tag=f"sample_{sample_index}{extra_info}", img_tensor=tfimage, global_step=global_step)
                     else:
-                        self.log_writer.add_image(tag=f"sample_{sample_index}_{clean_prompt[:100]}", img_tensor=tfimage, global_step=global_step)
+                        self.log_writer.add_image(tag=f"sample_{sample_index}_{extra_info}{clean_prompt[:100]}", img_tensor=tfimage, global_step=global_step)
                     sample_index += 1
 
                     del result
