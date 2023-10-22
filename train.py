@@ -57,7 +57,7 @@ from data.data_loader import DataLoaderMultiAspect
 from data.every_dream import EveryDreamBatch, build_torch_dataloader
 from data.every_dream_validation import EveryDreamValidator
 from data.image_train_item import ImageTrainItem, DEFAULT_BATCH_ID
-from plugins.plugins import PluginRunner
+from plugins.plugins import PluginRunner, g_plugin_runner
 from utils.huggingface_downloader import try_download_model_from_hf
 from utils.convert_diff_to_ckpt import convert as converter
 from utils.isolate_rng import isolate_rng
@@ -125,9 +125,6 @@ class EveryDreamTrainingState:
         self.vae = vae
         self.unet_ema = unet_ema
         self.text_encoder_ema = text_encoder_ema
-
-# global plugin runner instance
-plugin_runner: PluginRunner = None
 
 @torch.no_grad()
 def save_model(save_path, ed_state: EveryDreamTrainingState, global_step: int, save_ckpt_dir, yaml_name,
@@ -207,7 +204,7 @@ def save_model(save_path, ed_state: EveryDreamTrainingState, global_step: int, s
         logging.info(f" Saving optimizer state to {save_path}")
         ed_state.optimizer.save(save_path)
 
-    plugin_runner.run_on_model_save(
+    g_plugin_runner.run_on_model_save(
         ed_state=ed_state,
         diffusers_save_path=diffusers_model_path
     )
@@ -764,9 +761,10 @@ def main(args):
         with open(os.path.join(os.curdir, optimizer_config_path), "r") as f:
             optimizer_config = json.load(f)
 
-    global plugin_runner
-    plugin_runner = PluginRunner(plugins=plugins)
-    plugin_runner.run_on_model_load(
+    # initialize the global instance
+    PluginRunner(plugins)
+
+    g_plugin_runner.run_on_model_load(
         ed_state=EveryDreamTrainingState(unet=unet, text_encoder=text_encoder, tokenizer=tokenizer, vae=vae),
         optimizer_config=optimizer_config
     )
@@ -1114,7 +1112,7 @@ def main(args):
     epoch = None
     try:
         write_batch_schedule(args, log_folder, train_batch, epoch = 0)
-        plugin_runner.run_on_training_start(log_folder=log_folder,
+        g_plugin_runner.run_on_training_start(log_folder=log_folder,
                                             project_name=args.project_name,
                                             ed_state=make_current_ed_state())
 
@@ -1125,7 +1123,7 @@ def main(args):
 
             epoch_len = math.ceil(len(train_batch) / args.batch_size)
 
-            plugin_runner.run_on_epoch_start(
+            g_plugin_runner.run_on_epoch_start(
                 epoch=epoch,
                 global_step=global_step,
                 epoch_length=epoch_len,
@@ -1151,7 +1149,7 @@ def main(args):
 
                 step_start_time = time.time()
 
-                plugin_runner.run_on_step_start(epoch=epoch,
+                g_plugin_runner.run_on_step_start(epoch=epoch,
                         local_step=step,
                         global_step=global_step,
                         project_name=args.project_name,
@@ -1239,7 +1237,7 @@ def main(args):
                                save_full_precision=args.save_full_precision,
                                save_optimizer_flag=args.save_optimizer, save_ckpt=not args.no_save_ckpt)
 
-                plugin_runner.run_on_step_end(epoch=epoch,
+                g_plugin_runner.run_on_step_end(epoch=epoch,
                                       global_step=global_step,
                                       local_step=step,
                                       project_name=args.project_name,
@@ -1267,7 +1265,7 @@ def main(args):
                 loss_epoch = sum(loss_epoch) / len(loss_epoch)
                 log_writer.add_scalar(tag="loss/epoch", scalar_value=loss_epoch, global_step=global_step)
 
-            plugin_runner.run_on_epoch_end(epoch=epoch,
+            g_plugin_runner.run_on_epoch_end(epoch=epoch,
                                       global_step=global_step,
                                       project_name=args.project_name,
                                       log_folder=log_folder,
@@ -1279,7 +1277,7 @@ def main(args):
         # end of training
         epoch = args.max_epochs
 
-        plugin_runner.run_on_training_end()
+        g_plugin_runner.run_on_training_end()
 
         save_path = make_save_path(epoch, global_step, prepend=("" if args.no_prepend_last else "last-"))
         save_model(save_path, global_step=global_step, ed_state=make_current_ed_state(),
