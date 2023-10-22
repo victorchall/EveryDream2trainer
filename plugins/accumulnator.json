@@ -1,0 +1,10 @@
+{
+    "documentation": {
+        "curve": "one of 'linear' or 'log', defines how the grad_accum value changes from begin to end"
+    },
+    "begin_epoch": 3,
+    "end_epoch": 10,
+    "begin_grad_accum": 1,
+    "end_grad_accum": 100,
+    "curve": "linear"
+}

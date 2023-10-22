@@ -15,6 +15,10 @@ class Accumulnator(BasePlugin):
             begin_grad_accum = config['begin_grad_accum']
             end_epoch = config['end_epoch']
             end_grad_accum = config['end_grad_accum']
+            curve = config['curve']
+            if curve != 'linear':
+                raise NotImplementedError("Only 'linear' curve is implemented for now")
+
             accums_per_epoch = {}
             for i in range(begin_epoch):
                 accums_per_epoch[i] = begin_grad_accum

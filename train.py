@@ -159,7 +159,7 @@ def save_model(save_path, ed_state: EveryDreamTrainingState, global_step: int, s
         logging.warning("  No model to save, something likely blew up on startup, not saving")
         return
 
-    if args.ema_decay_rate != None:
+    if ed_state.unet_ema is not None or ed_state.text_encoder_ema is not None:
         pipeline_ema = StableDiffusionPipeline(
             vae=ed_state.vae,
             text_encoder=ed_state.text_encoder_ema,
