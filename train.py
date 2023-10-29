@@ -901,7 +901,7 @@ def main(args):
     assert len(train_batch) > 0, "train_batch is empty, check that your data_root is correct"
 
     # actual prediction function - shared between train and validate
-    def get_model_prediction_and_target(image, tokens, zero_frequency_noise_ratio=0.0, return_loss=False):
+    def get_model_prediction_and_target(image, tokens, zero_frequency_noise_ratio=0.0, input_perturbation=0.0, return_loss=False):
         with torch.no_grad():
             with autocast(enabled=args.amp):
                 pixel_values = image.to(memory_format=torch.contiguous_format).to(unet.device)
@@ -916,6 +916,8 @@ def main(args):
                 # see https://www.crosslabs.org//blog/diffusion-with-offset-noise
                 zero_frequency_noise = zero_frequency_noise_ratio * torch.randn(latents.shape[0], latents.shape[1], 1, 1, device=latents.device)
                 noise = torch.randn_like(latents) + zero_frequency_noise
+            else:
+                noise = torch.randn_like(latents)
 
             bsz = latents.shape[0]
 
@@ -932,7 +934,12 @@ def main(args):
         else:
             encoder_hidden_states = encoder_hidden_states.last_hidden_state
 
-        noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
+        if input_perturbation > 0:
+            # add some extra noise
+            new_noise = noise + args.input_perturbation * torch.randn_like(noise)
+            noisy_latents = noise_scheduler.add_noise(latents, new_noise, timesteps)
+        else:
+            noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
 
         if noise_scheduler.config.prediction_type == "epsilon":
             target = noise
@@ -1133,7 +1140,10 @@ def main(args):
                         batch=batch,
                         ed_state=make_current_ed_state())
 
-                model_pred, target, loss = get_model_prediction_and_target(batch["image"], batch["tokens"], args.zero_frequency_noise_ratio, return_loss=True)
+                model_pred, target, loss = get_model_prediction_and_target(batch["image"], batch["tokens"],
+                                                                     zero_frequency_noise_ratio=args.zero_frequency_noise_ratio,
+                                                                     input_perturbation=args.input_perturbation,
+                                                                     return_loss=True)
 
                 del target, model_pred
 
@@ -1347,6 +1357,7 @@ if __name__ == "__main__":
     argparser.add_argument("--ema_sample_nonema_model", action="store_true", default=False, help="Will show samples from non-EMA trained model, just like regular training. Can be used with: --ema_sample_ema_model")
     argparser.add_argument("--ema_sample_ema_model", action="store_true", default=False, help="Will show samples from EMA model. May be slower when using ema cpu offloading. Can be used with: --ema_sample_nonema_model")
     argparser.add_argument("--ema_resume_model", type=str, default=None, help="The EMA decay checkpoint to resume from for EMA decay, either a local .ckpt file, a converted Diffusers format folder, or a Huggingface.co repo id such as stabilityai/stable-diffusion-2-1-ema-decay")
+    argparser.add_argument("--input_perturbation", type=float, default=0, help="add input perturbation, helps the model recover from errors during inference (ref Ming et al. 'Input Perturbation Reduces Exposure Bias in Diffusion Models')")
 
 
     # load CLI args to overwrite existing config args

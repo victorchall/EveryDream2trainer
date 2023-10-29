@@ -161,6 +161,10 @@ Very tentatively, I suggest closer to 0.10 for short term training, and lower va
 
 Set `zero_frequency_noise_ratio` to -1.
 
+## Input perturbation
+
+Pass e.g. `--input_perturbation 0.1` to add a random amount of noise to every training step (`0` = disabled, which is the default). May help the model recover from "errors" during inference (ref Ming et al. 'Input Perturbation Reduces Exposure Bias in Diffusion Models').
+
 ## Keeping images together (custom batching)
 
 If you have a subset of your dataset that expresses the same style or concept, training quality may be improved by putting all of these images through the trainer together in the same batch or batches, instead of the default behaviour (which is to shuffle them randomly throughout the entire dataset).
