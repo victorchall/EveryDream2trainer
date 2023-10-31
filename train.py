@@ -1138,8 +1138,12 @@ def main(args):
                 del target, model_pred
 
                 if batch["runt_size"] > 0:
-                    loss_scale = (batch["runt_size"] / args.batch_size)**1.5 # further discount runts by **1.5
-                    loss = loss * loss_scale
+                    runt_loss_scale = (batch["runt_size"] / args.batch_size)**1.5 # further discount runts by **1.5
+                    loss = loss * runt_loss_scale
+
+                if "loss_scale" in batch.keys():
+                    # Apply the mask to the loss
+                    loss = loss * batch["loss_scale"]
 
                 ed_optimizer.step(loss, step, global_step)
 

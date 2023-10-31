@@ -138,10 +138,11 @@ class ImageTrainItem:
                  aspects: list[float], 
                  pathname: str, 
                  flip_p=0.0, 
-                 multiplier: float=1.0, 
+                 multiplier: float=1.0,
                  cond_dropout=None,
                  shuffle_tags=False,
-                 batch_id: str=None
+                 batch_id: str=None,
+                 loss_scale: float=None
                  ):
         self.caption = caption
         self.aspects = aspects
@@ -153,6 +154,7 @@ class ImageTrainItem:
         self.cond_dropout = cond_dropout
         self.shuffle_tags = shuffle_tags
         self.batch_id = batch_id or DEFAULT_BATCH_ID
+        self.loss_scale = loss_scale or 1
         self.target_wh = None
 
         self.image_size = None
