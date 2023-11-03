@@ -108,7 +108,7 @@ def main(args):
 
                 if args.save_entities and (not os.path.exists(f"{name}.ent") or args.overwrite):
                     with open(f"{name}.ent", "w") as entities_file:
-                        entities_file.write(entities)
+                        entities_file.write(str(entities))
                 gpu_mb_used = get_gpu_memory_map()
                 print(f"gpu usage: {gpu_mb_used:.1f} mb, time taken: {time.time()-start_time:.2f} seconds")
 
@@ -119,9 +119,9 @@ if __name__ == "__main__":
     parser.add_argument("--data_root", type=str, default="input", help="Path to folder of images to caption")
     parser.add_argument("--prompt", type=str, default="Describe this image in detail: ", help="Prompt for generating caption")
     parser.add_argument("--keep_prompt", action="store_true", default=False, help="will keep the prompt at the start of the caption when saved")
-    parser.add_argument("--max_new_tokens", type=int, default=75, help="Maximum number of tokens to generate")
+    parser.add_argument("--max_new_tokens", type=int, default=128, help="Maximum number of tokens to generate")
     parser.add_argument("--save_entities", action="store_true", default=False, help="Save coord box with entities to a separate .ent file")
-    parser.add_argument("--overwrite", action="store_true", default=False, help="will overwrite txt and ent files if they exist")
+    parser.add_argument("--overwrite", action="store_true", default=False, help="will overwrite .txt and .ent files if they exist")
     parser.add_argument("--cpu", action="store_true", default=False, help="use cpu instead of cuda")
     parser.add_argument("--dtype", type=str, default="fp16", help="force a different dtype if using GPU (fp16, bf16, fp32) (default: fp16)")
     args = parser.parse_args()
