@@ -118,6 +118,7 @@ class EveryDreamBatch(Dataset):
         example["tokens"] = torch.tensor(example["tokens"])
 
         example["runt_size"] = train_item["runt_size"]
+        example["loss_scale"] = train_item["loss_scale"]
 
         return example
 
@@ -134,6 +135,7 @@ class EveryDreamBatch(Dataset):
             example["cond_dropout"] = image_train_tmp.cond_dropout
         example["runt_size"] = image_train_tmp.runt_size
         example["shuffle_tags"] = image_train_tmp.shuffle_tags
+        example["loss_scale"] = image_train_tmp.loss_scale
 
         return example
 
@@ -214,11 +216,14 @@ def collate_fn(batch):
     images = torch.stack(images)
     images = images.to(memory_format=torch.contiguous_format).float()
 
+    loss_scale = torch.tensor([example.get("loss_scale", 1) for example in batch])
+
     ret = {
         "tokens": torch.stack(tuple(tokens)),
         "image": images,
         "captions": captions,
         "runt_size": runt_size,
+        "loss_scale": loss_scale
     }
     del batch
     return ret

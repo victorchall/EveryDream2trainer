@@ -901,7 +901,7 @@ def main(args):
     assert len(train_batch) > 0, "train_batch is empty, check that your data_root is correct"
 
     # actual prediction function - shared between train and validate
-    def get_model_prediction_and_target(image, tokens, zero_frequency_noise_ratio=0.0, return_loss=False):
+    def get_model_prediction_and_target(image, tokens, zero_frequency_noise_ratio=0.0, return_loss=False, loss_scale=None):
         with torch.no_grad():
             with autocast(enabled=args.amp):
                 pixel_values = image.to(memory_format=torch.contiguous_format).to(unet.device)
@@ -947,10 +947,10 @@ def main(args):
             model_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
 
         if return_loss:
-            if args.min_snr_gamma is None:
-                loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+            if loss_scale is None:
+                loss_scale = torch.ones(model_pred.shape[0], dtype=torch.float)
 
-            else:
+            if args.min_snr_gamma is not None:
                 snr = compute_snr(timesteps, noise_scheduler)
 
                 mse_loss_weights = (
@@ -960,9 +960,11 @@ def main(args):
                         / snr
                 )
                 mse_loss_weights[snr == 0] = 1.0
-                loss = F.mse_loss(model_pred.float(), target.float(), reduction="none")
-                loss = loss.mean(dim=list(range(1, len(loss.shape)))) * mse_loss_weights
-                loss = loss.mean()
+                loss_scale = loss_scale * mse_loss_weights
+
+            loss = F.mse_loss(model_pred.float(), target.float(), reduction="none")
+            loss = loss.mean(dim=list(range(1, len(loss.shape)))) * loss_scale.to(unet.device)
+            loss = loss.mean()
 
             return model_pred, target, loss
 
@@ -1133,13 +1135,17 @@ def main(args):
                         batch=batch,
                         ed_state=make_current_ed_state())
 
-                model_pred, target, loss = get_model_prediction_and_target(batch["image"], batch["tokens"], args.zero_frequency_noise_ratio, return_loss=True)
+                model_pred, target, loss = get_model_prediction_and_target(batch["image"],
+                                                                           batch["tokens"],
+                                                                           args.zero_frequency_noise_ratio,
+                                                                           return_loss=True,
+                                                                           loss_scale=batch["loss_scale"])
 
                 del target, model_pred
 
                 if batch["runt_size"] > 0:
-                    loss_scale = (batch["runt_size"] / args.batch_size)**1.5 # further discount runts by **1.5
-                    loss = loss * loss_scale
+                    runt_loss_scale = (batch["runt_size"] / args.batch_size)**1.5 # further discount runts by **1.5
+                    loss = loss * runt_loss_scale
 
                 ed_optimizer.step(loss, step, global_step)
 
