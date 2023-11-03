@@ -24,10 +24,9 @@ import torch
 from PIL import Image
 from pynvml import *
 from transformers import AutoProcessor, AutoModelForVision2Seq
-
+import colorama
 
 GROUNDING = "<grounding>"
-
 SUPPORTED_EXT = [".jpg", ".png", ".jpeg", ".bmp", ".jfif", ".webp"]
 
 def get_gpu_memory_map():
@@ -38,8 +37,6 @@ def get_gpu_memory_map():
     return info.used/1024/1024
 
 def remove_starting_string(a, b):
-    print(a)
-    print(b)
     if b.startswith(a):
         return b[len(a):]  # Remove string A from the beginning of string B
     elif b.strip().startswith(a.strip()):
@@ -54,7 +51,6 @@ def main(args):
     dtype=torch.float32
 
     if not args.cpu:
-        #move to cuda and use float16
         if args.dtype == "fp16":
             dtype=torch.float16
         elif args.dtype == "bf16":
