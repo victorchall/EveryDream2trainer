@@ -19,6 +19,8 @@ import io
 import argparse
 import time
 
+import torch
+
 from PIL import Image
 from pynvml import *
 from transformers import AutoProcessor, AutoModelForVision2Seq
@@ -49,9 +51,17 @@ def main(args):
     model = AutoModelForVision2Seq.from_pretrained("microsoft/kosmos-2-patch14-224")
     processor = AutoProcessor.from_pretrained("microsoft/kosmos-2-patch14-224")
 
+    dtype=torch.float32
+
     if not args.cpu:
         #move to cuda and use float16
-        model = model.half().cuda()
+        if args.dtype == "fp16":
+            dtype=torch.float16
+        elif args.dtype == "bf16":
+            dtype=torch.bfloat16
+        elif args.dtype == "fp32":
+            dtype=torch.float32
+        model = model.to(dtype=dtype).cuda()
         print(f"Using cuda, model dtype: {model.dtype}")
     else:
         print(f"Using cpu, model dtype: {model.dtype}")
@@ -72,15 +82,16 @@ def main(args):
 
                 inputs = processor(text=GROUNDING+args.prompt, images=image, return_tensors="pt")
 
-                generated_ids = model.generate(
-                    pixel_values=inputs["pixel_values"].cuda() if not args.cpu else inputs["pixel_values"],
-                    input_ids=inputs["input_ids"].cuda() if not args.cpu else inputs["input_ids"],
-                    attention_mask=inputs["attention_mask"].cuda() if not args.cpu else inputs["attention_mask"],
-                    image_embeds=None,
-                    image_embeds_position_mask=inputs["image_embeds_position_mask"].cuda() if not args.cpu else inputs["image_embeds_position_mask"],
-                    use_cache=True,
-                    max_new_tokens=args.max_new_tokens,
-                )
+                with torch.cuda.amp.autocast(enabled=args.dtype != "fp32", dtype=dtype):
+                    generated_ids = model.generate(
+                        pixel_values=inputs["pixel_values"].cuda() if not args.cpu else inputs["pixel_values"],
+                        input_ids=inputs["input_ids"].cuda() if not args.cpu else inputs["input_ids"],
+                        attention_mask=inputs["attention_mask"].cuda() if not args.cpu else inputs["attention_mask"],
+                        image_embeds=None,
+                        image_embeds_position_mask=inputs["image_embeds_position_mask"].cuda() if not args.cpu else inputs["image_embeds_position_mask"],
+                        use_cache=True,
+                        max_new_tokens=args.max_new_tokens,
+                    )
 
                 generated_text = processor.batch_decode(generated_ids, skip_special_tokens=True)[0]        
                 processed_text, entities = processor.post_process_generation(generated_text) # remove remaining special tokens to get just the caption and entities 
@@ -99,7 +110,7 @@ def main(args):
                     with open(f"{name}.ent", "w") as entities_file:
                         entities_file.write(entities)
                 gpu_mb_used = get_gpu_memory_map()
-                print(f"gpu usage: {gpu_mb_used:.1f} mb")
+                print(f"gpu usage: {gpu_mb_used:.1f} mb, time taken: {time.time()-start_time:.2f} seconds")
 
 if __name__ == "__main__":
     print("Kosmos-2 captioning script")
@@ -108,10 +119,11 @@ if __name__ == "__main__":
     parser.add_argument("--data_root", type=str, default="input", help="Path to folder of images to caption")
     parser.add_argument("--prompt", type=str, default="Describe this image in detail: ", help="Prompt for generating caption")
     parser.add_argument("--keep_prompt", action="store_true", default=False, help="will keep the prompt at the start of the caption when saved")
-    parser.add_argument("--max_new_tokens", type=int, default=128, help="Maximum number of tokens to generate")
+    parser.add_argument("--max_new_tokens", type=int, default=75, help="Maximum number of tokens to generate")
     parser.add_argument("--save_entities", action="store_true", default=False, help="Save coord box with entities to a separate .ent file")
     parser.add_argument("--overwrite", action="store_true", default=False, help="will overwrite txt and ent files if they exist")
     parser.add_argument("--cpu", action="store_true", default=False, help="use cpu instead of cuda")
+    parser.add_argument("--dtype", type=str, default="fp16", help="force a different dtype if using GPU (fp16, bf16, fp32) (default: fp16)")
     args = parser.parse_args()
     parser.print_help()
 
