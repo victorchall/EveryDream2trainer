@@ -34,7 +34,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     python3 -m venv ${VIRTUAL_ENV} && \
     pip install -U -I torch==2.1.0+cu121 torchvision==0.16.0+cu121 --extra-index-url "https://download.pytorch.org/whl/cu121" && \
     pip install -r requirements-build.txt && \
-    pip install --no-deps xformers==0.0.20.post7
+    pip install --no-deps xformers==0.0.22.post7
 
 ###################
 # Runtime Stage
