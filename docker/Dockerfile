@@ -78,8 +78,8 @@ RUN echo "source ${VIRTUAL_ENV}/bin/activate" >> /root/.bashrc
 #   https://github.com/TimDettmers/bitsandbytes/issues/62
 #   https://github.com/TimDettmers/bitsandbytes/issues/73
 ENV LD_LIBRARY_PATH="/usr/local/cuda-12.1/targets/x86_64-linux/lib/"
-RUN ln /usr/local/cuda/targets/x86_64-linux/lib/libcudart.so.12.1.55 /usr/local/cuda-12.1/targets/x86_64-linux/lib/libcudart.so
-RUN ln /usr/local/cuda/targets/x86_64-linux/lib/libnvrtc.so.12.1.55 /usr/local/cuda-12.1/targets/x86_64-linux/lib/libnvrtc.so
+#RUN ln /usr/local/cuda/targets/x86_64-linux/lib/libcudart.so.12.1.55 /usr/local/cuda-12.1/targets/x86_64-linux/lib/libcudart.so
+#RUN ln /usr/local/cuda/targets/x86_64-linux/lib/libnvrtc.so.12.1.55 /usr/local/cuda-12.1/targets/x86_64-linux/lib/libnvrtc.so.12.1.55
 
 # Vast.ai SSH ignores ENV vars unless fully exported
 # Exporting anything with an _ should cover the bases
