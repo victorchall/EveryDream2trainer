@@ -65,7 +65,7 @@ class EveryDreamOptimizer():
         self.unet_params = unet.parameters()
 
         with torch.no_grad():
-            log_action = lambda n, label: logging.info(f"{Fore.LIGHTBLUE_EX} {label} weight normal: {n}{Style.RESET_ALL}")
+            log_action = lambda n, label: logging.info(f"{Fore.LIGHTBLUE_EX} {label} weight normal: {n:.1f}{Style.RESET_ALL}")
             self._log_weight_normal(text_encoder.text_model.encoder.layers.parameters(), "text encoder", log_action)
             self._log_weight_normal(unet.parameters(), "unet", log_action)
 
