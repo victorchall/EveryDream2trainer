@@ -60,7 +60,7 @@ class EveryDreamBatch(Dataset):
         self.rated_dataset = rated_dataset
         self.rated_dataset_dropout_target = rated_dataset_dropout_target
         # First epoch always trains on all images
-        self.image_train_items  = []
+        self.image_train_items = []
         self.__update_image_train_items(1.0)
         self.name = name
 

@@ -159,7 +159,7 @@ def save_model(save_path, ed_state: EveryDreamTrainingState, global_step: int, s
         logging.warning("  No model to save, something likely blew up on startup, not saving")
         return
 
-    if args.ema_decay_rate != None:
+    if ed_state.unet_ema is not None or ed_state.text_encoder_ema is not None:
         pipeline_ema = StableDiffusionPipeline(
             vae=ed_state.vae,
             text_encoder=ed_state.text_encoder_ema,
@@ -1101,13 +1101,21 @@ def main(args):
 
             epoch_len = math.ceil(len(train_batch) / args.batch_size)
 
+            def update_arg(arg: str, newValue):
+                if arg == "grad_accum":
+                    args.grad_accum = newValue
+                    data_loader.grad_accum = newValue
+                else:
+                    raise("Unrecognized arg: " + arg)
+
             plugin_runner.run_on_epoch_start(
                 epoch=epoch,
                 global_step=global_step,
                 epoch_length=epoch_len,
                 project_name=args.project_name,
                 log_folder=log_folder,
-                data_root=args.data_root
+                data_root=args.data_root,
+                arg_update_callback=update_arg
             )
 
 
@@ -1238,6 +1246,13 @@ def main(args):
             epoch_times.append(dict(epoch=epoch, time=elapsed_epoch_time))
             log_writer.add_scalar("performance/minutes per epoch", elapsed_epoch_time, global_step)
 
+            plugin_runner.run_on_epoch_end(epoch=epoch,
+                                           global_step=global_step,
+                                           project_name=args.project_name,
+                                           log_folder=log_folder,
+                                           data_root=args.data_root,
+                                           arg_update_callback=update_arg)
+
             epoch_pbar.update(1)
             if epoch < args.max_epochs - 1:
                 train_batch.shuffle(epoch_n=epoch, max_epochs = args.max_epochs)
@@ -1246,12 +1261,6 @@ def main(args):
             if len(loss_epoch) > 0:
                 loss_epoch = sum(loss_epoch) / len(loss_epoch)
                 log_writer.add_scalar(tag="loss/epoch", scalar_value=loss_epoch, global_step=global_step)
-
-            plugin_runner.run_on_epoch_end(epoch=epoch,
-                                      global_step=global_step,
-                                      project_name=args.project_name,
-                                      log_folder=log_folder,
-                                      data_root=args.data_root)
 
             gc.collect()
             # end of epoch
