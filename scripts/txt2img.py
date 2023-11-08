@@ -14,36 +14,36 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
+import argparse
 import os
 import random
-import argparse
+from datetime import datetime
 
-from torch import no_grad
-from torch.cuda.amp import autocast
 import torch
-
-from diffusers import StableDiffusionPipeline, AutoencoderKL, UNet2DConditionModel, DDIMScheduler, DDPMScheduler, PNDMScheduler, EulerAncestralDiscreteScheduler
-#from diffusers.models import AttentionBlock
-from diffusers.optimization import get_scheduler
-from diffusers.utils.import_utils import is_xformers_available
-
+from diffusers import StableDiffusionPipeline, AutoencoderKL, UNet2DConditionModel, DPMSolverSDEScheduler
+from torch.cuda.amp import autocast
 from transformers import CLIPTextModel, CLIPTokenizer
 
-def __generate_sample(pipe: StableDiffusionPipeline, prompt : str, cfg: float, resolution: int, gen, steps: int = 30):
+
+# from diffusers.models import AttentionBlock
+
+def __generate_sample(pipe: StableDiffusionPipeline, prompt: str, cfg: float, height: int, width: int, gen,
+                      steps: int = 30, batch_size: int = 1):
     """
     generates a single sample at a given cfg scale and saves it to disk
-    """       
+    """
     with autocast():
-        image = pipe(prompt,
-                num_inference_steps=steps,
-                num_images_per_prompt=1,
-                guidance_scale=cfg,
-                generator=gen,
-                height=resolution,
-                width=resolution,
-        ).images[0]
-    
-    return image
+        images = pipe(prompt,
+                      num_inference_steps=steps,
+                      num_images_per_prompt=batch_size,
+                      guidance_scale=cfg,
+                      generator=gen,
+                      height=height,
+                      width=width,
+                      ).images
+
+    return images
+
 
 def __create_inference_pipe(unet, text_encoder, tokenizer, scheduler, vae):
     """
@@ -55,14 +55,18 @@ def __create_inference_pipe(unet, text_encoder, tokenizer, scheduler, vae):
         tokenizer=tokenizer,
         unet=unet,
         scheduler=scheduler,
-        safety_checker=None, # save vram
-        requires_safety_checker=None, # avoid nag
-        feature_extractor=None, # must be none of no safety checker
+        safety_checker=None,  # save vram
+        requires_safety_checker=None,  # avoid nag
+        feature_extractor=None,  # must be none of no safety checker
     )
 
     return pipe
 
+
 def main(args):
+    # Create output folder if it doesn't exist
+    os.makedirs('output', exist_ok=True)
+    
     text_encoder = CLIPTextModel.from_pretrained(args.diffusers_path, subfolder="text_encoder")
     vae = AutoencoderKL.from_pretrained(args.diffusers_path, subfolder="vae")
     unet = UNet2DConditionModel.from_pretrained(args.diffusers_path, subfolder="unet")
@@ -79,23 +83,32 @@ def main(args):
 
     pipe = __create_inference_pipe(unet, text_encoder, tokenizer, sample_scheduler, vae)
 
-    seed = args.seed if args.seed != -1 else random.randint(0, 2**30)
-    gen = torch.Generator(device="cuda").manual_seed(seed)
+    for _ in range(args.batch_count):
+        seed = args.seed if args.seed != -1 else random.randint(0, 2 ** 30)
+        gen = torch.Generator(device="cuda").manual_seed(seed)
 
-    img = __generate_sample(pipe, args.prompt, args.cfg_scale, args.resolution, gen=gen, steps=args.steps)
+        images = __generate_sample(pipe, args.prompt, args.cfg_scale, args.height, args.width, gen=gen,
+                                   steps=args.steps,
+                                   batch_size=args.batch_size)
 
-
-    img.save(f"img_{args.prompt[0:100].replace(' ', '_')}_cfg_{args.cfg_scale}.png")
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        for i, img in enumerate(images):
+            img.save(
+                f"output/img_{args.prompt[0:210].replace(' ', '_')}_cfg_{args.cfg_scale}_{i}_{seed}_{timestamp}.png")
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--diffusers_path', type=str, default=None, required=True, help='path to diffusers model (from logs)')
+    parser.add_argument('--diffusers_path', type=str, default=None, required=True,
+                        help='path to diffusers model (from logs)')
     parser.add_argument('--prompt', type=str, required=True, help='prompt to use')
-    parser.add_argument('--resolution', type=int, default=512, help='resolution (def: 512)')
+    parser.add_argument('--height', type=int, default=512, help='height (def: 512)')
+    parser.add_argument('--width', type=int, default=512, help='width (def: 512)')
     parser.add_argument('--seed', type=int, default=-1, help='seed, use -1 for random (def: -1)')
     parser.add_argument('--steps', type=int, default=50, help='inference, denoising steps (def: 50)')
-    parser.add_argument('--cfg_scale', type=int, default=7.5, help='unconditional guidance scale (def: 7.5)')
+    parser.add_argument('--cfg_scale', type=float, default=7.5, help='unconditional guidance scale (def: 7.5)')
+    parser.add_argument('--batch_size', type=int, default=1, help='batch size (def: 1)')
+    parser.add_argument('--batch_count', type=int, default=1, help='batch count (def: 1)')
     args = parser.parse_args()
 
     main(args)

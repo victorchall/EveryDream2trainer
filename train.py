@@ -390,7 +390,6 @@ def setup_args(args):
     if args.grad_accum > 1:
         logging.info(f"{Fore.CYAN} Batch size: {args.batch_size}, grad accum: {args.grad_accum}, 'effective' batch size: {args.batch_size * args.grad_accum}{Style.RESET_ALL}")
 
-    total_batch_size = args.batch_size * args.grad_accum
 
     if args.save_ckpt_dir is not None and not os.path.exists(args.save_ckpt_dir):
         os.makedirs(args.save_ckpt_dir)
