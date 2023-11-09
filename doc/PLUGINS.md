@@ -2,20 +2,23 @@
 
 This is a very early and evolving feature, but users who have a need to extend behavior can now do so with plugin loading.
 
+## Plugin creation
+
 To create a plugin, extend the BasePlugin class and override the methods you want to change.  
 
-For example, lets say we made ExampleLoggingPlugin class, and placed it in a file called `plugins/example_plugin.py`:
+For example, let's say we made the `ExampleLoggingPlugin` class, and placed it in a file called `plugins/example_plugin.py`:
 
-
-To activate a plugin, edit your `train.json` and use 
+To activate a plugin, edit your `train.json` as follows:
 
 ```"plugins": ["plugins.example_plugin.ExampleLoggingPlugin"],```
 
-This uses module-path-like to your class.  For this example, `plugins/example_plug.py` contains a class `ExampleLoggingPlugin` which extends `BasePlugin`. You can go look at the [example](plugins/example_plugin.py) to see how this one works.
+The entries are in 'module-path-like' form to your class. For this example, `plugins/example_plugin.py` contains a class `ExampleLoggingPlugin` which extends `BasePlugin`. See this [example](../plugins/example_plugin.py) for more details.
 
-Everything is passed in as kwargs and the list of variables passed in is not fully defined yet.  Consider it an open question what should be passed in, but it should be specific to the context, such as on_epoch_start should not pass in batch data or anything specific to step except for `epoch` and `global_step`. 
+You can add as many plugins as you want, and each plugin only needs to implement the functions you wish.
 
-You can pass in as many plugins as you want, and each plugin only needs to implement the functions you wish.
+Data is passed to the plugin functions as a list of variables via `kwargs`, but it's still an open question which data should be passed in. In any case it should be relevant to the function, e.g. `on_epoch_start()` should not receive batch data or anything specific to a step, except for `epoch` and `global_step`. 
+
+## Quick example
 
 A basic implementation of a plugin that only uses the "end of an epoch" function will look something like this:
 
