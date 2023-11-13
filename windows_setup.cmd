@@ -24,6 +24,7 @@ pip install dadaptation
 pip install safetensors
 pip install open-flamingo==2.0.0
 pip install prodigyopt
+pip install torchsde
 python utils/get_yamls.py
 GOTO :eof
 

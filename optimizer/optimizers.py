@@ -223,23 +223,23 @@ class EveryDreamOptimizer():
         if args.lr_warmup_steps is None:
             # set warmup to 2% of decay, if decay was autoset to 150% of max epochs then warmup will end up about 3% of max epochs
             args.lr_warmup_steps = int(args.lr_decay_steps / 50)
-        
+
         if args.lr is not None:
             # override for legacy support reasons
             base_config["lr"] = args.lr
 
         base_config["optimizer"] = base_config.get("optimizer", None) or "adamw8bit"
-        base_config["lr_warmup_steps"] = base_config.get("lr_warmup_steps", None) or args.lr_warmup_steps
+
         base_config["lr_decay_steps"] = base_config.get("lr_decay_steps", None) or args.lr_decay_steps
         base_config["lr_scheduler"] = base_config.get("lr_scheduler", None) or args.lr_scheduler
-        base_config["lr_warmup_steps"] = base_config.get("lr_warmup_steps", None) or args.lr_warmup_steps
+        base_config["lr_warmup_steps"] = base_config.get("lr_warmup_steps", args.lr_warmup_steps)
         base_config["lr_decay_steps"] = base_config.get("lr_decay_steps", None) or args.lr_decay_steps
         base_config["lr_scheduler"] = base_config.get("lr_scheduler", None) or args.lr_scheduler
 
         te_config["lr"] = te_config.get("lr", None) or base_config["lr"]
         te_config["optimizer"] = te_config.get("optimizer", None) or base_config["optimizer"]
         te_config["lr_scheduler"] = te_config.get("lr_scheduler", None) or base_config["lr_scheduler"]
-        te_config["lr_warmup_steps"] = te_config.get("lr_warmup_steps", None) or base_config["lr_warmup_steps"]
+        te_config["lr_warmup_steps"] = te_config.get("lr_warmup_steps", base_config["lr_warmup_steps"])
         te_config["lr_decay_steps"] = te_config.get("lr_decay_steps", None) or base_config["lr_decay_steps"]
         te_config["weight_decay"] = te_config.get("weight_decay", None) or base_config["weight_decay"]
         te_config["betas"] = te_config.get("betas", None) or base_config["betas"]

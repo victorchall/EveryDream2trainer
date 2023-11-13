@@ -279,9 +279,6 @@ class ImageTrainItem:
         return image
 
     def hydrate(self, save=False, crop_jitter=0.02):
-        """
-        save: save the cropped image to disk, for manual inspection of resize/crop
-        """
         image = self.load_image()
 
         width, height = image.size
@@ -298,8 +295,9 @@ class ImageTrainItem:
         self.image = image.resize(self.target_wh)
 
         self.image = self.flip(self.image)
-        # Remove comment here to view image cropping outputs
-        #self._debug_save_image(self.image, "final")
+
+        if save:
+            self._debug_save_image(self.image, "final")
 
         self.image = np.array(self.image).astype(np.uint8)
         
@@ -313,6 +311,7 @@ class ImageTrainItem:
                     height, width = image.size
                 else:
                     width, height = image.size
+
                 image_aspect = width / height
                 target_wh = min(self.aspects, key=lambda aspects:abs(aspects[0]/aspects[1] - image_aspect))
 
