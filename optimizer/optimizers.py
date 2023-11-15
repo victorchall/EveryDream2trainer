@@ -232,14 +232,14 @@ class EveryDreamOptimizer():
 
         base_config["lr_decay_steps"] = base_config.get("lr_decay_steps", None) or args.lr_decay_steps
         base_config["lr_scheduler"] = base_config.get("lr_scheduler", None) or args.lr_scheduler
-        base_config["lr_warmup_steps"] = base_config.get("lr_warmup_steps", args.lr_warmup_steps)
+        base_config["lr_warmup_steps"] = base_config.get("lr_warmup_steps", None) or args.lr_warmup_steps
         base_config["lr_decay_steps"] = base_config.get("lr_decay_steps", None) or args.lr_decay_steps
         base_config["lr_scheduler"] = base_config.get("lr_scheduler", None) or args.lr_scheduler
 
         te_config["lr"] = te_config.get("lr", None) or base_config["lr"]
         te_config["optimizer"] = te_config.get("optimizer", None) or base_config["optimizer"]
         te_config["lr_scheduler"] = te_config.get("lr_scheduler", None) or base_config["lr_scheduler"]
-        te_config["lr_warmup_steps"] = te_config.get("lr_warmup_steps", base_config["lr_warmup_steps"])
+        te_config["lr_warmup_steps"] = te_config.get("lr_warmup_steps", None) or  base_config["lr_warmup_steps"]
         te_config["lr_decay_steps"] = te_config.get("lr_decay_steps", None) or base_config["lr_decay_steps"]
         te_config["weight_decay"] = te_config.get("weight_decay", None) or base_config["weight_decay"]
         te_config["betas"] = te_config.get("betas", None) or base_config["betas"]
@@ -257,8 +257,8 @@ class EveryDreamOptimizer():
             lr_scheduler = get_scheduler(
                 te_config.get("lr_scheduler", args.lr_scheduler),
                 optimizer=self.optimizer_te,
-                num_warmup_steps=int(te_config.get("lr_warmup_steps", None) or unet_config["lr_warmup_steps"]),
-                num_training_steps=int(te_config.get("lr_decay_steps", None) or unet_config["lr_decay_steps"])
+                num_warmup_steps=int(te_config.get("lr_warmup_steps", None) or unet_config.get("lr_warmup_steps",0)),
+                num_training_steps=int(te_config.get("lr_decay_steps", None) or unet_config.get("lr_decay_steps",1e9))
             )
             ret_val.append(lr_scheduler)    
 
