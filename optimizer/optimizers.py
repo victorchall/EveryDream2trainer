@@ -320,7 +320,8 @@ class EveryDreamOptimizer():
         betas = BETAS_DEFAULT
         epsilon = EPSILON_DEFAULT
         weight_decay = WEIGHT_DECAY_DEFAULT
-        opt_class = None
+        import bitsandbytes as bnb
+        opt_class = bnb.optim.AdamW8bit
         optimizer = None
 
         default_lr = 1e-6
