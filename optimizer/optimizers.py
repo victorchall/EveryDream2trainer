@@ -257,8 +257,8 @@ class EveryDreamOptimizer():
             lr_scheduler = get_scheduler(
                 te_config.get("lr_scheduler", args.lr_scheduler),
                 optimizer=self.optimizer_te,
-                num_warmup_steps=int(te_config.get("lr_warmup_steps", None)) or unet_config["lr_warmup_steps"],
-                num_training_steps=int(te_config.get("lr_decay_steps", None)) or unet_config["lr_decay_steps"]
+                num_warmup_steps=int(te_config.get("lr_warmup_steps", None) or unet_config["lr_warmup_steps"]),
+                num_training_steps=int(te_config.get("lr_decay_steps", None) or unet_config["lr_decay_steps"])
             )
             ret_val.append(lr_scheduler)    
 
@@ -452,10 +452,6 @@ class EveryDreamOptimizer():
                         log_every=args.log_step,
                         growth_rate=growth_rate,
                     )
-
-            else:
-                import bitsandbytes as bnb
-                opt_class = bnb.optim.AdamW8bit
 
         if not optimizer:
             optimizer = opt_class(
