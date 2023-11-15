@@ -34,7 +34,11 @@ def _collect_rng_states(include_cuda: bool = True) -> Dict[str, Any]:
         "python": python_get_rng_state(),
     }
     if include_cuda:
-        states["torch.cuda"] = torch.cuda.get_rng_state_all()
+        try:
+            states["torch.cuda"] = torch.cuda.get_rng_state_all()
+        except RuntimeError:
+            # CUDA initialization failure.
+            pass
     return states
 
 
