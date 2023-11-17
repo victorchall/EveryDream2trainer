@@ -461,7 +461,6 @@ class EveryDreamOptimizer():
                 opt_class = AdaCoor
                 optimizer = opt_class(
                     itertools.chain(parameters),
-                    lr=curr_lr,
                     eps=epsilon
                 )
 
