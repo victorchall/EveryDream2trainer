@@ -87,3 +87,4 @@ Make sure to check out the [tools repo](https://github.com/victorchall/EveryDrea
 
 [Contributing](doc/CONTRIBUTING.md)
 
+[Citations and references](doc/CITATIONS.md)
