@@ -189,7 +189,7 @@ def save_model(save_path, ed_state: EveryDreamTrainingState, global_step: int, s
         pipeline_ema.save_pretrained(diffusers_model_path)
 
         if save_ckpt:
-            sd_ckpt_path_ema = f"{os.path.basename(save_path)}_ema.ckpt"
+            sd_ckpt_path_ema = f"{os.path.basename(save_path)}_ema.safetensors"
 
             save_ckpt_file(diffusers_model_path, sd_ckpt_path_ema)
 
@@ -210,7 +210,7 @@ def save_model(save_path, ed_state: EveryDreamTrainingState, global_step: int, s
     pipeline.save_pretrained(diffusers_model_path)
 
     if save_ckpt:
-        sd_ckpt_path = f"{os.path.basename(save_path)}.ckpt"
+        sd_ckpt_path = f"{os.path.basename(save_path)}.safetensors"
         save_ckpt_file(diffusers_model_path, sd_ckpt_path)
 
     if save_optimizer_flag:
@@ -223,17 +223,15 @@ def setup_local_logger(args):
     configures logger with file and console logging, logs args, and returns the datestamp
     """
     log_path = args.logdir
-
-    if not os.path.exists(log_path):
-        os.makedirs(log_path)
-
-    json_config = json.dumps(vars(args), indent=2)
+    os.makedirs(log_path, exist_ok=True)
+    
     datetimestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
-    with open(os.path.join(log_path, f"{args.project_name}-{datetimestamp}_cfg.json"), "w") as f:
-        f.write(f"{json_config}")
+    log_folder = os.path.join(log_path, f"{args.project_name}-{datetimestamp}")
+    os.makedirs(log_folder, exist_ok=True)
 
-    logfilename = os.path.join(log_path, f"{args.project_name}-{datetimestamp}.log")
+    logfilename = os.path.join(log_folder, f"{args.project_name}-{datetimestamp}.log")
+
     print(f" logging to {logfilename}")
     logging.basicConfig(filename=logfilename,
                         level=logging.INFO,
@@ -247,7 +245,7 @@ def setup_local_logger(args):
     warnings.filterwarnings("ignore", message="UserWarning: Palette images with Transparency expressed in bytes should be converted to RGBA images")
     #from PIL import Image
 
-    return datetimestamp
+    return datetimestamp, log_folder
 
 # def save_optimizer(optimizer: torch.optim.Optimizer, path: str):
 #     """
@@ -462,15 +460,14 @@ def resolve_image_train_items(args: argparse.Namespace) -> list[ImageTrainItem]:
 
     return image_train_items
 
-def write_batch_schedule(args: argparse.Namespace, log_folder: str, train_batch: EveryDreamBatch, epoch: int):
-    if args.write_schedule:
-        with open(f"{log_folder}/ep{epoch}_batch_schedule.txt", "w", encoding='utf-8') as f:
-            for i in range(len(train_batch.image_train_items)):
-                try:
-                    item = train_batch.image_train_items[i]
-                    f.write(f"step:{int(i / train_batch.batch_size):05}, wh:{item.target_wh}, r:{item.runt_size}, path:{item.pathname}\n")
-                except Exception as e:
-                    logging.error(f" * Error writing to batch schedule for file path: {item.pathname}")
+def write_batch_schedule(log_folder: str, train_batch: EveryDreamBatch, epoch: int):
+    with open(f"{log_folder}/ep{epoch}_batch_schedule.txt", "w", encoding='utf-8') as f:
+        for i in range(len(train_batch.image_train_items)):
+            try:
+                item = train_batch.image_train_items[i]
+                f.write(f"step:{int(i / train_batch.batch_size):05}, wh:{item.target_wh}, r:{item.runt_size}, path:{item.pathname}\n")
+            except Exception as e:
+                logging.error(f" * Error writing to batch schedule for file path: {item.pathname}")
 
 
 def read_sample_prompts(sample_prompts_file_path: str):
@@ -480,11 +477,21 @@ def read_sample_prompts(sample_prompts_file_path: str):
             sample_prompts.append(line.strip())
     return sample_prompts
 
-def log_args(log_writer, args):
+
+def log_args(log_writer, args, optimizer_config, log_folder, log_time):
     arglog = "args:\n"
     for arg, value in sorted(vars(args).items()):
         arglog += f"{arg}={value}, "
     log_writer.add_text("config", arglog)
+
+    args_as_json = json.dumps(vars(args), indent=2)
+    with open(os.path.join(log_folder, f"{args.project_name}-{log_time}_main.json"), "w") as f:
+        f.write(args_as_json)
+        
+    optimizer_config_as_json = json.dumps(optimizer_config, indent=2)
+    with open(os.path.join(log_folder, f"{args.project_name}-{log_time}_opt.json"), "w") as f:
+        f.write(optimizer_config_as_json)
+
 
 def update_ema(model, ema_model, decay, default_device, ema_device):
     with torch.no_grad():
@@ -563,7 +570,7 @@ def main(args):
         print(" * Windows detected, disabling Triton")
         os.environ['XFORMERS_FORCE_DISABLE_TRITON'] = "1"
 
-    log_time = setup_local_logger(args)
+    log_time, log_folder = setup_local_logger(args)
     args = setup_args(args)
     print(f" Args:")
     pprint.pprint(vars(args))
@@ -582,8 +589,7 @@ def main(args):
         device = 'cpu'
         gpu = None
 
-
-    log_folder = os.path.join(args.logdir, f"{args.project_name}_{log_time}")
+    #log_folder = os.path.join(args.logdir, f"{args.project_name}_{log_time}")
 
     if not os.path.exists(log_folder):
         os.makedirs(log_folder)
@@ -706,8 +712,6 @@ def main(args):
         text_encoder = text_encoder.to(device, dtype=torch.float32)
 
 
-
-
     if use_ema_dacay_training:
         if not ema_model_loaded_from_file:
             logging.info(f"EMA decay enabled, creating EMA model.")
@@ -821,9 +825,10 @@ def main(args):
                                        optimizer_config,
                                        text_encoder,
                                        unet,
-                                       epoch_len)
+                                       epoch_len,
+                                       log_writer)
 
-    log_args(log_writer, args)
+    log_args(log_writer, args, optimizer_config, log_folder, log_time)
 
     sample_generator = SampleGenerator(log_folder=log_folder, log_writer=log_writer,
                                        default_resolution=args.resolution, default_seed=args.seed,
@@ -857,7 +862,6 @@ def main(args):
             if not interrupted:
                 interrupted=True
                 global global_step
-                #TODO: save model on ctrl-c
                 interrupted_checkpoint_path = os.path.join(f"{log_folder}/ckpts/interrupted-gs{global_step}")
                 print()
                 logging.error(f"{Fore.LIGHTRED_EX} ************************************************************************{Style.RESET_ALL}")
@@ -1103,12 +1107,11 @@ def main(args):
                                        text_encoder_ema=text_encoder_ema)
 
     epoch = None
-    try:
-        write_batch_schedule(args, log_folder, train_batch, epoch = 0)
+    try:        
         plugin_runner.run_on_training_start(log_folder=log_folder, project_name=args.project_name)
 
         for epoch in range(args.max_epochs):
-
+            write_batch_schedule(log_folder, train_batch, epoch) if args.write_schedule else None
             if args.load_settings_every_epoch:
                 load_train_json_from_file(args)
 
@@ -1269,7 +1272,6 @@ def main(args):
             epoch_pbar.update(1)
             if epoch < args.max_epochs - 1:
                 train_batch.shuffle(epoch_n=epoch, max_epochs = args.max_epochs)
-                write_batch_schedule(args, log_folder, train_batch, epoch + 1)
 
             if len(loss_epoch) > 0:
                 loss_epoch = sum(loss_epoch) / len(loss_epoch)
