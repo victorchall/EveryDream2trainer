@@ -275,3 +275,13 @@ While the calculation makes sense in how it compensates for inteval and total tr
     --ema_strength_target 0.10 ^
 
 If you use `ema_strength_target` the actual calculated `ema_decay_rate` used will be printed in your logs, and you should pay attention to this value and use it to inform your future decisions on EMA tuning.
+
+## AdaCoor optimizer
+
+This is an optimizer made by stripping out non functional components of CoordinateDoWG and several tweaks to high memory efficiency. It is a learning rate free adaptive optimizer where the only recommended parameter is an epsilon value of 1e-8. This optimizer does not scale well with high batch sizes, so it is recommended to use batch sizes no greater than 8 unless slow and careful training is desired.
+
+## Pyramid_Noise_Discount parameter
+
+This is an implementation of pyramid noise as first introduced here https://wandb.ai/johnowhitaker/multires_noise/reports/Multi-Resolution-Noise-for-Diffusion-Model-Training--VmlldzozNjYyOTU2
+
+Pyramid noise can be used to improve dynamic range in short finetunes of < 2000 steps at discounts greater than 0.40. At all discount levels pyramid noise appears to improve the amount of detail generated in images. However, it is not advised to train with pyramid noise for a full training as the noise affects the whole model rapidly and can destabilize the model if trained for too many steps. At 0, pyramid noise is disabled. 

@@ -261,6 +261,17 @@ def setup_local_logger(args):
 #     """
 #     optimizer.load_state_dict(torch.load(path))
 
+def pyramid_noise_like(x, discount=0.8):
+  b, c, w, h = x.shape # EDIT: w and h get over-written, rename for a different variant!
+  u = torch.nn.Upsample(size=(w, h), mode='bilinear')
+  noise = torch.randn_like(x)
+  for i in range(10):
+    r = random.random()*2+2 # Rather than always going 2x, 
+    w, h = max(1, int(w/(r**i))), max(1, int(h/(r**i)))
+    noise += u(torch.randn(b, c, w, h).to(x)) * discount**i
+    if w==1 or h==1: break # Lowest resolution is 1x1
+  return noise/noise.std() # Scaled back to roughly unit variance
+
 def get_gpu_memory(nvsmi):
     """
     returns the gpu memory usage
@@ -821,7 +832,8 @@ def main(args):
                                        optimizer_config,
                                        text_encoder,
                                        unet,
-                                       epoch_len)
+                                       epoch_len,
+                                       log_writer)
 
     log_args(log_writer, args)
 
@@ -922,13 +934,19 @@ def main(args):
             del pixel_values
             latents = latents[0].sample() * 0.18215
 
+            noise = torch.randn_like(latents)
+
+            if args.pyramid_noise_discount != None:
+                if 0 < args.pyramid_noise_discount:
+                    noise = pyramid_noise_like(noise, discount=args.pyramid_noise_discount)
+
             if zero_frequency_noise_ratio != None:
                 if zero_frequency_noise_ratio < 0:
                     zero_frequency_noise_ratio = 0
 
                 # see https://www.crosslabs.org//blog/diffusion-with-offset-noise
                 zero_frequency_noise = zero_frequency_noise_ratio * torch.randn(latents.shape[0], latents.shape[1], 1, 1, device=latents.device)
-                noise = torch.randn_like(latents) + zero_frequency_noise
+                noise = noise + zero_frequency_noise
 
             bsz = latents.shape[0]
 
@@ -1376,7 +1394,7 @@ if __name__ == "__main__":
     argparser.add_argument("--ema_sample_nonema_model", action="store_true", default=False, help="Will show samples from non-EMA trained model, just like regular training. Can be used with: --ema_sample_ema_model")
     argparser.add_argument("--ema_sample_ema_model", action="store_true", default=False, help="Will show samples from EMA model. May be slower when using ema cpu offloading. Can be used with: --ema_sample_nonema_model")
     argparser.add_argument("--ema_resume_model", type=str, default=None, help="The EMA decay checkpoint to resume from for EMA decay, either a local .ckpt file, a converted Diffusers format folder, or a Huggingface.co repo id such as stabilityai/stable-diffusion-2-1-ema-decay")
-
+    argparser.add_argument("--pyramid_noise_discount", type=float, default=None, help="Enables pyramid noise and use specified discount factor for it")
 
     # load CLI args to overwrite existing config args
     args = argparser.parse_args(args=argv, namespace=args)
