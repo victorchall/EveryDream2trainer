@@ -355,6 +355,8 @@ class EveryDreamOptimizer():
             logging.warning(f"No LR setting found, defaulting to {default_lr}")
 
         if optimizer_name:
+            optimizer_name = optimizer_name.lower()
+
             if optimizer_name == "lion":
                 from lion_pytorch import Lion
                 opt_class = Lion
@@ -385,14 +387,14 @@ class EveryDreamOptimizer():
                     use_bias_correction=use_bias_correction,
                     growth_rate=growth_rate,
                     d0=d0,
-                    safeguard_warmup=safeguard_warmup 
+                    safeguard_warmup=safeguard_warmup
                 )
             elif optimizer_name == "adamw":
                 opt_class = torch.optim.AdamW
-            if "dowg" in optimizer_name:  
+            if "dowg" in optimizer_name:
                 # coordinate_dowg, scalar_dowg require no additional parameters. Epsilon is overrideable but is unnecessary in all stable diffusion training situations.
                 import dowg
-                if optimizer_name == "coordinate_dowg":                    
+                if optimizer_name == "coordinate_dowg":
                     opt_class = dowg.CoordinateDoWG
                 elif optimizer_name == "scalar_dowg":
                     opt_class = dowg.ScalarDoWG
@@ -453,6 +455,14 @@ class EveryDreamOptimizer():
                         log_every=args.log_step,
                         growth_rate=growth_rate,
                     )
+            elif optimizer_name == "adacoor":
+                from optimizer.adacoor import AdaCoor
+
+                opt_class = AdaCoor
+                optimizer = opt_class(
+                    itertools.chain(parameters),
+                    eps=epsilon
+                )
 
         if not optimizer:
             optimizer = opt_class(
