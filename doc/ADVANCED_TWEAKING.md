@@ -2,7 +2,7 @@
 
 This document is a bit more geared to experienced users who have trained several models.  It is not required reading for new users.
 
-Start with the [Low VRAM guide](TWEAKING.md) if you are having trouble training on a 12GB card.
+Start with the [Low VRAM guide](VRAM.md) if you are having trouble training on a 12GB card.
 
 ## Resolution
 
