@@ -24,9 +24,6 @@ from diffusers import StableDiffusionPipeline, AutoencoderKL, UNet2DConditionMod
 from torch.cuda.amp import autocast
 from transformers import CLIPTextModel, CLIPTokenizer
 
-
-# from diffusers.models import AttentionBlock
-
 def __generate_sample(pipe: StableDiffusionPipeline, prompt: str, cfg: float, height: int, width: int, gen,
                       steps: int = 30, batch_size: int = 1):
     """
