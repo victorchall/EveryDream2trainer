@@ -24,10 +24,6 @@ pip install dadaptation
 pip install safetensors
 pip install prodigyopt
 pip install torchsde
-pip install --no-deps open-flamingo==2.0.1
-pip install einops
-pip install einops-exts
-pip install open-clip-torch
 python utils/get_yamls.py
 GOTO :eof
 

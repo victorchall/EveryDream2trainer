@@ -2,6 +2,8 @@
 
 ## Open-Flamingo
 
+#### Note: Open-Flamingo currently only works on Torch 2.0.1.  If you want to use it, you will have to backdate your torch installation, which will break features in the trainer.  I recommend making a separate environment for Open Flamingo captioning instead.  You can run through normal install, then `pip install open-flamingo` in the separate envirment to back date torch and make that install open-flamingo only.  
+
 `python caption_fl.py --data_root input --min_new_tokens 20 --max_new_tokens 30 --num_beams 3 --model "openflamingo/OpenFlamingo-9B-vitl-mpt7b"`
 
 This script uses two example image/caption pairs located in the `/example` folder to prime the system to caption, then captions the images in the input folder. It will save a `.txt` file of the same base filename with the caption in the same folder. 
