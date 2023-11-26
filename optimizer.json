@@ -28,8 +28,8 @@
     },
     "text_encoder_overrides": {
         "optimizer": null,
-        "lr": null,
-        "lr_scheduler": null,
+        "lr": 5e-7,
+        "lr_scheduler": "cosine",
         "lr_decay_steps": null,
         "lr_warmup_steps": null,
         "betas": null,

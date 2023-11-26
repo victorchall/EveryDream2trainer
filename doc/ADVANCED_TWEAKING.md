@@ -285,3 +285,7 @@ This is an optimizer made by stripping out non functional components of Coordina
 This is an implementation of pyramid noise as first introduced here https://wandb.ai/johnowhitaker/multires_noise/reports/Multi-Resolution-Noise-for-Diffusion-Model-Training--VmlldzozNjYyOTU2
 
 Pyramid noise can be used to improve dynamic range in short finetunes of < 2000 steps at discounts greater than 0.40. At all discount levels pyramid noise appears to improve the amount of detail generated in images. However, it is not advised to train with pyramid noise for a full training as the noise affects the whole model rapidly and can destabilize the model if trained for too many steps. At 0, pyramid noise is disabled. 
+
+## Attention Type
+
+The `attn_type` arg allows you to select `xformers`, `sdp`, or `slice`.  Xformers uses the [xformers package](https://github.com/facebookresearch/xformers).  SDP uses the scaled dot product mechanism [built into  Pytorch](https://pytorch.org/docs/stable/generated/torch.nn.functional.scaled_dot_product_attention.html) as of recent Pytorch updates. Slice uses head splitting.  `sdp` is the default and suggested value as it seems to save a small amount of VRAM while also being approximately 5% faster than xformers.  There is likely little reason to use slice or xformers but are kept for the time being for experimentation or consistency with prior experiments.
