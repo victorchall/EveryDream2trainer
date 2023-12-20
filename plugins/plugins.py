@@ -3,6 +3,7 @@ import importlib
 import logging
 import time
 import warnings
+from PIL import Image
 
 class BasePlugin:
     def on_epoch_start(self, **kwargs):
@@ -17,8 +18,10 @@ class BasePlugin:
         pass
     def on_step_end(self, **kwargs):
         pass
-
-
+    def transform_caption(self, caption:str):
+        return caption
+    def transform_pil_image(self, img:Image):
+        return img
 
 def load_plugin(plugin_path):
     print(f" - Attempting to load plugin: {plugin_path}")
@@ -89,3 +92,15 @@ class PluginRunner:
         for plugin in self.plugins:
             with Timer(warn_seconds=self.step_warn_seconds, label=f'{plugin.__class__.__name__}'):
                 plugin.on_step_end(**kwargs)
+    
+    def run_transform_caption(self, caption):
+        with Timer(warn_seconds=self.step_warn_seconds, label="plugin.transform_caption"):
+            for plugin in self.plugins:
+                caption = plugin.transform_caption(caption)
+        return caption
+
+    def run_transform_pil_image(self, img):
+        with Timer(warn_seconds=self.step_warn_seconds, label="plugin.transform_pil_image"):
+            for plugin in self.plugins:
+                img = plugin.transform_pil_image(img)
+        return img

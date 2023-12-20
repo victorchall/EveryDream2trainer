@@ -42,6 +42,7 @@ class EveryDreamBatch(Dataset):
                  tokenizer=None,
                  shuffle_tags=False,
                  keep_tags=0,
+                 plugin_runner=None,
                  rated_dataset=False,
                  rated_dataset_dropout_target=0.5,
                  name='train'
@@ -56,6 +57,7 @@ class EveryDreamBatch(Dataset):
         self.max_token_length = self.tokenizer.model_max_length
         self.shuffle_tags = shuffle_tags
         self.keep_tags = keep_tags
+        self.plugin_runner = plugin_runner
         self.seed = seed
         self.rated_dataset = rated_dataset
         self.rated_dataset_dropout_target = rated_dataset_dropout_target
@@ -101,6 +103,8 @@ class EveryDreamBatch(Dataset):
             example["caption"] = train_item["caption"].get_caption()
 
         example["image"] = image_transforms(train_item["image"])
+        example["image"] = self.plugin_runner.transform_pil_image(example["image"])
+        example["caption"] = self.plugin_runner.transform_caption(example["caption"])
 
         if random.random() > (train_item.get("cond_dropout", self.conditional_dropout)):
             example["tokens"] = self.tokenizer(example["caption"],

@@ -775,6 +775,16 @@ def main(args):
 
     report_image_train_item_problems(log_folder, image_train_items, batch_size=args.batch_size)
 
+    from plugins.plugins import load_plugin
+    if args.plugins is not None:
+        plugins = [load_plugin(name) for name in args.plugins]
+    else:
+        logging.info("No plugins specified")
+        plugins = []
+
+    from plugins.plugins import PluginRunner
+    plugin_runner = PluginRunner(plugins=plugins)
+
     data_loader = DataLoaderMultiAspect(
         image_train_items=image_train_items,
         seed=seed,
@@ -790,6 +800,7 @@ def main(args):
         seed = seed,
         shuffle_tags=args.shuffle_tags,
         keep_tags=args.keep_tags,
+        plugin_runner=plugin_runner,
         rated_dataset=args.rated_dataset,
         rated_dataset_dropout_target=(1.0 - (args.rated_dataset_target_dropout_percent / 100.0))
     )
@@ -1081,16 +1092,6 @@ def main(args):
     if sample_generator.generate_pretrain_samples:
         _, batch = next(enumerate(train_dataloader))
         generate_samples(global_step=0, batch=batch)
-
-    from plugins.plugins import load_plugin
-    if args.plugins is not None:
-        plugins = [load_plugin(name) for name in args.plugins]
-    else:
-        logging.info("No plugins specified")
-        plugins = []
-
-    from plugins.plugins import PluginRunner
-    plugin_runner = PluginRunner(plugins=plugins)
 
     def make_current_ed_state() -> EveryDreamTrainingState:
         return EveryDreamTrainingState(optimizer=ed_optimizer,
