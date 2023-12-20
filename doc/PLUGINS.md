@@ -29,3 +29,13 @@ class MyPlugin(BasePlugin):
     def on_epoch_end(self, **kwargs):
         print(f"hello world, this is a plugin at the end of epoch number: {kwargs['epoch']}")
 ```
+
+## Data loader hooks
+
+These runs every time the image/caption pair are loaded and passed into the training loop.  These do not use kwargs, but are focused on specific parts of the data loading routine. 
+
+#### transform_caption(self, caption:str)
+Could be useful for things like customized shuffling algorithms, word replacement/addition/removal, randomization of length, etc. 
+
+#### transform_pil_image(self, img:Image)
+Could be  useful for things like color grading, gamma adjustment, HSL modifications, etc.  Note that AFTER this function runs the image is converted to numpy format and normalized (std_dev=0.5, norm=0.5), so normalization is wasted compute. From prior experimentation, all adjustments to the standard normalization are a waste of time.  Gamma or curve adjustments are still potentially useful. 
