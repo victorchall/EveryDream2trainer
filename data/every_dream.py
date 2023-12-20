@@ -102,8 +102,8 @@ class EveryDreamBatch(Dataset):
         else:
             example["caption"] = train_item["caption"].get_caption()
 
-        example["image"] = image_transforms(train_item["image"])
         example["image"] = self.plugin_runner.transform_pil_image(example["image"])
+        example["image"] = image_transforms(train_item["image"])        
         example["caption"] = self.plugin_runner.transform_caption(example["caption"])
 
         if random.random() > (train_item.get("cond_dropout", self.conditional_dropout)):
