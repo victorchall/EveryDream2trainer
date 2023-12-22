@@ -51,7 +51,7 @@ class Timer:
 
 
 class PluginRunner:
-    def __init__(self, plugins: list, epoch_warn_seconds=5, step_warn_seconds=0.5, training_warn_seconds=20):
+    def __init__(self, plugins:list=[], epoch_warn_seconds=5, step_warn_seconds=0.5, training_warn_seconds=20):
         """
         plugins: list of plugins to run
         epoch_warn_seconds: warn if any epoch start/end call takes longer than this
