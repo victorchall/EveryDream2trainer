@@ -287,6 +287,6 @@ class EveryDreamValidator:
             seed=seed,
             name=name,
             crop_jitter=0,
-            empty_plugin_runner=empty_plugin_runner,
+            plugin_runner=empty_plugin_runner,
         )
         return ed_batch
