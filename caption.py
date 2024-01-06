@@ -45,7 +45,7 @@ def get_gpu_memory_map():
 def create_blip2_processor(model_name, device, dtype=torch.float16):
     processor = Blip2Processor.from_pretrained(model_name)
     model = Blip2ForConditionalGeneration.from_pretrained(
-        args.model, torch_dtype=dtype
+        args.model, torch_dtype=dtype, device_map=device
     )
     model.to(device)
     model.eval()
@@ -77,13 +77,16 @@ def main(args):
     dtype = torch.float32 if args.force_cpu else torch.float16
 
     if "salesforce/blip2-" in args.model.lower():
+        model_type = "blip2"
         print(f"Using BLIP2 model: {args.model}")
         processor, model = create_blip2_processor(args.model, device, dtype)
     elif "microsoft/git-" in args.model.lower():
+        model_type = "git"
         print(f"Using GIT model: {args.model}")
         processor, model = create_git_processor(args.model, device, dtype)
     else:
         # try to use auto model?  doesn't work with blip/git
+        model_type = "auto"
         processor, model = create_auto_processor(args.model, device, dtype)
 
     print(f"GPU memory used, after loading model: {get_gpu_memory_map()} MB")
@@ -98,7 +101,10 @@ def main(args):
                 image = Image.open(full_file_path)
                 start_time = time.time()
 
-                inputs = processor(images=image, return_tensors="pt", max_new_tokens=args.max_new_tokens).to(device, dtype)
+                if model_type == "git":
+                    inputs = processor(images=image, return_tensors="pt", max_new_tokens=args.max_new_tokens).to(device)
+                else:
+                    inputs = processor(images=image, return_tensors="pt", max_new_tokens=args.max_new_tokens).to(device, dtype)
 
                 generated_ids = model.generate(**inputs)
                 generated_text = processor.batch_decode(generated_ids, skip_special_tokens=True)[0].strip()
