@@ -42,6 +42,7 @@ class TextualInversionPlugin(BasePlugin):
         self.training_tokens = None
         self.training_token_ids = None
         self.original_text_embeddings = None
+        self.textual_inversion_tokens_only_grads = None
 
     def on_model_load(self, **kwargs):
         ed_state: EveryDreamTrainingState = kwargs.get('ed_state')
@@ -109,12 +110,21 @@ class TextualInversionPlugin(BasePlugin):
     def on_step_end(self, **kwargs):
         ed_state: EveryDreamTrainingState = kwargs['ed_state']
 
-        # reset the embeddings that have been touched this step, except the ones we're training, to their original state
-        with (torch.no_grad()):
-            embeddings = ed_state.text_encoder.get_input_embeddings()
-            embeddings_to_restore = [t for t in self.this_batch_tokens if t not in self.training_token_ids]
-            for t in embeddings_to_restore:
-                embeddings.weight[t] = self.original_text_embeddings[t]
+        # Zero out the gradients for all token embeddings except the newly added
+        # embeddings for the concept, as we only want to optimize the concept embeddings
+        grads = ed_state.text_encoder.get_input_embeddings().weight.grad
+        # Get the index for tokens that we want to zero the grads for
+        index_grads_to_zero = torch.arange(len(grads)) != placeholder_token_id
+        grads.data[index_grads_to_zero, :] = grads.data[index_grads_to_zero, :].fill_(0)
+
+        grads = ed_state.text_encoder.get_input_embeddings().weight.grad
+        if self.textual_inversion_tokens_only_grads is None:
+            self.textual_inversion_tokens_only_grads = torch.zeros_like(grads)
+        for t in self.training_token_ids:
+            self.textual_inversion_tokens_only_grads[t] = grads[t]
+
+        ed_state.text_encoder.get_input_embeddings().weight.grad = self.textual_inversion_tokens_only_grads
+
 
     def on_model_save(self, **kwargs):
         ed_state: EveryDreamTrainingState = kwargs['ed_state']
