@@ -133,6 +133,7 @@ class TextualInversionPlugin(BasePlugin):
         for token_id, token in zip(self.training_token_ids, self.training_tokens):
             _save_embedding(token=token, embedding=embeddings.weight[token_id], save_folder=save_folder)
 
+
 def _save_embedding(token, embedding, save_folder):
     dict_to_save = {token: embedding}
     token_name_safe = clean_filename(token)

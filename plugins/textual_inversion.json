@@ -1,0 +1,16 @@
+
+{
+  "documentation": {
+    "tokens": {
+      "token": "the token (word) to train, given exactly as it appears in tokens",
+      "initializer_word": "starting point for the embedding. make it close to the intended meaning to kick-start training",
+      "vector_length": "length of the embedding. use more if you have more images and/or if what you want to train is complex"
+    },
+    "example": "the example below trains `hat*`, `dancing shoes` and `cane` as custom tokens, if you have training data where the captions include those tokens."
+  },
+  "tokens": [
+    { "token": "hat*", "initializer_word": "hat", "vector_length": 8 },
+    { "token": "dancing shoes", "initializer_word": "shoes" },
+    { "token": "cane", "initializer_word": "cane" }
+  ]
+}

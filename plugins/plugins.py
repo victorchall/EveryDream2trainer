@@ -92,7 +92,17 @@ class PluginRunner:
         for plugin in self.plugins:
             with Timer(warn_seconds=self.step_warn_seconds, label=f'{plugin.__class__.__name__}'):
                 plugin.on_step_end(**kwargs)
-    
+
+    def run_on_model_load(self, **kwargs):
+        for plugin in self.plugins:
+            with Timer(warn_seconds=self.epoch_warn_seconds, label=f'{plugin.__class__.__name__}'):
+                plugin.on_model_load(**kwargs)
+
+    def run_on_model_save(self, **kwargs):
+        for plugin in self.plugins:
+            with Timer(warn_seconds=self.epoch_warn_seconds, label=f'{plugin.__class__.__name__}'):
+                plugin.on_model_save(**kwargs)
+
     def run_transform_caption(self, caption):
         with Timer(warn_seconds=self.step_warn_seconds, label="plugin.transform_caption"):
             for plugin in self.plugins:

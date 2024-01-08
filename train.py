@@ -57,6 +57,7 @@ from data.data_loader import DataLoaderMultiAspect
 from data.every_dream import EveryDreamBatch, build_torch_dataloader
 from data.every_dream_validation import EveryDreamValidator
 from data.image_train_item import ImageTrainItem, DEFAULT_BATCH_ID
+from plugins.plugins import PluginRunner
 from utils.huggingface_downloader import try_download_model_from_hf
 from utils.convert_diff_to_ckpt import convert as converter
 from utils.isolate_rng import isolate_rng
@@ -141,7 +142,7 @@ class EveryDreamTrainingState:
 
 @torch.no_grad()
 def save_model(save_path, ed_state: EveryDreamTrainingState, global_step: int, save_ckpt_dir, yaml_name,
-               save_full_precision=False, save_optimizer_flag=False, save_ckpt=True):
+               save_full_precision=False, save_optimizer_flag=False, save_ckpt=True, plugin_runner: PluginRunner=None):
     """
     Save the model to disk
     """
@@ -187,6 +188,11 @@ def save_model(save_path, ed_state: EveryDreamTrainingState, global_step: int, s
         diffusers_model_path = save_path + "_ema"
         logging.info(f" * Saving diffusers EMA model to {diffusers_model_path}")
         pipeline_ema.save_pretrained(diffusers_model_path)
+
+        plugin_runner.run_on_model_save(
+            ed_state=ed_state,
+            diffusers_save_path=diffusers_model_path
+        )
 
         if save_ckpt:
             sd_ckpt_path_ema = f"{os.path.basename(save_path)}_ema.safetensors"
@@ -784,6 +790,10 @@ def main(args):
 
     from plugins.plugins import PluginRunner
     plugin_runner = PluginRunner(plugins=plugins)
+    plugin_runner.run_on_model_load(
+        ed_state=EveryDreamTrainingState(unet=unet, text_encoder=text_encoder, tokenizer=tokenizer, vae=vae),
+        optimizer_config=optimizer_config
+    )
 
     data_loader = DataLoaderMultiAspect(
         image_train_items=image_train_items,
