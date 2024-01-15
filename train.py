@@ -792,7 +792,9 @@ def main(args):
     plugin_runner.run_on_model_load(
         ed_state=EveryDreamTrainingState(unet=unet, text_encoder=text_encoder, tokenizer=tokenizer, vae=vae,
                                          optimizer=None, train_batch=None, scheduler=noise_scheduler, unet_ema=None, text_encoder_ema=None),
-        optimizer_config=optimizer_config
+        optimizer_config=optimizer_config,
+        disable_unet_training=args.disable_unet_training,
+        disable_textenc_training=args.disable_textenc_training
     )
 
     data_loader = DataLoaderMultiAspect(
@@ -882,7 +884,7 @@ def main(args):
                 time.sleep(2) # give opportunity to ctrl-C again to cancel save
                 save_model(interrupted_checkpoint_path, global_step=global_step, ed_state=make_current_ed_state(),
                            save_ckpt_dir=args.save_ckpt_dir, yaml_name=yaml, save_full_precision=args.save_full_precision,
-                           save_optimizer_flag=args.save_optimizer, save_ckpt=not args.no_save_ckpt)
+                           save_optimizer_flag=args.save_optimizer, save_ckpt=not args.no_save_ckpt, plugin_runner=plugin_runner)
             exit(_SIGTERM_EXIT_CODE)
         else:
             # non-main threads (i.e. dataloader workers) should exit cleanly
@@ -1249,7 +1251,7 @@ def main(args):
                     save_model(save_path, global_step=global_step, ed_state=make_current_ed_state(),
                                save_ckpt_dir=args.save_ckpt_dir, yaml_name=None,
                                save_full_precision=args.save_full_precision,
-                               save_optimizer_flag=args.save_optimizer, save_ckpt=not args.no_save_ckpt)
+                               save_optimizer_flag=args.save_optimizer, save_ckpt=not args.no_save_ckpt, plugin_runner=plugin_runner)
 
                 plugin_runner.run_on_step_end(epoch=epoch,
                                       global_step=global_step,
@@ -1296,7 +1298,7 @@ def main(args):
         save_path = make_save_path(epoch, global_step, prepend=("" if args.no_prepend_last else "last-"))
         save_model(save_path, global_step=global_step, ed_state=make_current_ed_state(),
                    save_ckpt_dir=args.save_ckpt_dir, yaml_name=yaml, save_full_precision=args.save_full_precision,
-                   save_optimizer_flag=args.save_optimizer, save_ckpt=not args.no_save_ckpt)
+                   save_optimizer_flag=args.save_optimizer, save_ckpt=not args.no_save_ckpt, plugin_runner=plugin_runner)
 
         total_elapsed_time = time.time() - training_start_time
         logging.info(f"{Fore.CYAN}Training complete{Style.RESET_ALL}")
@@ -1308,7 +1310,7 @@ def main(args):
         save_path = make_save_path(epoch, global_step, prepend="errored-")
         save_model(save_path, global_step=global_step, ed_state=make_current_ed_state(),
                    save_ckpt_dir=args.save_ckpt_dir, yaml_name=yaml, save_full_precision=args.save_full_precision,
-                   save_optimizer_flag=args.save_optimizer, save_ckpt=not args.no_save_ckpt)
+                   save_optimizer_flag=args.save_optimizer, save_ckpt=not args.no_save_ckpt, plugin_runner=plugin_runner)
         logging.info(f"{Fore.LIGHTYELLOW_EX}Model saved, re-raising exception and exiting.  Exception was:{Style.RESET_ALL}{Fore.LIGHTRED_EX} {ex} {Style.RESET_ALL}")
         raise ex
 

@@ -26,7 +26,8 @@ In optimizer.json, the following "text_encoder_freezing" section is *required*:
     "text_encoder_freezing": {
         "unfreeze_last_n_layers": 0,
         "freeze_embeddings": false,
-        "freeze_final_layer_norm": true
+        "freeze_final_layer_norm": true,
+        "freeze_position_embeddings": true
     }
 In addition, you'll need a very high LR on the TE - maybe even as high as 1e-3. I recommend using the LR finder method.
 
@@ -48,12 +49,17 @@ class TextualInversionPlugin(BasePlugin):
 
     def on_model_load(self, **kwargs):
         ed_state: EveryDreamTrainingState = kwargs.get('ed_state')
-        optimizer_config: dict = kwargs.get('optimizer_config')
         def get_token_ids(t: str):
             return ed_state.tokenizer.convert_tokens_to_ids(ed_state.tokenizer.tokenize(t))
 
         # check for correctly configured text encoder training
+        disable_unet_training: bool = kwargs.get('disable_unet_training')
+        disable_textenc_training: bool = kwargs.get('disable_textenc_training')
+        if not disable_unet_training or disable_textenc_training:
+            logging.error(f" * {Fore.LIGHTRED_EX}Textual Inversion plugin REQUIRES {Fore.RESET}\"disable_unet_training\": true{Fore.LIGHTRED_EX} and {Fore.RESET}\"disable_textenc_training\": false{Fore.LIGHTRED_EX} in your train.json{Fore.RESET}")
+            raise RuntimeError("Unet training must be disabled and text encoder training enabled")
         num_te_layers = len(ed_state.text_encoder.text_model.encoder.layers)
+        optimizer_config: dict = kwargs.get('optimizer_config')
         if (optimizer_config is None or
             'text_encoder_freezing' not in optimizer_config or
             optimizer_config['text_encoder_freezing'].get('freeze_embeddings') != False or
@@ -65,18 +71,21 @@ class TextualInversionPlugin(BasePlugin):
             logging.error(f" * {Fore.LIGHTRED_EX}  {json.dumps(required_js_fragment)}{Fore.RESET}")
             raise RuntimeError("Misconfigured optimizer config")
 
+
         training_tokens = set()
         for token_info in self.config['tokens']:
             start_token = token_info['token']
             vector_length = token_info.get('vector_length', 1)
+            print(f" * Textual Inversion training on '{start_token}' with vector length {vector_length}")
             this_padding_tokens = [f"{start_token}_pad!!!_{n+1}" for n in range(vector_length-1)]
             self.padding_tokens[start_token] = this_padding_tokens
             training_tokens.update([start_token] + this_padding_tokens)
-            print(f"textual inversion training: token sequence for {start_token} is \"{' '.join([start_token] + this_padding_tokens)}\"")
+            if vector_length > 1:
+                print(f"   - if you want accurate samples for trigger '{start_token}', replace it in sample prompts with the following text: \"{' '.join([start_token] + this_padding_tokens)}\"")
 
         tokens_to_add = [t for t in training_tokens if len(get_token_ids(t))>1]
         logging.info(
-            f" * Textual inversion training adding the following tokens: {tokens_to_add}")
+            f" * Textual inversion training adding the following tokens: {sorted(tokens_to_add)}")
         tokens_to_overwrite = [t for t in training_tokens if t not in tokens_to_add]
         if any(tokens_to_overwrite):
             logging.warning(f" * {Fore.LIGHTYELLOW_EX}Textual inversion training overwriting the following tokens: {tokens_to_overwrite}{Fore.RESET}")
@@ -110,7 +119,7 @@ class TextualInversionPlugin(BasePlugin):
                                max_length=ed_state.tokenizer.model_max_length,
                                ).input_ids
                 initializer_embedding_full = ed_state.text_encoder(
-                    torch.tensor(initializer_token_ids_full).unsqueeze(0), output_hidden_states=True
+                    torch.tensor(initializer_token_ids_full, device=ed_state.text_encoder.device).unsqueeze(0), output_hidden_states=True
                 ).last_hidden_state
             initializer_embedding = initializer_embedding_full[0][1:vector_length+1]
 
@@ -147,8 +156,10 @@ class TextualInversionPlugin(BasePlugin):
     def on_model_save(self, **kwargs):
         ed_state: EveryDreamTrainingState = kwargs['ed_state']
         embeddings = ed_state.text_encoder.get_input_embeddings()
-        save_folder = kwargs['save_folder']
+        save_folder = kwargs['diffusers_save_path']
         for token_id, token in zip(self.training_token_ids, self.training_tokens):
+            if token not in self.padding_token_ids:
+                continue
             padding_token_ids = self.padding_token_ids[token]
             all_token_ids = [token_id] + padding_token_ids
             full_embedding = embeddings.weight[all_token_ids]
@@ -160,7 +171,7 @@ class TextualInversionPlugin(BasePlugin):
         # eg "hat*" with vector length 3 -> "hat* hat*_pad!!!_1 hat*_pad!!!_2"
         for t in tokens:
             trigger = t['token']
-            replacement = " ".join([trigger] + self.training_tokens[trigger])
+            replacement = " ".join([trigger] + self.padding_tokens[trigger])
             caption = re.sub(trigger, replacement, caption)
         return caption
 

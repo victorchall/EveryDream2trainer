@@ -8,9 +8,13 @@
     },
     "example": "the example below trains `hat*`, `dancing shoes` and `cane` as custom tokens, if you have training data where the captions include those tokens."
   },
-  "tokens": [
+  "example_tokens": [
     { "token": "hat*", "initializer": "a man's hat", "vector_length": 8 },
     { "token": "dancing shoes", "initializer": "shoes" },
     { "token": "cane", "initializer": "cane" }
+  ],
+  "tokens": [
+    { "token": "ay hairstyle", "initializer": "long red hair, elaborately plaited", "vector_length": 18 },
+    { "token": "hz outfit", "initializer": "skins, furs, and pieces of ceramic, plastic, and alloy plating", "vector_length": 18 }
   ]
 }
