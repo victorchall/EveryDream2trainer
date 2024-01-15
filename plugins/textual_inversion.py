@@ -55,9 +55,9 @@ class TextualInversionPlugin(BasePlugin):
         # check for correctly configured text encoder training
         disable_unet_training: bool = kwargs.get('disable_unet_training')
         disable_textenc_training: bool = kwargs.get('disable_textenc_training')
-        if not disable_unet_training or disable_textenc_training:
-            logging.error(f" * {Fore.LIGHTRED_EX}Textual Inversion plugin REQUIRES {Fore.RESET}\"disable_unet_training\": true{Fore.LIGHTRED_EX} and {Fore.RESET}\"disable_textenc_training\": false{Fore.LIGHTRED_EX} in your train.json{Fore.RESET}")
-            raise RuntimeError("Unet training must be disabled and text encoder training enabled")
+        #if not disable_unet_training or disable_textenc_training:
+        #    logging.error(f" * {Fore.LIGHTRED_EX}Textual Inversion plugin REQUIRES {Fore.RESET}\"disable_unet_training\": true{Fore.LIGHTRED_EX} and {Fore.RESET}\"disable_textenc_training\": false{Fore.LIGHTRED_EX} in your train.json{Fore.RESET}")
+        #    raise RuntimeError("Unet training must be disabled and text encoder training enabled")
         num_te_layers = len(ed_state.text_encoder.text_model.encoder.layers)
         optimizer_config: dict = kwargs.get('optimizer_config')
         if (optimizer_config is None or
@@ -111,7 +111,8 @@ class TextualInversionPlugin(BasePlugin):
         input_embeddings = ed_state.text_encoder.get_input_embeddings()
         for token_info in self.config['tokens']:
             vector_length = token_info.get('vector_length', 1)
-            initializer_text = token_info['initializer']
+            # make sure it's very long
+            initializer_text = " ".join([token_info['initializer']] * vector_length)
             with torch.no_grad():
                 initializer_token_ids_full = ed_state.tokenizer(initializer_text,
                                truncation=True,
@@ -143,14 +144,15 @@ class TextualInversionPlugin(BasePlugin):
         untrained_tokens = uniques[counts == 1]
         self.non_training_token_ids = untrained_tokens
 
-
-    def on_step_end(self, **kwargs):
+    def on_backpropagation(self, **kwargs):
         # Zero out the gradients for all token embeddings except the newly added
         # embeddings for the concept, as we only want to optimize the concept embeddings
         index_grads_to_zero = self.non_training_token_ids
         ed_state: EveryDreamTrainingState = kwargs['ed_state']
         grads = ed_state.text_encoder.get_input_embeddings().weight.grad
+        #print(f"before zeroing: global sum {torch.sum(grads)}, training sum {torch.sum(grads[self.training_token_ids])}, individual: {grads[self.training_token_ids]}")
         grads.data[index_grads_to_zero, :] = grads.data[index_grads_to_zero, :].fill_(0)
+        #print(f"after zeroing: global sum {torch.sum(grads)}, training sum {torch.sum(grads[self.training_token_ids])}, individual: {grads[self.training_token_ids]}")
 
 
     def on_model_save(self, **kwargs):

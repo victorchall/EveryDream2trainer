@@ -18,6 +18,8 @@ class BasePlugin:
         pass
     def on_step_end(self, **kwargs):
         pass
+    def on_will_step_optimizer(self, **kwargs):
+        pass
     def transform_caption(self, caption:str):
         return caption
     def transform_pil_image(self, img:Image):
@@ -92,6 +94,11 @@ class PluginRunner:
         for plugin in self.plugins:
             with Timer(warn_seconds=self.step_warn_seconds, label=f'{plugin.__class__.__name__}'):
                 plugin.on_step_end(**kwargs)
+
+    def run_on_backpropagation(self, **kwargs):
+        for plugin in self.plugins:
+            with Timer(warn_seconds=self.step_warn_seconds, label=f'{plugin.__class__.__name__}'):
+                plugin.on_backpropagation(**kwargs)
 
     def run_on_model_load(self, **kwargs):
         for plugin in self.plugins:

@@ -903,7 +903,7 @@ def main(args):
 
     train_dataloader = build_torch_dataloader(train_batch, batch_size=args.batch_size)
 
-    unet.train() if not args.disable_unet_training else unet.eval()
+    unet.train() if (args.gradient_checkpointing or not args.disable_unet_training) else unet.eval()
     text_encoder.train() if not args.disable_textenc_training else text_encoder.eval()
 
     logging.info(f" unet device: {unet.device}, precision: {unet.dtype}, training: {unet.training}")
@@ -1181,7 +1181,7 @@ def main(args):
                     runt_loss_scale = (batch["runt_size"] / args.batch_size)**1.5 # further discount runts by **1.5
                     loss = loss * runt_loss_scale
 
-                ed_optimizer.step(loss, step, global_step)
+                ed_optimizer.step(loss, step, global_step, plugin_runner=plugin_runner, ed_state=make_current_ed_state())
 
                 if args.ema_decay_rate != None:
                     if ((global_step + 1) % args.ema_update_interval) == 0:

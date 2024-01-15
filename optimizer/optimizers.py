@@ -27,6 +27,8 @@ from diffusers.optimization import get_scheduler
 from colorama import Fore, Style
 import pprint
 
+from plugins.plugins import PluginRunner
+
 BETAS_DEFAULT = [0.9, 0.999]
 EPSILON_DEFAULT = 1e-8
 WEIGHT_DECAY_DEFAULT = 0.01
@@ -120,8 +122,9 @@ class EveryDreamOptimizer():
         else:
             return 0.0
 
-    def step(self, loss, step, global_step):
+    def step(self, loss, step, global_step, plugin_runner: PluginRunner, ed_state: 'EveryDreamTrainingState'):
         self.scaler.scale(loss).backward()
+        plugin_runner.run_on_backpropagation(ed_state=ed_state)
 
         if ((global_step + 1) % self.grad_accum == 0) or (step == self.epoch_len - 1):
             if self.clip_grad_norm is not None:
@@ -142,6 +145,7 @@ class EveryDreamOptimizer():
                 self.log_writer.add_scalar("optimizer/te_grad_norm", te_grad_norm, global_step)
 
             for optimizer in self.optimizers:
+                # the scaler steps the optimizer on our behalf
                 self.scaler.step(optimizer)
 
             self.scaler.update()
@@ -537,6 +541,10 @@ class EveryDreamOptimizer():
         else:
             print(" ❄️ freezing position embeddings")
 
+        # make sure there's some requires_grad in some places
+        parameters = list(parameters)
+        set_requires_grad(text_encoder.parameters(), False)
+        set_requires_grad(parameters, True)
         return parameters
 
 
@@ -555,3 +563,7 @@ def log_optimizer(label: str, optimizer: torch.optim.Optimizer, betas, epsilon, 
     logging.info(f"{Fore.CYAN} * {label} optimizer: {optimizer.__class__.__name__} {param_info} *{Style.RESET_ALL}")
     logging.info(f"{Fore.CYAN}    lr: {lr}, betas: {betas}, epsilon: {epsilon}, weight_decay: {weight_decay} *{Style.RESET_ALL}")
 
+
+def set_requires_grad(params, requires_grad: bool):
+    for param in params:
+        param.requires_grad = requires_grad
