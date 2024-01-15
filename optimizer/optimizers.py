@@ -480,6 +480,7 @@ class EveryDreamOptimizer():
     def _apply_text_encoder_freeze(self, text_encoder) -> chain[Any]:
         num_layers = len(text_encoder.text_model.encoder.layers)
         unfreeze_embeddings = True
+        unfreeze_position_embeddings = True
         unfreeze_last_n_layers = None
         unfreeze_final_layer_norm = True
         if "freeze_front_n_layers" in self.te_freeze_config:
@@ -499,7 +500,6 @@ class EveryDreamOptimizer():
             unfreeze_last_n_layers = num_layers
         else:
             # something specified:
-            assert(unfreeze_last_n_layers > 0)
             if unfreeze_last_n_layers < num_layers:
                 # if we're unfreezing layers then by default we ought to freeze the embeddings
                 unfreeze_embeddings = False
@@ -508,11 +508,13 @@ class EveryDreamOptimizer():
             unfreeze_embeddings = not self.te_freeze_config["freeze_embeddings"]
         if "freeze_final_layer_norm" in self.te_freeze_config:
             unfreeze_final_layer_norm = not self.te_freeze_config["freeze_final_layer_norm"]
+        if "freeze_position_embeddings" in self.te_freeze_config:
+            unfreeze_position_embeddings = not self.te_freeze_config["freeze_position_embeddings"]
 
         parameters = itertools.chain([])
 
         if unfreeze_embeddings:
-            parameters = itertools.chain(parameters, text_encoder.text_model.embeddings.parameters())
+            parameters = itertools.chain(parameters, text_encoder.text_model.embeddings.token_embedding.parameters())
         else:
             print(" ❄️ freezing embeddings")
 
@@ -529,6 +531,11 @@ class EveryDreamOptimizer():
             parameters = itertools.chain(parameters, text_encoder.text_model.final_layer_norm.parameters())
         else:
             print(" ❄️ freezing final layer norm")
+
+        if unfreeze_position_embeddings:
+            parameters = itertools.chain(parameters, text_encoder.text_model.embeddings.position_embeddings.parameters)
+        else:
+            print(" ❄️ freezing position embeddings")
 
         return parameters
 

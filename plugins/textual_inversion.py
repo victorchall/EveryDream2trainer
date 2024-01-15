@@ -4,6 +4,7 @@ import os.path
 
 import torch
 from colorama import Fore
+import re
 
 from plugins.plugins import BasePlugin
 from train import EveryDreamTrainingState
@@ -38,10 +39,10 @@ class TextualInversionPlugin(BasePlugin):
         logging.info(f" * Textual Inversion plugin instantiated, loading config from {path}")
         with open(path, 'rt') as f:
             self.config = json.load(f)
-        self.this_batch_tokens = None
+
         self.training_tokens = None
         self.training_token_ids = None
-        self.original_text_embeddings = None
+        self.padding_tokens = {}
         self.textual_inversion_tokens_only_grads = None
 
     def on_model_load(self, **kwargs):
@@ -63,10 +64,20 @@ class TextualInversionPlugin(BasePlugin):
             logging.error(f" * {Fore.LIGHTRED_EX}  {json.dumps(required_js_fragment)}{Fore.RESET}")
             raise RuntimeError("Misconfigured optimizer config")
 
-        tokens_to_add = [t['token'] for t in self.config['tokens'] if len(get_token_ids(t['token']))>1]
+        # new - multi-vector support
+        training_tokens = set()
+        for token_info in self.config['tokens']:
+            start_token = token_info['token']
+            vector_length = token_info.get('vector_length', 1)
+            this_padding_tokens = [f"{start_token}_pad!!!_{n+1}" for n in range(vector_length-1)]
+            self.padding_tokens[start_token] = this_padding_tokens
+            training_tokens.update([start_token] + this_padding_tokens)
+        # end new - multi vector support
+
+        tokens_to_add = [t for t in training_tokens if len(get_token_ids(t))>1]
         logging.info(
             f" * Textual inversion training adding the following tokens: {tokens_to_add}")
-        tokens_to_overwrite = [t['token'] for t in self.config['tokens'] if t['token'] not in tokens_to_add]
+        tokens_to_overwrite = [t for t in training_tokens if t not in tokens_to_add]
         if any(tokens_to_overwrite):
             logging.warning(f" * {Fore.LIGHTYELLOW_EX}Textual inversion training overwriting the following tokens: {tokens_to_overwrite}{Fore.RESET}")
 
@@ -76,54 +87,57 @@ class TextualInversionPlugin(BasePlugin):
         ed_state.text_encoder.resize_token_embeddings(len(ed_state.tokenizer))
 
         added_token_ids = []
-        input_embeddings = ed_state.text_encoder.get_input_embeddings()
-        for token_info in self.config['tokens']:
-            # get newly added token id
-            t = token_info['token']
-            token_ids = get_token_ids(t)
+        for token in tokens_to_add:
+            token_ids = get_token_ids(token)
             if len(token_ids) != 1:
                 raise RuntimeError(f"Tokens not added succesfully - expected 1 token id for {t}, found {len(token_ids)}")
             token_id = token_ids[0]
             added_token_ids.append(token_id)
 
-            # copy initializer embedding
-            initializer_word = token_info['initializer_word']
-            initializer_word_token_ids = get_token_ids(initializer_word)
-            if len(initializer_word_token_ids) != 1:
-                raise RuntimeError(f"Tokens not added succesfully - initializer word '{initializer_word}' needs "
-                                   f"{len(initializer_word_token_ids)} tokens, but only single tokens are supported.")
-            initializer_word_token_id = initializer_word_token_ids[0]
-            initializer_embedding = input_embeddings.weight.data[initializer_word_token_id]
-            input_embeddings.weight.data[token_id] = initializer_embedding
+        # copy initializer embedding
+        input_embeddings = ed_state.text_encoder.get_input_embeddings()
+        for token_info in self.config['tokens']:
+            vector_length = token_info.get('vector_length', 1)
+            initializer_text = token_info['initializer']
+            with torch.no_grad():
+                initializer_token_ids_full = ed_state.tokenizer(initializer_text,
+                               truncation=True,
+                               padding="max_length",
+                               max_length=ed_state.tokenizer.model_max_length,
+                               ).input_ids
+                initializer_embedding_full = ed_state.text_encoder(
+                    torch.tensor(initializer_token_ids_full).unsqueeze(0), output_hidden_states=True
+                ).last_hidden_state
+            initializer_embedding = initializer_embedding_full[0][1:vector_length+1]
+
+            trigger_token = token_info['token']
+            trigger_and_padding_tokens = [trigger_token] + self.padding_tokens[trigger_token]
+            for i in range(vector_length):
+                token_ids = get_token_ids(trigger_and_padding_tokens[i])
+                token_id = token_ids[0]
+                input_embeddings.weight.data[token_id] = initializer_embedding[i]
 
         overwriting_token_ids = [get_token_ids(t)[0] for t in tokens_to_overwrite]
         self.training_tokens = tokens_to_add + tokens_to_overwrite
         self.training_token_ids = added_token_ids + overwriting_token_ids
-        self.original_text_embeddings = ed_state.text_encoder.get_input_embeddings().weight.data.detach().clone()
 
+        # get indices of non-training tokens (ie tokens whose grads should be reset to 0 every step)
+        total_len = len(ed_state.text_encoder.get_input_embeddings().weight)
+        all_token_ids = torch.arange(total_len, dtype=torch.int)
 
-    def on_step_start(self, **kwargs):
-        batch = kwargs['batch']
-        tokens = batch['tokens']  # a torch.stack
-        self.this_batch_tokens = torch.unique(torch.flatten(tokens)).tolist()
+        untrained_tokens_working = torch.cat((all_token_ids, torch.tensor(self.training_token_ids, dtype=torch.int)))
+        uniques, counts = untrained_tokens_working.unique(return_counts=True)
+        untrained_tokens = uniques[counts == 1]
+        self.non_training_token_ids = untrained_tokens
+
 
     def on_step_end(self, **kwargs):
-        ed_state: EveryDreamTrainingState = kwargs['ed_state']
-
         # Zero out the gradients for all token embeddings except the newly added
         # embeddings for the concept, as we only want to optimize the concept embeddings
+        index_grads_to_zero = self.non_training_token_ids
+        ed_state: EveryDreamTrainingState = kwargs['ed_state']
         grads = ed_state.text_encoder.get_input_embeddings().weight.grad
-        # Get the index for tokens that we want to zero the grads for
-        index_grads_to_zero = torch.arange(len(grads)) != placeholder_token_id
         grads.data[index_grads_to_zero, :] = grads.data[index_grads_to_zero, :].fill_(0)
-
-        grads = ed_state.text_encoder.get_input_embeddings().weight.grad
-        if self.textual_inversion_tokens_only_grads is None:
-            self.textual_inversion_tokens_only_grads = torch.zeros_like(grads)
-        for t in self.training_token_ids:
-            self.textual_inversion_tokens_only_grads[t] = grads[t]
-
-        ed_state.text_encoder.get_input_embeddings().weight.grad = self.textual_inversion_tokens_only_grads
 
 
     def on_model_save(self, **kwargs):
@@ -132,6 +146,16 @@ class TextualInversionPlugin(BasePlugin):
         save_folder = kwargs['save_folder']
         for token_id, token in zip(self.training_token_ids, self.training_tokens):
             _save_embedding(token=token, embedding=embeddings.weight[token_id], save_folder=save_folder)
+
+    def transform_caption(self, caption:str):
+        tokens = self.config['tokens']
+        # for multi-vector tokens, replace the trigger token with a padded sequence of the correct length.
+        # eg "hat*" with vector length 3 -> "hat* hat*_pad!!!_1 hat*_pad!!!_2"
+        for t in tokens:
+            trigger = t['token']
+            replacement = " ".join([trigger] + self.training_tokens[trigger])
+            caption = re.sub(trigger, replacement, caption)
+        return caption
 
 
 def _save_embedding(token, embedding, save_folder):

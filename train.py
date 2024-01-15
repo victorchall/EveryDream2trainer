@@ -119,12 +119,12 @@ def convert_to_hf(ckpt_path):
 
 class EveryDreamTrainingState:
     def __init__(self,
-                 optimizer: EveryDreamOptimizer,
-                 train_batch: EveryDreamBatch,
+                 optimizer: Optional[EveryDreamOptimizer],
+                 train_batch: Optional[EveryDreamBatch],
                  unet: UNet2DConditionModel,
                  text_encoder: CLIPTextModel,
                  tokenizer: CLIPTokenizer,
-                 scheduler,
+                 scheduler: Optional,
                  vae: AutoencoderKL,
                  unet_ema: Optional[UNet2DConditionModel],
                  text_encoder_ema: Optional[CLIPTextModel]
@@ -791,7 +791,8 @@ def main(args):
     from plugins.plugins import PluginRunner
     plugin_runner = PluginRunner(plugins=plugins)
     plugin_runner.run_on_model_load(
-        ed_state=EveryDreamTrainingState(unet=unet, text_encoder=text_encoder, tokenizer=tokenizer, vae=vae),
+        ed_state=EveryDreamTrainingState(unet=unet, text_encoder=text_encoder, tokenizer=tokenizer, vae=vae,
+                                         optimizer=None, train_batch=None, scheduler=noise_scheduler, unet_ema=None, text_encoder_ema=None),
         optimizer_config=optimizer_config
     )
 
