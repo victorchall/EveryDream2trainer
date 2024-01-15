@@ -168,7 +168,6 @@ def save_model(save_path, ed_state: EveryDreamTrainingState, global_step: int, s
             logging.info(f" * Saving yaml to {yaml_save_path}")
             shutil.copyfile(yaml_name, yaml_save_path)
 
-
     if global_step is None or global_step == 0:
         logging.warning("  No model to save, something likely blew up on startup, not saving")
         return
@@ -188,11 +187,6 @@ def save_model(save_path, ed_state: EveryDreamTrainingState, global_step: int, s
         diffusers_model_path = save_path + "_ema"
         logging.info(f" * Saving diffusers EMA model to {diffusers_model_path}")
         pipeline_ema.save_pretrained(diffusers_model_path)
-
-        plugin_runner.run_on_model_save(
-            ed_state=ed_state,
-            diffusers_save_path=diffusers_model_path
-        )
 
         if save_ckpt:
             sd_ckpt_path_ema = f"{os.path.basename(save_path)}_ema.safetensors"
@@ -222,6 +216,11 @@ def save_model(save_path, ed_state: EveryDreamTrainingState, global_step: int, s
     if save_optimizer_flag:
         logging.info(f" Saving optimizer state to {save_path}")
         ed_state.optimizer.save(save_path)
+
+    plugin_runner.run_on_model_save(
+        ed_state=ed_state,
+        diffusers_save_path=diffusers_model_path
+    )
 
 
 def setup_local_logger(args):

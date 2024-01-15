@@ -43,6 +43,7 @@ class TextualInversionPlugin(BasePlugin):
         self.training_tokens = None
         self.training_token_ids = None
         self.padding_tokens = {}
+        self.padding_token_ids = {}
         self.textual_inversion_tokens_only_grads = None
 
     def on_model_load(self, **kwargs):
@@ -64,7 +65,6 @@ class TextualInversionPlugin(BasePlugin):
             logging.error(f" * {Fore.LIGHTRED_EX}  {json.dumps(required_js_fragment)}{Fore.RESET}")
             raise RuntimeError("Misconfigured optimizer config")
 
-        # new - multi-vector support
         training_tokens = set()
         for token_info in self.config['tokens']:
             start_token = token_info['token']
@@ -72,7 +72,7 @@ class TextualInversionPlugin(BasePlugin):
             this_padding_tokens = [f"{start_token}_pad!!!_{n+1}" for n in range(vector_length-1)]
             self.padding_tokens[start_token] = this_padding_tokens
             training_tokens.update([start_token] + this_padding_tokens)
-        # end new - multi vector support
+            print(f"textual inversion training: token sequence for {start_token} is \"{' '.join([start_token] + this_padding_tokens)}\"")
 
         tokens_to_add = [t for t in training_tokens if len(get_token_ids(t))>1]
         logging.info(
@@ -93,6 +93,10 @@ class TextualInversionPlugin(BasePlugin):
                 raise RuntimeError(f"Tokens not added succesfully - expected 1 token id for {t}, found {len(token_ids)}")
             token_id = token_ids[0]
             added_token_ids.append(token_id)
+
+        for trigger_token, padding_tokens in self.padding_tokens.items():
+            this_padding_token_ids = [get_token_ids(t)[0] for t in padding_tokens]
+            self.padding_token_ids[trigger_token] = this_padding_token_ids
 
         # copy initializer embedding
         input_embeddings = ed_state.text_encoder.get_input_embeddings()
@@ -145,7 +149,10 @@ class TextualInversionPlugin(BasePlugin):
         embeddings = ed_state.text_encoder.get_input_embeddings()
         save_folder = kwargs['save_folder']
         for token_id, token in zip(self.training_token_ids, self.training_tokens):
-            _save_embedding(token=token, embedding=embeddings.weight[token_id], save_folder=save_folder)
+            padding_token_ids = self.padding_token_ids[token]
+            all_token_ids = [token_id] + padding_token_ids
+            full_embedding = embeddings.weight[all_token_ids]
+            _save_embedding(token=token, embedding=full_embedding, save_folder=save_folder)
 
     def transform_caption(self, caption:str):
         tokens = self.config['tokens']
