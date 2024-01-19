@@ -80,8 +80,6 @@ class TextualInversionPlugin(BasePlugin):
             this_padding_tokens = [f"{start_token}_pad!!!_{n+1}" for n in range(vector_length-1)]
             self.padding_tokens[start_token] = this_padding_tokens
             training_tokens.update([start_token] + this_padding_tokens)
-            if vector_length > 1:
-                print(f"   - if you want accurate samples for trigger '{start_token}', replace it in sample prompts with the following text: \"{' '.join([start_token] + this_padding_tokens)}\"")
 
         tokens_to_add = [t for t in training_tokens if len(get_token_ids(t))>1]
         logging.info(
@@ -99,7 +97,7 @@ class TextualInversionPlugin(BasePlugin):
         for token in tokens_to_add:
             token_ids = get_token_ids(token)
             if len(token_ids) != 1:
-                raise RuntimeError(f"Tokens not added succesfully - expected 1 token id for {t}, found {len(token_ids)}")
+                raise RuntimeError(f"Tokens not added succesfully - expected 1 token id for {token}, found {len(token_ids)}")
             token_id = token_ids[0]
             added_token_ids.append(token_id)
 
@@ -169,7 +167,13 @@ class TextualInversionPlugin(BasePlugin):
             full_embedding = embeddings.weight[all_token_ids]
             _save_embedding(token=token, embedding=full_embedding, save_folder=save_folder)
 
-    def transform_caption(self, caption:str):
+    def transform_caption(self, caption:str) -> str:
+        return self.expand_trigger_tokens(caption)
+
+    def modify_sample_prompt(self, prompt: str) -> str:
+        return self.expand_trigger_tokens(prompt)
+
+    def expand_trigger_tokens(self, caption: str) -> str:
         tokens = self.config['tokens']
         # for multi-vector tokens, replace the trigger token with a padded sequence of the correct length.
         # eg "hat*" with vector length 3 -> "hat* hat*_pad!!!_1 hat*_pad!!!_2"
@@ -178,6 +182,7 @@ class TextualInversionPlugin(BasePlugin):
             replacement = " ".join([trigger] + self.padding_tokens[trigger])
             caption = re.sub(trigger, replacement, caption)
         return caption
+
 
 
 def _save_embedding(token, embedding, save_folder):

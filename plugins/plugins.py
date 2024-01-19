@@ -20,10 +20,12 @@ class BasePlugin:
         pass
     def on_will_step_optimizer(self, **kwargs):
         pass
-    def transform_caption(self, caption:str):
+    def transform_caption(self, caption:str) -> str:
         return caption
-    def transform_pil_image(self, img:Image):
+    def transform_pil_image(self, img:Image) -> Image:
         return img
+    def modify_sample_prompt(self, prompt:str) -> str:
+        return prompt
 
 def load_plugin(plugin_path):
     print(f" - Attempting to load plugin: {plugin_path}")
@@ -102,12 +104,12 @@ class PluginRunner:
 
     def run_on_model_load(self, **kwargs):
         for plugin in self.plugins:
-            with Timer(warn_seconds=self.epoch_warn_seconds, label=f'{plugin.__class__.__name__}'):
+            with Timer(warn_seconds=self.training_warn_seconds, label=f'{plugin.__class__.__name__}'):
                 plugin.on_model_load(**kwargs)
 
     def run_on_model_save(self, **kwargs):
         for plugin in self.plugins:
-            with Timer(warn_seconds=self.epoch_warn_seconds, label=f'{plugin.__class__.__name__}'):
+            with Timer(warn_seconds=self.training_warn_seconds, label=f'{plugin.__class__.__name__}'):
                 plugin.on_model_save(**kwargs)
 
     def run_transform_caption(self, caption):
@@ -121,3 +123,9 @@ class PluginRunner:
             for plugin in self.plugins:
                 img = plugin.transform_pil_image(img)
         return img
+
+    def run_modify_sample_prompt(self, prompt) -> str:
+        with Timer(warn_seconds=self.step_warn_seconds, label="plugin.modify_sample_prompt"):
+            for plugin in self.plugins:
+                prompt = plugin.modify_sample_prompt(prompt)
+        return prompt

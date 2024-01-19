@@ -19,6 +19,8 @@ from torchvision import transforms
 from tqdm.auto import tqdm
 from compel import Compel
 
+from plugins.plugins import PluginRunner
+
 
 def clean_filename(filename):
     """
@@ -184,7 +186,7 @@ class SampleGenerator:
                 self.sample_requests = self._make_random_caption_sample_requests()
 
     @torch.no_grad()
-    def generate_samples(self, pipe: StableDiffusionPipeline, global_step: int, extra_info: str = ""):
+    def generate_samples(self, pipe: StableDiffusionPipeline, global_step: int, plugin_runner: PluginRunner, extra_info: str = ""):
         """
         generates samples at different cfg scales and saves them to disk
         """
@@ -211,8 +213,10 @@ class SampleGenerator:
                             text_encoder=pipe.text_encoder,
                             use_penultimate_clip_layer=self.use_penultimate_clip_layer)
             for batch in batches:
-                prompts = [p.prompt for p in batch]
-                negative_prompts = [p.negative_prompt for p in batch]
+                prompts = [plugin_runner.run_modify_sample_prompt(p.prompt)
+                           for p in batch]
+                negative_prompts = [plugin_runner.run_modify_sample_prompt(p.negative_prompt)
+                                    for p in batch]
                 seeds = [(p.seed if p.seed != -1 else random.randint(0, 2 ** 30))
                          for p in batch]
                 # all sizes in a batch are the same
