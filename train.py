@@ -1066,7 +1066,7 @@ def main(args):
                                                                         vae=vae,
                                                                         diffusers_scheduler_config=inference_scheduler.config
                                                                         ).to(device)
-                sample_generator.generate_samples(inference_pipe, global_step, extra_info=extra_info)
+                sample_generator.generate_samples(inference_pipe, global_step, extra_info=extra_info, plugin_runner=plugin_runner)
 
                 # Cleanup
                 del inference_pipe
