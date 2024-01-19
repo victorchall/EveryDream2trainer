@@ -129,7 +129,9 @@ class TextualInversionPlugin(BasePlugin):
             for i in range(vector_length):
                 token_ids = get_token_ids(trigger_and_padding_tokens[i])
                 token_id = token_ids[0]
-                input_embeddings.weight.data[token_id] = initializer_embedding[i]
+                # don't clobber trained embeddings when resuming
+                if token_id in tokens_to_add:
+                    input_embeddings.weight.data[token_id] = initializer_embedding[i]
 
         overwriting_token_ids = [get_token_ids(t)[0] for t in tokens_to_overwrite]
         self.training_tokens = tokens_to_add + tokens_to_overwrite
