@@ -29,9 +29,10 @@ In optimizer.json, the following "text_encoder_freezing" section is *required*:
         "freeze_final_layer_norm": true,
         "freeze_position_embeddings": true
     }
-In addition, you'll need a very high LR on the TE - maybe even as high as 1e-3. I recommend using the LR finder method.
+In addition, you'll need a very high LR on the TE - maybe even as high as 5e-2. I recommend using the LR finder method.
 
 """
+
 
 class TextualInversionPlugin(BasePlugin):
 
