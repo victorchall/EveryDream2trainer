@@ -22,7 +22,7 @@ class BasePlugin:
         pass
     def on_model_save(self, **kwargs):
         pass
-    def on_will_step_optimizer(self, **kwargs):
+    def on_backpropagation(self, **kwargs):
         pass
     def transform_caption(self, caption:str) -> str:
         return caption
