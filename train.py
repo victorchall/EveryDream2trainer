@@ -792,6 +792,7 @@ def main(args):
     plugin_runner.run_on_model_load(
         ed_state=EveryDreamTrainingState(unet=unet, text_encoder=text_encoder, tokenizer=tokenizer, vae=vae,
                                          optimizer=None, train_batch=None, scheduler=noise_scheduler, unet_ema=None, text_encoder_ema=None),
+        resume_ckpt=args.resume_ckpt,
         optimizer_config=optimizer_config,
         disable_unet_training=args.disable_unet_training,
         disable_textenc_training=args.disable_textenc_training

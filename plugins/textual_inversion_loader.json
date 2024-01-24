@@ -1,0 +1,16 @@
+
+{
+  "documentation": {
+    "tokens": {
+      "token": "the trigger token (word or phrase). whenever this word or phrase appears in image captions, the embedding will be trained.",
+      "path": "(optional) /path/to/embedding.bin. If omitted, tries to load an embedding from the resume_ckpt diffusers folder, textual_inversions/<token>.bin where <token> is the token"
+    },
+    "example": "the example below tries to load textual_inversions/hat*.bin from inside the resume ckpt's textual_inversion folder and textual_inversions/dancing shoes.bin from inside the model folder, and cane from the path specified."
+  },
+  "tokens": [
+    { "token": "hat*" },
+    { "token": "dancing shoes" },
+    { "token": "cane", "path": "/workspace/embeddings/my_cane_embedding_ep30.bin"}
+  ]
+
+}
