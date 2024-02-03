@@ -28,6 +28,8 @@ BLIP/BLIP2 [blip paper](https://arxiv.org/abs/2201.12086) - [blip2 github (LAVIS
 
 Kosmos-2 [paper](https://arxiv.org/abs/2306.14824) - [Github](https://github.com/microsoft/unilm/tree/master/kosmos-2) - [Huggingface](https://huggingface.co/microsoft/kosmos-2-patch14-224)
 
+Cog-VLM [paper](https://arxiv.org/abs/2311.03079) - [Github](https://github.com/THUDM/CogVLM) - [Huggingface](https://huggingface.co/THUDM/cogvlm-chat-hf)
+
 
 ### Optimizers
 
