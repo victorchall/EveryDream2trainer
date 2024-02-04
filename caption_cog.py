@@ -218,11 +218,14 @@ if __name__ == "__main__":
         args.top_p = args.top_p or 1.0
         args.temp = args.temp or 1.0
 
-    print(DESCRIPTION)
-    print(EXAMPLES)
     if args.image_dir is None:
         print(f"** {Fore.RED}Error: image_dir is required.{Style.RESET_ALL}")
         exit(1)
+
+    if not os.path.exists(args.image_dir):
+        print(f"** {Fore.RED}Error: image_dir {args.image_dir} does not exist.{Style.RESET_ALL}")
+        exit(1)
+
     print(f"** Running: {args.image_dir} with prompt '{args.prompt}'")
 
     main(args)
