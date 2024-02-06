@@ -84,7 +84,7 @@ def main(args):
         del gen_kwargs["max_length"]
 
     if not do_sample:
-        print(f"** Using greedy sampling")
+        print(f"** Using greedy search instead sampling. Generated captions will be deterministic; meaning it will be the same even if you run this program multiple times.")
         del gen_kwargs["top_k"]
         del gen_kwargs["top_p"]
         del gen_kwargs["temperature"]
