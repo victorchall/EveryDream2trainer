@@ -139,7 +139,7 @@ def main(args):
             caption = tokenizer.decode(outputs_without_prompt[0], skip_special_tokens=True)
             caption += args.append
 
-            with open(candidate_caption_path, "w") as f:
+            with open(candidate_caption_path, "w", encoding="utf-8") as f:
                 f.write(caption)
             vram_gb = get_gpu_memory_map()
             elapsed_time = time.time() - start_time
