@@ -30,6 +30,7 @@ from transformers import AutoModelForCausalLM, LlamaTokenizer
 from colorama import Fore, Style
 
 SUPPORTED_EXT = [".jpg", ".png", ".jpeg", ".bmp", ".jfif", ".webp"]
+Image.MAX_IMAGE_PIXELS = None
 
 def image_generator(image_dir) -> Generator[str, None, None]:
     for root, dirs, files in os.walk(image_dir):
