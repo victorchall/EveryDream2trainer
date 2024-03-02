@@ -54,7 +54,7 @@ There are two circumstances where this is extremely useful. If you are captionin
 
 Another circumstance is to provide a starting phrase such a "An image showcasing" or "An image of", and follow up with using the `--remove_starts_with` option to remove the starting phrase from the caption.  Often Cog will add "An image of" on its own, wasting tokens and making the caption less useful.  By providing the starting phrase then removing it with `--remove_starts_with` you can short circuit the model to start in a more concise manner.
 
-`--remove_starts_with "An image of"` will remove the text given from the caption.
+`--remove_starts_with` will remove the `starts_with` text from the start of the output caption.
 
 `--append "by Claude Monet."` will add the text given to the end of every caption, and is not fed to the model, it is simply tacked on to the end of the caption.  This can be useful for things like artist or collection names that are fixed across all images.
 
