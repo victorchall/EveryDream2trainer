@@ -184,7 +184,7 @@ def main(args):
     total_start_time = time.time()
     i_processed = 0
 
-    starts_with = args.starts_with.strip()
+    starts_with = args.starts_with.strip() if args.starts_with is not None else ""
 
     for i, image_path in enumerate(image_generator(args.image_dir, do_recurse=not args.no_recurse)):
         candidate_caption_path = image_path.replace(os.path.splitext(image_path)[-1], ".txt")
