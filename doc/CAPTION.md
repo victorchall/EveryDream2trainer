@@ -1,34 +1,27 @@
 # Captioning tools
 
-## Open-Flamingo
+## CogVLM
 
-#### Note: Open-Flamingo currently only works on Torch 2.0.1.  If you want to use it, you will have to backdate your torch installation, which will break features in the trainer.  I recommend making a separate environment for Open Flamingo captioning instead.  You can run through normal install, then `pip install open-flamingo` in the separate envirment to back date torch and make that install open-flamingo only.  
+[CogVLM](https://github.com/THUDM/CogVLM) is, so far, the best model for generating synthetic captions.  The script for Cog is enhanced, so read the [CogVLM README](CAPTION_COG.md) for more information.
 
-`python caption_fl.py --data_root input --min_new_tokens 20 --max_new_tokens 30 --num_beams 3 --model "openflamingo/OpenFlamingo-9B-vitl-mpt7b"`
+## Kosmos-2
 
-This script uses two example image/caption pairs located in the `/example` folder to prime the system to caption, then captions the images in the input folder. It will save a `.txt` file of the same base filename with the caption in the same folder. 
+Microsoft's [Kosmos-2](https://huggingface.co/microsoft/kosmos-2-patch14-224)  is significantly lighter weight than Cog, using <5GB of VRAM and generating captions in under 1/21 second on a RTX 3090.  
 
-This script currently requires an AMPERE or newer GPU due to using bfloat16. 
+It has the capability to output grounding bounding boxes.
 
-**Trying out different example image/caption pairs will influence how the system captions the input images.** Adding more examples slows processing. 
+Run `python caption_kosmos2.py --help` to get a list of options. 
 
-Supported models:
+### _Kosmos-2 grounding_
 
-* `openflamingo/OpenFlamingo-3B-vitl-mpt1b` Small model, requires 8 GB VRAM a num_beams 3, or 12 GB at num_beams 16
-* `openflamingo/OpenFlamingo-9B-vitl-mpt7b` Large model, requires 24 GB VRAM at num_beams 3, or 36.7gb at num_beams 32
+Kosmos-2can generate bounding boxes for the "grounding" of the caption.  This is useful for identifying specific objects in the image in 2D space, which can be useful in later piplines. 
 
-The small model with more beams (ex. 16) performs well with details and should not be immediately discounted. 
+It's worth reading the documentation [here](https://huggingface.co/microsoft/kosmos-2-patch14-224) to understand the grounding output.
 
-The larger model is more accurate with proper names (i.e. identifying well-known celebrities, objects, or locations) and seems to exhibit a larger vocabulary.
+`--save_entities` outputs a '.ent' file with bounding box information.  The entities identified will be based on what caption is produced.
 
-Primary params:
+`--phrase_mode` This modifies how the model is called, wrapping phrases in \<phrase> tags.  This also interprets your prompt as a CSV, wrapping each item in a phrase tag. You might use it with `--prompt "dog,cat,tree"` for instance.  *This is not a gaurantee your phrases will be found and output into the grounding output file.*
 
-* `--num_beams 3` increasing uses more VRAM and runs slower, may improve detail, but can increase hallicunations
-* `--min_new_tokens 20` and `--max_new_tokens 35` control the length of the caption
+`--save_entities_only` This will not attempt to write the caption into the .txt file at all.  **This is recommended with `--phrase_mode`**. Using this option forces `--save_entities`.
 
-Other settings:
-
-* `--force_cpu` forces to use CPU even if a CUDA device is present
-* `--temperature 1.0` relates to randomness used for next token chosen
-* `--repetition_penalty 1.0` penalizes repeating tokens/words, can adjust up if you see repeated terms
-* `--length_penalty 1.0` penalizes longer captions
+There is a trivial/dumb UI for viewing the grounding in the scripts folder.  Launch it with `python scripts/grounding_ui.py` and it will open a window allowing you to select a directory, and it will display the images and bounding boxes. 
