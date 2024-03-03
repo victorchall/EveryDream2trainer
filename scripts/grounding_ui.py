@@ -40,14 +40,13 @@ class ImageBoundingBoxApp:
         img_path = os.path.join(self.folder_path, image_name)
         ent_path = img_path.rsplit('.', 1)[0] + '.ent'
 
-        # Load image
         image = cv2.imread(img_path)
+        image_cp = image.copy()
         image_h, image_w, _ = image.shape
         font_scale = max(0.5 * (image_h + image_w) / 1000,0.35)
         thickness = max(int(0.5 * (image_h + image_w) / 500),1)
-        print(f"Font Scale: {font_scale}, Thickness: {thickness}")
+        shadow_thickness = 3
 
-        # Read .ent file
         if os.path.exists(ent_path):
             with open(ent_path, 'r') as f:
                 entities = ast.literal_eval(f.read())
@@ -55,15 +54,17 @@ class ImageBoundingBoxApp:
             for entity_name, _, bboxes in entities:
                 for (x1_norm, y1_norm, x2_norm, y2_norm) in bboxes:
                     orig_x1, orig_y1, orig_x2, orig_y2 = int(x1_norm * image_w), int(y1_norm * image_h), int(x2_norm * image_w), int(y2_norm * image_h)
-                    color = (0, 255, 0)  # Green color for bounding box
-                    cv2.rectangle(image, (orig_x1, orig_y1), (orig_x2, orig_y2), color, 2)
-                    #shadow text
-                    cv2.putText(image, entity_name, (orig_x1, orig_y1 + int(30*font_scale)), cv2.FONT_HERSHEY_SIMPLEX, font_scale, (0,0,0), thickness+3)
-                    #cv2.putText(image, entity_name, (orig_x1+1, orig_y1 + int(30*font_scale)-1), cv2.FONT_HERSHEY_SIMPLEX, font_scale, (0,0,0), thickness)
-                    #text
+                    rand_r = np.random.randint(0, 128)
+                    rand_g = np.random.randint(144, 240)
+                    rand_b = 128 - rand_r
+                    color = (rand_r, rand_g, rand_b)  # Green color for bounding box
+                    cv2.rectangle(image, (orig_x1, orig_y1), (orig_x2, orig_y2), color, thickness)
+                    cv2.putText(image, entity_name, (orig_x1, orig_y1 + int(30*font_scale)), cv2.FONT_HERSHEY_SIMPLEX, font_scale, (0,0,0), thickness+shadow_thickness)
                     cv2.putText(image, entity_name, (orig_x1, orig_y1 + int(30*font_scale)), cv2.FONT_HERSHEY_SIMPLEX, font_scale, (255,255,255), thickness)
+        
+        overlay_weight = 0.75
+        image = cv2.addWeighted(image, overlay_weight, image_cp, 1-overlay_weight, 0.0)
 
-        # Convert to PIL Image to display in Tkinter
         image_pil = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
 
         # Resize image to fit the canvas size while maintaining aspect ratio
