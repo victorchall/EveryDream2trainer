@@ -43,7 +43,7 @@ class ImageBoundingBoxApp:
         # Load image
         image = cv2.imread(img_path)
         image_h, image_w, _ = image.shape
-        font_scale = 0.5 * (image_h + image_w) / 1000
+        font_scale = max(0.5 * (image_h + image_w) / 1000,0.35)
         thickness = max(int(0.5 * (image_h + image_w) / 500),1)
         print(f"Font Scale: {font_scale}, Thickness: {thickness}")
 
@@ -57,7 +57,11 @@ class ImageBoundingBoxApp:
                     orig_x1, orig_y1, orig_x2, orig_y2 = int(x1_norm * image_w), int(y1_norm * image_h), int(x2_norm * image_w), int(y2_norm * image_h)
                     color = (0, 255, 0)  # Green color for bounding box
                     cv2.rectangle(image, (orig_x1, orig_y1), (orig_x2, orig_y2), color, 2)
-                    cv2.putText(image, entity_name, (orig_x1, orig_y1 + int(30*font_scale)), cv2.FONT_HERSHEY_SIMPLEX, font_scale, color, thickness)
+                    #shadow text
+                    cv2.putText(image, entity_name, (orig_x1, orig_y1 + int(30*font_scale)), cv2.FONT_HERSHEY_SIMPLEX, font_scale, (0,0,0), thickness+3)
+                    #cv2.putText(image, entity_name, (orig_x1+1, orig_y1 + int(30*font_scale)-1), cv2.FONT_HERSHEY_SIMPLEX, font_scale, (0,0,0), thickness)
+                    #text
+                    cv2.putText(image, entity_name, (orig_x1, orig_y1 + int(30*font_scale)), cv2.FONT_HERSHEY_SIMPLEX, font_scale, (255,255,255), thickness)
 
         # Convert to PIL Image to display in Tkinter
         image_pil = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
