@@ -120,7 +120,7 @@ I would recommend not setting any of these and leave the default values until yo
 
 `--no_repeat_ngram_size 3` prevents the same n-gram (successive token sequence) from being repeated in the output.  Can help prevent the model from repeating itself.
 
-`--bad_words "foo,bar"` Attempts to prevent the model from using these words in the output caption. Comma-delimited.
+`--bad_words "foo,bar"` Attempts to prevent the model from using these words in the output caption. Comma-delimited. Very useful, consider trying `"depicts,poses,posing,showcases,appears,suggests"` to get more concise phrasing in captions. This is not a guarantee, due to [different tokenizations](https://github.com/huggingface/transformers/issues/17504) being possible for a given bad_word.
 
 `--force_word "photograph,Spain"` Attempts to force the model to include the words in the output caption. Comma-delimited.
 
@@ -128,7 +128,7 @@ I would recommend not setting any of these and leave the default values until yo
 
 `--max_new_tokens 120` Truncates output after n tokens. May cut off captions abruptly.
 
-`--no_repeat_ngram_size 3` prevents the same n-gram from being repeated in the output.  Default is 0, which means no n-gram is prevented from repeating.  Setting this to 2 or 3 can help prevent the model from repeating itself. 
+`--no_repeat_ngram_size 3` prevents the same n-gram (sequence of size n-tokens) from being repeated in the output.  Default is 0, which means no n-gram is prevented from repeating.  Setting this to 2 or 3 can help prevent the model from repeating itself. 
 
 `--min_new_tokens 5` Force the model to produce at least n tokens.
 
