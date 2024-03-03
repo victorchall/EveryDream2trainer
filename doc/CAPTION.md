@@ -6,7 +6,7 @@
 
 ## Kosmos-2
 
-Microsoft's [Kosmos-2](https://huggingface.co/microsoft/kosmos-2-patch14-224)  is significantly lighter weight than Cog, using <5GB of VRAM and generating captions in under 1/21 second on a RTX 3090.  
+Microsoft's [Kosmos-2](https://huggingface.co/microsoft/kosmos-2-patch14-224)  is significantly lighter weight than Cog, using <5GB of VRAM and generating captions in under a second on a RTX 3090.  
 
 It has the capability to output grounding bounding boxes.
 

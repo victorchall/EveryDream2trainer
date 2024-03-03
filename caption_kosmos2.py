@@ -103,7 +103,7 @@ def main(args):
                 print(f"File: {full_file_path}, Generated caption: {processed_text}")
 
                 name = os.path.splitext(full_file_path)[0]
-                if not os.path.exists(f"{name}.txt") or args.overwrite and not args.save_entities_only:
+                if (not os.path.exists(f"{name}.txt") or args.overwrite) and not args.save_entities_only:
                     with open(f"{name}.txt", "w") as f:
                         f.write(processed_text)
 
