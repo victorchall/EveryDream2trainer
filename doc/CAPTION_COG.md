@@ -87,7 +87,7 @@ Write a description.
 ```
 This is very useful if you can organize your data into folders that are meaningful to the captioning task, either manually, or with a classifier. 
 
-* `title_and_tags_from_metadata_json` Adds the title and tags from a metadata.json file in the same folder as the image to the prompt.  This is useful if you have a metadata.json file in each folder with the images.  The metadata.json file should look like this:
+* `title_and_tags_from_metadata_json` Adds the title and tags from a metadata.json file in the same folder as the image to the prompt.  This is useful if you have a metadata.json file in each folder with the images that applies to all the images in that folder.  The metadata.json file should look like this:
 ```json
 {
     "title": "A photograph of John Smith",
@@ -96,9 +96,12 @@ This is very useful if you can organize your data into folders that are meaningf
 ```
 And the prompt will be modified with the information pulled from the metadata.json file.  The prompt will look like this after modification:
 ```
-Hint: title: A photograph of John Smith, tags: portrait, outdoors, smiling. 
+Hint: title: A photograph of John Smith, tags: portrait, outdoors, smiling
 Write a description.
 ```
+
+* `title_and_tags_from_image_json` Same as above but looks for a file ending in `.json` with the same basename and in the same directory as the image, enabling *per-image* metadata. 
+
 
 ### Programming your own plugins.
 
