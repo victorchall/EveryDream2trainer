@@ -1,7 +1,8 @@
 torch==2.1.0 
 torchvision==0.16.0
-transformers==4.35.0
+transformers>=4.38.2
 diffusers[torch]==0.21.4
+peft>=0.9.0
 pynvml==11.4.1
 bitsandbytes==0.41.1
 ftfy==6.1.1
