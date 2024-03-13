@@ -185,6 +185,40 @@ class TagsFromFolderMetadataJson(PromptIdentityPlugin):
             return self._add_hint_to_prompt(f"tags: {tags}", prompt)
         return prompt
 
+class TitleAndTagsFromFolderImageJson(PromptIdentityPlugin):
+    def __init__(self, args:Namespace=None):
+        super().__init__(key="title_and_tags_from_image_json",
+                         description="Adds title and tags hint from metadata.json (in the samefolder as the image) to the prompt", 
+                         fn=self._title_and_tags_from_metadata_json,
+                         args=args)
+
+    def _title_and_tags_from_metadata_json(self, args:Namespace) -> str:
+        prompt = args.prompt
+        logging.debug(f" {self.key}: prompt before: {prompt}")
+        image_path = args.image_path
+        current_dir = os.path.dirname(image_path)
+        image_path_base = os.path.basename(image_path)
+        image_path_without_extension = os.path.splitext(image_path_base)[0]
+        candidate_json_path = os.path.join(current_dir, f"{image_path_without_extension}.json")
+        metadata_json_path = os.path.join(current_dir, "metadata.json")
+
+        if os.path.exists(candidate_json_path):
+            with open(metadata_json_path, "r") as f:
+                metadata = json.load(f)
+
+        title = metadata.get("title", "").strip()
+        hint = f"title: {title}" if len(title) > 0 else ""
+
+        tags = metadata.get("tags", []) 
+        tags = tags.split(",") if isinstance(tags, str) else tags # can be csv or list
+        if len(tags) > 0:
+            tags = ", ".join(tags)
+            hint += f", tags: {tags}"
+
+        prompt = self._add_hint_to_prompt(hint, prompt)
+        logging.debug(f" {self.key}: prompt after: {prompt}")
+        return prompt
+
 class TitleAndTagsFromFolderMetadataJson(PromptIdentityPlugin):
     def __init__(self, args:Namespace=None):
         self.cache = {}
