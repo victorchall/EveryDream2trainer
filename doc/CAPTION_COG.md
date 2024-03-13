@@ -100,7 +100,7 @@ Hint: title: A photograph of John Smith, tags: portrait, outdoors, smiling
 Write a description.
 ```
 
-* `title_and_tags_from_image_json` Same as above but looks for a file ending in `.json` with the same basename and in the same directory as the image, enabling *per-image* metadata. 
+* `title_and_tags_from_image_json` Same as above but looks for a file ending in `.json` with the same basename and in the same directory as the image (ex. `/myfolder/001.png`, `/myfolder/001.json`), enabling *per-image* metadata instead of a per-folder metadata file.
 
 
 ### Programming your own plugins.
