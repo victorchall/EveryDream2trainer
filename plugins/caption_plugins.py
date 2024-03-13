@@ -200,10 +200,9 @@ class TitleAndTagsFromFolderImageJson(PromptIdentityPlugin):
         image_path_base = os.path.basename(image_path)
         image_path_without_extension = os.path.splitext(image_path_base)[0]
         candidate_json_path = os.path.join(current_dir, f"{image_path_without_extension}.json")
-        metadata_json_path = os.path.join(current_dir, "metadata.json")
 
         if os.path.exists(candidate_json_path):
-            with open(metadata_json_path, "r") as f:
+            with open(candidate_json_path, "r") as f:
                 metadata = json.load(f)
 
         title = metadata.get("title", "").strip()
