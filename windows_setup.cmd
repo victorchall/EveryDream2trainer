@@ -4,7 +4,7 @@ echo should be in venv here
 cd .
 python -m pip install --upgrade pip
 pip install torch==2.1.0+cu121 torchvision==0.16.0+cu121 --extra-index-url "https://download.pytorch.org/whl/cu121"
-pip install -U transformers==4.35.0
+pip install -U transformers==4.38.2
 pip install -U diffusers[torch]==0.23.1
 pip install pynvml==11.4.1
 pip install -U pip install -U https://github.com/jllllll/bitsandbytes-windows-webui/releases/download/wheels/bitsandbytes-0.41.1-py3-none-win_amd64.whl
@@ -24,6 +24,7 @@ pip install dadaptation
 pip install safetensors
 pip install prodigyopt
 pip install torchsde
+pip install peft==0.9.0
 python utils/get_yamls.py
 GOTO :eof
 
