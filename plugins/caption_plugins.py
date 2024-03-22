@@ -22,7 +22,7 @@ class TestSub(TestBase):
     def __repr__(self) -> str:
         return f"TestSub: {self.a}, {self.b}"
 
-class PromptIdentityPlugin():
+class PromptIdentityBase():
     """
     Base class for prompt alternation plugins, useful for captioning, etc.
     """
@@ -68,7 +68,7 @@ class PromptIdentityPlugin():
             prompt = f"Hint: {hint}\n{prompt}"
         return prompt
 
-class HintFromFilename(PromptIdentityPlugin):
+class HintFromFilename(PromptIdentityBase):
     def __init__(self, args:Namespace=None):
         super().__init__(key="hint_from_filename",
                          description="Add a hint to the prompt using the filename of the image (without extension)", 
@@ -81,7 +81,7 @@ class HintFromFilename(PromptIdentityPlugin):
         prompt = self._add_hint_to_prompt(filename, prompt)
         return prompt
 
-class RemoveUsingCSV(PromptIdentityPlugin):
+class RemoveUsingCSV(PromptIdentityBase):
     def __init__(self, args:Namespace=None):
         super().__init__(key="remove_using_csv",
                          description="Removes whole word matches of the csv passed in from the prompt", 
@@ -111,7 +111,7 @@ class RemoveUsingCSV(PromptIdentityPlugin):
                 prompt = self._filter_logic(prompt, [word])
         return prompt
 
-class HintFromLeafDirectory(PromptIdentityPlugin):
+class HintFromLeafDirectory(PromptIdentityBase):
     def __init__(self, args:Namespace=None):
         super().__init__(key="from_leaf_directory",
                          description="Adds a hint to the prompt using the leaf directory name (last folder in path)", 
@@ -130,13 +130,13 @@ class MetadataProvider():
         self._datadict = {}
 
     def _from_metadata(self, args) -> dict:
-        image_path = args.get("image_path", "")
+        image_path = args.image_path
         prompt = args.get("prompt", "")
         metadata = self._get_metadata_dict(image_path)
         return f"metadata: {metadata}\n{prompt}"
 
     def _get_metadata_dict(self, metadata_path: str) -> dict:
-        if not self.loaded and not metadata_path in self.cache:
+        if not metadata_path in self._datadict:
             metadata_dirname = os.path.dirname(metadata_path)
             if not os.path.exists(metadata_path):
                 logging.warning(f" metadata.json not found in {metadata_dirname}, ignoring{Style.RESET_ALL}")
@@ -145,12 +145,12 @@ class MetadataProvider():
                 metadata = json.load(f)
             self._datadict[metadata_path] = metadata
 
-        return self.dict[metadata_path]
+        return self._datadict[metadata_path]
 
-class FromFolderMetadataJson(PromptIdentityPlugin):
+class FromFolderMetadataJson(PromptIdentityBase):
     def __init__(self, args:Namespace=None):
         super().__init__(key="from_folder_metadata", 
-                         description="Looks for metadata.json in the folder of the images", 
+                         description="Looks for metadata.json in the folder of the images and prefixes it to the prompt", 
                          fn=self._from_metadata_json,
                          args=args)
         self.metadata_provider = MetadataProvider()
@@ -159,11 +159,12 @@ class FromFolderMetadataJson(PromptIdentityPlugin):
         image_path = args.image_path
         image_dir = os.path.dirname(image_path)
         metadata_json_path = os.path.join(image_dir, "metadata.json")
-        self.metadata_provider._get_metadata_dict(metadata_json_path)
+        metadata = self.metadata_provider._get_metadata_dict(metadata_json_path)
+        metadata = json.dumps(metadata, indent=2)
+        prompt = self._add_hint_to_prompt(f"metadata: {metadata}", args.prompt)
+        return prompt
 
-        return ""
-
-class TagsFromFolderMetadataJson(PromptIdentityPlugin):
+class TagsFromFolderMetadataJson(PromptIdentityBase):
     def __init__(self, args:Namespace=None):
         self.cache = {}
         super().__init__(key = "tags_from_metadata_json", 
@@ -185,7 +186,7 @@ class TagsFromFolderMetadataJson(PromptIdentityPlugin):
             return self._add_hint_to_prompt(f"tags: {tags}", prompt)
         return prompt
 
-class TitleAndTagsFromFolderImageJson(PromptIdentityPlugin):
+class TitleAndTagsFromImageJson(PromptIdentityBase):
     def __init__(self, args:Namespace=None):
         super().__init__(key="title_and_tags_from_image_json",
                          description="Adds title and tags hint from metadata.json (in the samefolder as the image) to the prompt", 
@@ -218,7 +219,7 @@ class TitleAndTagsFromFolderImageJson(PromptIdentityPlugin):
         logging.debug(f" {self.key}: prompt after: {prompt}")
         return prompt
 
-class TitleAndTagsFromFolderMetadataJson(PromptIdentityPlugin):
+class TitleAndTagsFromFolderMetadataJson(PromptIdentityBase):
     def __init__(self, args:Namespace=None):
         self.cache = {}
         super().__init__(key="title_and_tags_from_metadata_json",
@@ -254,7 +255,7 @@ class TitleAndTagsFromFolderMetadataJson(PromptIdentityPlugin):
         logging.debug(f" {self.key}: prompt after: {prompt}")
         return prompt
 
-class TitleAndTagsFromGlobalMetadataJson(PromptIdentityPlugin):
+class TitleAndTagsFromGlobalMetadataJson(PromptIdentityBase):
     """
     Adds title and tags hint from global metadata json given by '--metadatafilename'
     Note: you could just put your metadata in the prompt instead of using this plugin, but perhaps useful?
@@ -316,8 +317,8 @@ def get_prompt_alteration_plugin_list() -> list:
 
                 if isinstance(attribute, type) \
                     and attribute.__module__ == module.__name__ \
-                    and is_subclass_of_subclass(attribute, PromptIdentityPlugin, recursion_depth=5) \
-                    and attribute is not PromptIdentityPlugin:
+                    and is_subclass_of_subclass(attribute, PromptIdentityBase, recursion_depth=5) \
+                    and attribute is not PromptIdentityBase:
                     
                     plugins.append(attribute)
         #print(f"done checking plugins_module_name: {plugins_module_name}")
@@ -337,4 +338,4 @@ def load_prompt_alteration_plugin(plugin_key: str, args) -> callable:
         raise ValueError(f"plugin_key: {plugin_key} not found in prompt_alteration_plugins")
     else:
         logging.info(f"No plugin specified")
-        return PromptIdentityPlugin(args=args)
+        return PromptIdentityBase(args=args)
