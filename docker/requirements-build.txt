@@ -5,4 +5,4 @@ omegaconf==2.2.3
 protobuf==3.20.3
 pyre-extensions==0.0.29
 pytorch-lightning==1.9.2
-transformers==4.35.0
+transformers==4.38.2
