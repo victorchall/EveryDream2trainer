@@ -1,10 +1,12 @@
 # CogVLM captioning
 
-CogVLM [code](https://github.com/THUDM/CogVLM) [model](https://huggingface.co/THUDM/cogvlm-chat-hf) is, so far (Q1 2024), the best model for automatically generating captions. 
+CogVLM ([code](https://github.com/THUDM/CogVLM)) ([model](https://huggingface.co/THUDM/cogvlm-chat-hf)) is, so far (Q1 2024), the best model for automatically generating captions. 
 
-The model uses about 13.5GB of VRAM due to 4bit inference with the default setting of 1 beam, and up to 4 or 5 beams is possible with a 24GB GPU meaning it is very capable on consumer hardware.  It is slow, ~6-10 seconds on a RTX 3090, but the quality is worth it over other models. 
+The model uses about 13.5GB of VRAM due to 4bit inference with the default setting of 1 beam, and up to 4 or 5 beams is possible with a 24GB GPU meaning it is very capable on consumer hardware.  It is slow, ~6-10+ seconds on a RTX 3090, but the quality is worth it over other models. 
 
 It is capable of naming and identifying things with proper nouns and has a large vocabulary. It can also readily read text even for hard to read fonts, from oblique angles, or from curved surfaces.
+
+<a href="https://colab.research.google.com/github/nawnie/EveryDream2trainer/blob/main/CaptionCog.ipynb" target="_parent"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/></a>
 
 ## Basics
 
