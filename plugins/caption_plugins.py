@@ -155,11 +155,20 @@ class FromFolderMetadataJson(PromptIdentityBase):
                          args=args)
         self.metadata_provider = MetadataProvider()
 
+    def _clean_metadata(self, metadata: dict, args) -> dict:
+        if "remove_keys" in args:
+            keys = args.remove_keys.split(",")
+            logging.debug(f"Removing keys: {keys}")
+            for key in keys:
+                metadata.pop(key, None)
+                logging.debug(f"Removed key: {key}")
+
     def _from_metadata_json(self, args:Namespace) -> dict:
         image_path = args.image_path
         image_dir = os.path.dirname(image_path)
         metadata_json_path = os.path.join(image_dir, "metadata.json")
         metadata = self.metadata_provider._get_metadata_dict(metadata_json_path)
+        self._clean_metadata(metadata, args)
         metadata = json.dumps(metadata, indent=2)
         prompt = self._add_hint_to_prompt(f"metadata: {metadata}", args.prompt)
         return prompt
