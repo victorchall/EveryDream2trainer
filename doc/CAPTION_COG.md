@@ -52,13 +52,13 @@ Christoph Shuhmann and Peter Bevan's [laion-pop](https://huggingface.co/datasets
 
 `--starts_with "A photograph of"` will add the text given to the caption.
 
-There are two circumstances where this is extremely useful. If you are captioning images that are all of the same subject, you can provide the subject's proper name and force it to be included.  Such as `--starts_with "A photograph of John Smith"`.  
+There are two circumstances where this is extremely useful. If you are captioning images that are all of the same subject, you can provide the subject's proper name and force it to be included.  Such as `--starts_with "A photograph of John Smith"`.  The caption will continue from there.
 
 Another circumstance is to provide a starting phrase such a "An image showcasing" or "An image of", and follow up with using the `--remove_starts_with` option to remove the starting phrase from the caption.  Often Cog will add "An image of" on its own, wasting tokens and making the caption less useful.  By providing the starting phrase then removing it with `--remove_starts_with` you can short circuit the model to start in a more concise manner.
 
-`--remove_starts_with` will remove the `starts_with` text from the start of the output caption.
+`--remove_starts_with` will remove the `starts_with` text from the start of the output caption.  Suggested use is to use this if your starts_with is something like `an image of` but not if your starts_with is a proper noun. 
 
-`--append "by Claude Monet."` will add the text given to the end of every caption, and is not fed to the model, it is simply tacked on to the end of the caption.  This can be useful for things like artist or collection names that are fixed across all images.
+`--append "by Claude Monet."` will add the text given to the end of every caption, and is not fed to the model, it is simply tacked on to the end of the caption.  This can be useful for things like artist or collection names that are fixed across all images.  This is "dumb code" string append.
 
 `--no_overwrite` will skip captioning the image if a corresponding .txt file already exists, useful for resuming.
 
@@ -134,10 +134,6 @@ I would recommend not setting any of these and leave the default values until yo
 `--max_new_tokens 120` Truncates output after n tokens. May cut off captions abruptly.
 
 `--no_repeat_ngram_size 3` prevents the same n-gram (sequence of size n-tokens) from being repeated in the output.  Default is 0, which means no n-gram is prevented from repeating.  Setting this to 2 or 3 can help prevent the model from repeating itself. 
-
-`--min_new_tokens 5` Force the model to produce at least n tokens.
-
-`--max_new_tokens 120` Truncates output after n tokens. May cut off captions abruptly.
 
 #### Sampling args
 
