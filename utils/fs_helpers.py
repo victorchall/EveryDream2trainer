@@ -16,16 +16,16 @@ def is_image(file):
 
 def read_text(file):
     try:
-        with open(file, encoding='utf-8', mode='r') as stream:
-            return stream.read().strip()
+        encodings = ['utf-8', 'iso-8859-1', 'windows-1252', 'latin-1']
+        for encoding in encodings:
+            try:
+                with open(file, encoding=encoding) as f:
+                    return f.read()
+            except UnicodeDecodeError:
+                continue
+        raise UnicodeDecodeError(f'Could not decode file with any of the provided encodings: {encodings}')
     except Exception as e:
-        logging.warning(f" *** Error reading text file as utf-8: {file}: {e}")
-
-    try:
-        with open(file, encoding='latin-1', mode='r') as stream:
-            return stream.read().strip()
-    except Exception as e:
-        logging.warning(f" *** Error reading text file as latin-1: {file}: {e}")
+        logging.warning(f" *** Error reading text file: {file}: {e}")
 
 def read_float(file):
     try:

@@ -41,10 +41,6 @@ Covers install, setup of base models, startning training, basic tweaking, and lo
 
 Behind the scenes look at how the trainer handles multiaspect and crop jitter
 
-### Companion tools repo
-
-Make sure to check out the [tools repo](https://github.com/victorchall/EveryDream), it has a grab bag of scripts to help with your data curation prior to training.  It has automatic bulk BLIP captioning for BLIP, script to web scrape based on Laion data files, script to rename generic pronouns to proper names or append artist tags to your captions, etc. 
-
 ## Cloud/Docker
 
 ### [Free tier Google Colab notebook](https://colab.research.google.com/github/victorchall/EveryDream2trainer/blob/main/Train_Colab.ipynb)
@@ -81,7 +77,7 @@ Make sure to check out the [tools repo](https://github.com/victorchall/EveryDrea
 
 [Validation](doc/VALIDATION.md) - Use a validation split on your data to see when you are overfitting and tune hyperparameters
 
-[Captioning](doc/CAPTION.md) - (beta) tools to automate captioning
+[Captioning](doc/CAPTION.md) - tools to generate synthetic captioning (recommend [Cog](doc/CAPTION_COG.md))
 
 [Plugins](doc/PLUGINS.md) - (beta) write your own plugins to execute arbitrary code during training
 

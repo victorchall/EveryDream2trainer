@@ -16,3 +16,5 @@
 .idea
 /.cache
 /models
+/*.safetensors
+/*.webp

@@ -391,6 +391,11 @@ def setup_args(args):
 
     args.aspects = aspects.get_aspect_buckets(args.resolution)
 
+    if args.timestep_start < 0:
+        raise ValueError("timestep_start must be >= 0")
+    if args.timestep_end > 1000:
+        raise ValueError("timestep_end must be <= 1000")
+
     return args
 
 
@@ -727,14 +732,20 @@ def main(args):
         text_encoder_ema = None
 
     try:
-        #unet = torch.compile(unet)
-        #text_encoder = torch.compile(text_encoder)
-        #vae = torch.compile(vae)
-        torch.set_float32_matmul_precision('high')
-        torch.backends.cudnn.allow_tf32 = True
+        print()
+        #unet = torch.compile(unet, mode="max-autotune")
+        #text_encoder = torch.compile(text_encoder, mode="max-autotune")
+        #vae = torch.compile(vae, mode="max-autotune")
         #logging.info("Successfully compiled models")
     except Exception as ex:
         logging.warning(f"Failed to compile model, continuing anyway, ex: {ex}")
+        pass
+
+    try:
+        torch.set_float32_matmul_precision('high')
+        torch.backends.cudnn.allow_tf32 = True
+    except Exception as ex:
+        logging.warning(f"Failed to set float32 matmul precision, continuing anyway, ex: {ex}")
         pass
 
     optimizer_config = None
@@ -944,7 +955,7 @@ def main(args):
 
             bsz = latents.shape[0]
 
-            timesteps = torch.randint(0, noise_scheduler.config.num_train_timesteps, (bsz,), device=latents.device)
+            timesteps = torch.randint(args.timestep_start, args.timestep_end, (bsz,), device=latents.device)
             timesteps = timesteps.long()
 
             cuda_caption = tokens.to(text_encoder.device)
@@ -987,9 +998,32 @@ def main(args):
                 mse_loss_weights[snr == 0] = 1.0
                 loss_scale = loss_scale * mse_loss_weights.to(loss_scale.device)
 
-            loss = F.mse_loss(model_pred.float(), target.float(), reduction="none")
-            loss = loss.mean(dim=list(range(1, len(loss.shape)))) * loss_scale.to(unet.device)
-            loss = loss.mean()
+            loss_mse = F.mse_loss(model_pred.float(), target.float(), reduction="none")
+            loss_scale = loss_scale.view(-1, 1, 1, 1).expand_as(loss_mse)
+
+            if args.loss_type == "mse_huber":
+                early_timestep_bias = (timesteps / noise_scheduler.config.num_train_timesteps)
+                early_timestep_bias = torch.tensor(early_timestep_bias, dtype=torch.float).to(unet.device)
+                early_timestep_bias = early_timestep_bias.view(-1, 1, 1, 1).expand_as(loss_mse)
+                loss_huber = F.huber_loss(model_pred.float(), target.float(), reduction="none", delta=1.0)
+                loss_mse = loss_mse * loss_scale.to(unet.device) * early_timestep_bias
+                loss_huber = loss_huber * loss_scale.to(unet.device) * (1.0 - early_timestep_bias)
+                loss = loss_mse.mean() + loss_huber.mean()
+            elif args.loss_type == "huber_mse":
+                early_timestep_bias = (timesteps / noise_scheduler.config.num_train_timesteps)
+                early_timestep_bias = torch.tensor(early_timestep_bias, dtype=torch.float).to(unet.device)
+                early_timestep_bias = early_timestep_bias.view(-1, 1, 1, 1).expand_as(loss_mse)
+                loss_huber = F.huber_loss(model_pred.float(), target.float(), reduction="none", delta=1.0)
+                loss_mse = loss_mse * loss_scale.to(unet.device) * (1.0 - early_timestep_bias)
+                loss_huber = loss_huber * loss_scale.to(unet.device) * early_timestep_bias
+                loss = loss_huber.mean() + loss_mse.mean()
+            elif args.loss_type == "huber":
+                loss_huber = F.huber_loss(model_pred.float(), target.float(), reduction="none", delta=1.0)
+                loss_huber = loss_huber * loss_scale.to(unet.device)
+                loss = loss_huber.mean()
+            else:
+                loss_mse = loss_mse * loss_scale.to(unet.device)
+                loss = loss_mse.mean()
 
             return model_pred, target, loss
 
@@ -1334,6 +1368,7 @@ if __name__ == "__main__":
     argparser.add_argument("--grad_accum", type=int, default=1, help="Gradient accumulation factor (def: 1), (ex, 2)")
     argparser.add_argument("--logdir", type=str, default="logs", help="folder to save logs to (def: logs)")
     argparser.add_argument("--log_step", type=int, default=25, help="How often to log training stats, def: 25, recommend default!")
+    argparser.add_argument("--loss_type", type=str, default="mse_huber", help="type of loss, 'huber', 'mse', or 'mse_huber' for interpolated (def: mse_huber)", choices=["huber", "mse", "mse_huber"])
     argparser.add_argument("--lr", type=float, default=None, help="Learning rate, if using scheduler is maximum LR at top of curve")
     argparser.add_argument("--lr_decay_steps", type=int, default=0, help="Steps to reach minimum LR, default: automatically set")
     argparser.add_argument("--lr_scheduler", type=str, default="constant", help="LR scheduler, (default: constant)", choices=["constant", "linear", "cosine", "polynomial"])
@@ -1356,6 +1391,8 @@ if __name__ == "__main__":
     argparser.add_argument("--save_optimizer", action="store_true", default=False, help="saves optimizer state with ckpt, useful for resuming training later")
     argparser.add_argument("--seed", type=int, default=555, help="seed used for samples and shuffling, use -1 for random")
     argparser.add_argument("--shuffle_tags", action="store_true", default=False, help="randomly shuffles CSV tags in captions, for booru datasets")
+    argparser.add_argument("--timestep_start", type=int, default=0, help="Noising timestep minimum (def: 0)")
+    argparser.add_argument("--timestep_end", type=int, default=1000, help="Noising timestep (def: 1000)")
     argparser.add_argument("--train_sampler", type=str, default="ddpm", help="noise sampler used for training, (default: ddpm)", choices=["ddpm", "pndm", "ddim"])
     argparser.add_argument("--keep_tags", type=int, default=0, help="Number of tags to keep when shuffle, used to randomly select subset of tags when shuffling is enabled, def: 0 (shuffle all)")
     argparser.add_argument("--wandb", action="store_true", default=False, help="enable wandb logging instead of tensorboard, requires env var WANDB_API_KEY")

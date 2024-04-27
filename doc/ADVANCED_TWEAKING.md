@@ -36,21 +36,45 @@ This is useful if you want to dump the CKPT files directly to your webui/inferen
 
 ## Conditional dropout
 
-Conditional dropout means the prompt or caption on the training image is dropped, and the caption is "blank".  The theory is this can help with unconditional guidance, per the original paper and authors of Latent Diffusion and Stable Diffusion.
+Conditional dropout means the prompt or caption on the training image is dropped, and the caption is "blank".  This can help with unconditional guidance, per the original paper and authors of Latent Diffusion and Stable Diffusion. This means the CFG Scale used at inference time will respond more smoothly. 
 
-The value is defaulted at 0.04, which means 4% conditional dropout.  You can set it to 0.0 to disable it, or increase it.  Many users of EveryDream 1.0 have had great success tweaking this, especially for larger models.  You may wish to try 0.10.  This may also be useful to really "force" a style into the model with a high setting such as 0.15.  However, setting it very high may lead to bleeding or overfitting to your training data, especially if your data is not very diverse, which may or may not be desirable for your project.
+The value is defaulted at 0.04, which means 4% conditional dropout.  You can set it to 0.0 to disable it, or increase it.  For larger training (many tens of thousands) using 0.10 would be my recommendation.
+
+This may also be useful to really "force" a style into the model with a high setting such as 0.15.  However, setting it very high may lead to bleeding or overfitting to your training data, especially if your data is not very diverse, which may or may not be desirable for your project.
 
     --cond_dropout 0.1 ^
 
+## Timestep clamping
+
+Stable Diffusion uses 1000 possible timesteps for denoising steps.  If you wish to train only a portion of those timesteps instead of the entire schedule you can clamp the value.
+
+Timesteps are always chosen randomly per training example, per step, within the possible or allowed timesteps. 
+
+For instance, if you only want to train from 500 to 999, use this:
+
+    --timestep_start 500
+
+Or if you only want to try from 0 to 449, use this:
+
+    --timestep_end 450
+
+Possible use cases are to "focus" training on aesthetics or composition.  It's likely you may need to train all timesteps as a "clean up" if you train just specific timestep ranges first. 
+
+## Loss Type
+
+You can change the type of loss from the standard [MSE ("L2") loss](https://pytorch.org/docs/stable/generated/torch.nn.MSELoss.html) to [Huber loss](https://pytorch.org/docs/stable/generated/torch.nn.HuberLoss.html), or a interpolated value across timesteps.  Valid values are "mse", "huber", "mse_huber", and "huber_mse".
+
+    --loss_type huber
+
+mse_huber will use MSE at timestep 0 and huber at timestep 999, and interpolate between the two across the intermediate timesteps. huber_mse is the reverse
+
 ## LR tweaking
 
-Learning rate adjustment is a very important part of training. 
+You should use [Optimizer config](doc/OPTIMZER.md) to tweak instead of the primary arg here, but it is left for legacy support of the Jupyter Notebook to make it easier to use the Jupyter Notbook in a happy path or simplified scenario.
 
     --lr 1.0e-6 ^
-
-By default, the learning rate is constant for the entire training session.  However, if you want it to change by itself during training, you can use cosine.
-
-General suggestion is 1e-6 for training SD1.5 at 512 resolution.  For SD2.1 at 768, try a much lower value, such as 2e-7.  [Validation](VALIDATION.md) can be helpful to tune learning rate. 
+    
+*If you set this in train.json or the main CLI arg it will override the value from your optimizer.json, so use with caution...*  Again, best to use optimizer.json instead.
 
 ## Clip skip
 
