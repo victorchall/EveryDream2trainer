@@ -6,13 +6,15 @@ Make sure the trainer is installed properly first. See [SETUP.md](SETUP.md) for 
 
 You can either [download one manually](#manual-download), or alternatively EveryDream2 can [automatically download](#automatic-download) a model from the Hugging Face hub for you.
 
-It's strongly suggested to simple use automatic download.  The quick start here is you can simply use `resume_ckpt` of `stabilityai/stable-diffusion-2-1` to make a SD2.1 768 model, or `panopstor/EveryDream` for SD1.5 models.  If you are ok with the base SD1.5 and SD2.1 models, you can use those values and skip reading this document.
+It's strongly suggested to simple use automatic download.  The quick start here is you can simply use `resume_ckpt` of `stabilityai/stable-diffusion-2-1` to make a SD2.1 768 model, or `panopstor/EveryDream` for SD1.5 models.  
 
-See below for more details.
+**If you are ok with the base SD1.5 and SD2.1 models, you can use those values and skip reading this document.**  SD1.5 is already set in train.json via `"resume_ckpt": "panopstor/EveryDream"` and you can stop reading this document if you just want to train SD1.5. 
 
-## Manual download
+See below for more details **if you downloaded an SD1.x or SD2.x based model off the internet that you want to use as a base.*  **Do NOT continue reading this document if you are just trying to train based on SD1.5.*
 
-First you have to download a `.ckpt` or `.safetensors` file for the base model, then you need to convert it to a "diffusers format" folder.  When you finish you should see something like this, come back to reference this picture as you go through the steps below:
+## Manual download 
+
+If you want to continue training based off some `.ckpt` or `.safetensors` file you downloaded off the internet, then you need to convert it to a "diffusers format" folder.  When you finish you should see something like this, come back to reference this picture as you go through the steps below:
 
 ![models](ckptcache.png) *(this picture is just an EXAMPLE)*
 
