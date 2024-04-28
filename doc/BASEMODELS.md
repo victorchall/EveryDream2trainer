@@ -10,7 +10,7 @@ It's strongly suggested to simple use automatic download.  The quick start here 
 
 **If you are ok with the base SD1.5 and SD2.1 models, you can use those values and skip reading this document.**  SD1.5 is already set in train.json via `"resume_ckpt": "panopstor/EveryDream"` and you can stop reading this document if you just want to train SD1.5. 
 
-See below for more details **if you downloaded an SD1.x or SD2.x based model off the internet that you want to use as a base.*  **Do NOT continue reading this document if you are just trying to train based on SD1.5.*
+See below for more details **if you downloaded an SD1.x or SD2.x based model off the internet that you want to use as a base.*  **Do NOT continue reading this document if you are just trying to train based on SD1.5.**
 
 ## Manual download 
 
