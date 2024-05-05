@@ -228,6 +228,54 @@ class TitleAndTagsFromImageJson(PromptIdentityBase):
         logging.debug(f" {self.key}: prompt after: {prompt}")
         return prompt
 
+class VogueRunwayImageJson(PromptIdentityBase):
+    def __init__(self, args:Namespace=None):
+        super().__init__(key="vogue_runway_from_image_json",
+                         description="Adds title and tags hint from metadata.json (in the samefolder as the image) to the prompt", 
+                         fn=self._title_and_tags_from_metadata_json,
+                         args=args)
+    
+    def try_get_kvps(self, metadata, keys:list):
+        values = []
+        for key in keys:
+            val = metadata.get(key, "")
+            if not val:
+                continue
+            if type(val) == int:
+                val = str(val)
+            val = val.strip()
+            values.append(f"{key}: {val}")
+        hint = ", ".join(values)
+        return hint
+
+    def _title_and_tags_from_metadata_json(self, args:Namespace) -> str:
+        prompt = args.prompt
+        logging.debug(f" {self.key}: prompt before: {prompt}")
+        image_path = args.image_path
+        current_dir = os.path.dirname(image_path)
+        image_path_base = os.path.basename(image_path)
+        image_path_without_extension = os.path.splitext(image_path_base)[0]
+        candidate_json_path = os.path.join(current_dir, f"{image_path_without_extension}.json")
+
+        if os.path.exists(candidate_json_path):
+            with open(candidate_json_path, "r") as f:
+                metadata = json.load(f)
+
+        keys = ["designer","season","category","year"]
+
+        hint = ""
+        hint = self.try_get_kvps(metadata, keys)
+
+        tags = metadata.get("tags", []) 
+        tags = tags.split(",") if isinstance(tags, str) else tags # can be csv or list
+        if tags and len(tags) > 0:
+            tags = ", ".join(tags)
+            hint += f"\nTags: {tags}"
+
+        prompt = self._add_hint_to_prompt(hint, prompt)
+        logging.debug(f" {self.key}: prompt after: {prompt}")
+        return prompt
+
 class TitleAndTagsFromFolderMetadataJson(PromptIdentityBase):
     def __init__(self, args:Namespace=None):
         self.cache = {}

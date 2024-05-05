@@ -46,9 +46,9 @@ This may also be useful to really "force" a style into the model with a high set
 
 ## Timestep clamping
 
-Stable Diffusion uses 1000 possible timesteps for denoising steps.  If you wish to train only a portion of those timesteps instead of the entire schedule you can clamp the value.
+Stable Diffusion uses 1000 possible timesteps for denoising steps.  Timesteps are always chosen randomly per training example, per step, within the possible or allowed timesteps. 
 
-Timesteps are always chosen randomly per training example, per step, within the possible or allowed timesteps. 
+If you wish to train only a portion of those timesteps instead of the entire schedule you can clamp the value.
 
 For instance, if you only want to train from 500 to 999, use this:
 
@@ -58,7 +58,9 @@ Or if you only want to try from 0 to 449, use this:
 
     --timestep_end 450
 
-Possible use cases are to "focus" training on aesthetics or composition.  It's likely you may need to train all timesteps as a "clean up" if you train just specific timestep ranges first. 
+Possible use cases are to "focus" training on aesthetics or composition by limiting timesteps and training specific data with certain qualities.  It's likely you may need to train all timesteps as a "clean up" if you train just specific timestep ranges first so the model does not overfit the fine tuned timesteps and lead to problems during inference.  
+
+This could also be used to train expert models for specific timestep ranges, similar to the SDXL Refiner model. 
 
 ## Loss Type
 
