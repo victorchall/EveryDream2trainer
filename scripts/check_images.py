@@ -1,6 +1,6 @@
 import os
 import argparse
-from PIL import Image
+from PIL import Image, ImageOps
 from typing import Generator
 
 SUPPORTED_EXT = [".jpg", ".png", ".jpeg", ".bmp", ".jfif", ".webp"]
@@ -21,6 +21,7 @@ def main(args):
     for path in image_path_generator(args.data_root, do_recurse=True):
         try:
             img = Image.open(path)
+            img = ImageOps.exif_transpose(img)
             print(f"Checked OK {img.size} {img.mode} {path}")
         except Exception as e:
             print(f"FAILED: {path}")
