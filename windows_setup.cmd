@@ -25,6 +25,7 @@ pip install safetensors
 pip install prodigyopt
 pip install torchsde
 pip install peft>=0.9.0
+pip install unidecode
 python utils/get_yamls.py
 GOTO :eof
 
