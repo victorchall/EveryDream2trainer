@@ -386,9 +386,6 @@ def get_inputs_dict(inputs):
             "return_dict": True
         }
 
-def replace_non_utf8_chars(text) -> str:
-    
-
 def main(args):
     prompt_plugin_fn = load_prompt_alteration_plugin(args.prompt_plugin, args=args)
     model_wrapper = get_model_wrapper(args.model)
