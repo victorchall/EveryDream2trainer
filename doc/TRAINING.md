@@ -26,7 +26,7 @@ I recommend you copy one of the examples below and keep it in a text file for fu
 
 Training examples:
 
-Resuming from a checkpoint, 50 epochs, 6 batch size, 3e-6 learning rate, constant scheduler, generate samples evern 200 steps, 10 minute checkpoint interval, adam8bit, and using the default "input" folder for training data:
+Resuming from a checkpoint, 50 epochs, 6 batch size, 3e-6 learning rate, constant scheduler, generate samples evern 200 steps, 10 minute checkpoint interval, and using the default "input" folder for training data:
 
     python train.py --resume_ckpt "sd_v1-5_vae" ^
     --max_epochs 50 ^
@@ -36,10 +36,9 @@ Resuming from a checkpoint, 50 epochs, 6 batch size, 3e-6 learning rate, constan
     --batch_size 6 ^
     --sample_steps 200 ^
     --lr 3e-6 ^
-    --ckpt_every_n_minutes 10 ^
-    --useadam8bit
+    --ckpt_every_n_minutes 10 
 
-Training from SD2 512 base model, 18 epochs, 4 batch size, 1.2e-6 learning rate, constant LR, generate samples evern 100 steps, 30 minute checkpoint interval, adam8bit, using imagesin the x:\mydata folder, training at resolution class of 640:
+Training from SD2 512 base model, 18 epochs, 4 batch size, 1.2e-6 learning rate, constant LR, generate samples evern 100 steps, 30 minute checkpoint interval, using imagesin the x:\mydata folder, training at resolution class of 640:
 
     python train.py --resume_ckpt "512-base-ema" ^
     --data_root "x:\mydata" ^
@@ -51,10 +50,9 @@ Training from SD2 512 base model, 18 epochs, 4 batch size, 1.2e-6 learning rate,
     --lr 1.2e-6 ^
     --resolution 640 ^
     --clip_grad_norm 1 ^
-    --ckpt_every_n_minutes 30 ^
-    --useadam8bit
+    --ckpt_every_n_minutes 30 
 
-Training from the "SD21" model on the "jets" dataset on another drive, for 50 epochs, 6 batch size, 1.5e-6 learning rate, cosine scheduler that will decay in 1500 steps, generate samples evern 100 steps, save a checkpoint every 20 epochs, and use AdamW 8bit optimizer:
+Training from the "SD21" model on the "jets" dataset on another drive, for 50 epochs, 6 batch size, 1.5e-6 learning rate, cosine scheduler that will decay in 1500 steps, generate samples evern 100 steps, save a checkpoint every 20 epochs:
 
     python train.py --resume_ckpt "SD21" ^
     --data_root "R:\everydream-trainer\training_samples\mega\gt\objects\jets" ^
@@ -66,8 +64,7 @@ Training from the "SD21" model on the "jets" dataset on another drive, for 50 ep
     --batch_size 6 ^
     --sample_steps 100 ^
     --lr 1.5e-6 ^
-    --save_every_n_epochs 20 ^
-    --useadam8bit 
+    --save_every_n_epochs 20 
 
 Copy paste the above to your command line and press enter.
 Make sure the last line does not have ^ but all other lines do.  If you want you can put the command all on one line and not use the ^ carats instead.
