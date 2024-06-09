@@ -86,6 +86,8 @@ You can change the type of loss from the standard [MSE ("L2") loss](https://pyto
 
 mse_huber will use MSE at timestep 0 and huber at timestep 999, and interpolate between the two across the intermediate timesteps. huber_mse is the reverse
 
+[Experiment results](https://discord.com/channels/1026983422431862825/1229478214020235355) (Discord)
+
 ## LR tweaking
 
 You should use [Optimizer config](doc/OPTIMZER.md) to tweak instead of the primary arg here, but it is left for legacy support of the Jupyter Notebook to make it easier to use the Jupyter Notbook in a happy path or simplified scenario.
@@ -308,7 +310,7 @@ Using the GPU for ema incurs only a small speed penalty of around 5-10% with all
 
 Generally, I recommend picking a device and approriate interval given your device choice first and stick with those values, then tweak the `ema_decay_rate` up or down according to how you want the EMA model to look vs. your non-EMA model.  From there, if your EMA model seems to "lag behind" the non-EMA model by "too much" (subjectively judged), you can decrease decay rate. If it identical or nearly identical, use a slightly higher value. 
 
-## ema_strength_target
+### ema_strength_target
 
 This arg is a non-standard way of calculating the actual decay rate used. It attempts to calculate a value for decay rate based on your `ema_update_interval` and the total length of training, compensating for both.  Values of 0.01-0.15 should work, with higher values leading to a EMA model that deviates more from the non-EMA model similar to how decay rate works.  It attempts to be more of a "strength" value of EMA, or "how much" (as a factor, i.e. 0.10 = 10% "strength") of the EMA model are kept for the totality of training.  
 
@@ -317,6 +319,8 @@ While the calculation makes sense in how it compensates for inteval and total tr
     --ema_strength_target 0.10 ^
 
 If you use `ema_strength_target` the actual calculated `ema_decay_rate` used will be printed in your logs, and you should pay attention to this value and use it to inform your future decisions on EMA tuning.
+
+[Experimental results](https://discord.com/channels/1026983422431862825/1150790432897388556) for EMA on Discord.
 
 ## AdaCoor optimizer
 
@@ -328,6 +332,10 @@ This is an implementation of pyramid noise as first introduced here https://wand
 
 Pyramid noise can be used to improve dynamic range in short finetunes of < 2000 steps at discounts greater than 0.40. At all discount levels pyramid noise appears to improve the amount of detail generated in images. However, it is not advised to train with pyramid noise for a full training as the noise affects the whole model rapidly and can destabilize the model if trained for too many steps. At 0, pyramid noise is disabled. 
 
+[Experimental results](https://discord.com/channels/1026983422431862825/1176398312870514788) (Discord)
+
 ## Attention Type
 
 The `attn_type` arg allows you to select `xformers`, `sdp`, or `slice`.  Xformers uses the [xformers package](https://github.com/facebookresearch/xformers).  SDP uses the scaled dot product mechanism [built into  Pytorch](https://pytorch.org/docs/stable/generated/torch.nn.functional.scaled_dot_product_attention.html) as of recent Pytorch updates. Slice uses head splitting.  `sdp` is the default and suggested value as it seems to save a small amount of VRAM while also being approximately 5% faster than xformers.  There is likely little reason to use slice or xformers but are kept for the time being for experimentation or consistency with prior experiments.
+
+[Experimental results](https://discord.com/channels/1026983422431862825/1178007113151287306) (Discord link)
