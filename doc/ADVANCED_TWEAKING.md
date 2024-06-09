@@ -44,6 +44,22 @@ This may also be useful to really "force" a style into the model with a high set
 
     --cond_dropout 0.1 ^
 
+## Conditional Embedding Perturbation
+
+Paper: https://arxiv.org/pdf/2405.20494
+    
+    --embedding_perturbation 1.0
+
+This is the gamma value in the paper.   This can be set to 0.0 to disable.  It adds gaussian noise to the embedding vector created by the text encoder.
+
+The noise zero centered with a std_dev of (embedding_perturbation divided by the square root of the embedding dimension) of the text encoder (i.e. 768 for CLIP-L used in SD1.x).
+
+$
+\xi \backsim \mathcal{N} (0, \frac{\gamma}{\sqrt{\mathcal{d}}})
+$
+
+You can join the Discord server to see [experimental results](https://discord.com/channels/1026983422431862825/1247917538952740955).
+
 ## Timestep clamping
 
 Stable Diffusion uses 1000 possible timesteps for denoising steps.  Timesteps are always chosen randomly per training example, per step, within the possible or allowed timesteps. 
