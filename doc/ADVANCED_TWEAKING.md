@@ -320,7 +320,7 @@ While the calculation makes sense in how it compensates for inteval and total tr
 
 If you use `ema_strength_target` the actual calculated `ema_decay_rate` used will be printed in your logs, and you should pay attention to this value and use it to inform your future decisions on EMA tuning.
 
-[Experimental results](https://discord.com/channels/1026983422431862825/1150790432897388556) for EMA on Discord.
+[Experimental results](https://discord.com/channels/1026983422431862825/1150790432897388556) for general use of EMA on Discord.
 
 ## AdaCoor optimizer
 

@@ -1,3 +1,15 @@
+# Synthetic Captioning
+
+Script now works with the following:
+
+    --model "THUDM/cogvlm-chat-hf"
+
+    --model "THUDM/cogvlm2-llama3-chat-19B"
+
+    --model "xtuner/llava-llama-3-8b-v1_1-transformers"
+
+    --model "THUDM/glm-4v-9b"
+
 # CogVLM captioning
 
 CogVLM ([code](https://github.com/THUDM/CogVLM)) ([model](https://huggingface.co/THUDM/cogvlm-chat-hf)) is, so far (Q1 2024), the best model for automatically generating captions. 
