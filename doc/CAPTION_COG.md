@@ -8,13 +8,23 @@ It is capable of naming and identifying things with proper nouns and has a large
 
 <a href="https://colab.research.google.com/github/nawnie/EveryDream2trainer/blob/main/CaptionCog.ipynb" target="_parent"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/></a>
 
+Both the ([Vicuna-based](https://huggingface.co/THUDM/cogvlm-chat-hf)) and ([Llama3-based](https://huggingface.co/THUDM/cogvlm2-llama3-chat-19B)) models are supported.
+
+Choose these by using one of these two CLI args:
+
+    --model THUDM/cogvlm-chat-hf
+
+    --model THUDM/cogvlm2-llama3-chat-19B
+
+The script uses the Vicuna model (first) by default if no `--model` arg is specified.
+
 ## Llava update
 
 This script now (confusiningly) supports (Xtuner's Llava Llama3 8b v1.1)[https://huggingface.co/xtuner/llava-llama-3-8b-v1_1-transformers/tree/main].
 
 To use, add `--model "https://huggingface.co/xtuner/llava-llama-3-8b-v1_1-transformers/tree/main"` to your command line.
 
-This is a work in progress. So far it seems bad_words do not work.
+When using Llava, the script will perform some clean-up operations to remove some less-than-useful language from the caption because the bad_words part of the Hugginface Transformers API is not supported by Llava.
 
 ## Basics
 

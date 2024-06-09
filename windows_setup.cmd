@@ -26,6 +26,7 @@ pip install prodigyopt
 pip install torchsde
 pip install peft>=0.9.0
 pip install unidecode
+pip install tiktoken
 python utils/get_yamls.py
 GOTO :eof
 

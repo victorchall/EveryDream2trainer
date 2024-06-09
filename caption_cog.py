@@ -47,7 +47,8 @@ except ImportError:
 
 Image.MAX_IMAGE_PIXELS = 715827880*4 # expand the size limit
 
-IMAGE_SIZE: int = 490
+IMAGE_SIZE_COG1: int = 490
+IMAGE_SIZE_COG2: int = 1344
 PATCH_SIZE: int = 14
 
 torch.backends.cuda.matmul.allow_tf32 = True
@@ -70,7 +71,7 @@ def save_params(args, gen_kwargs):
     with open(save_path, "w") as f:
         f.write(pretty_print)
 
-def create_bnb_config(bnb_4bit_compute_dtype="bfloat16",bnb_4bit_quant_type= "fp4"):
+def create_bnb_config(bnb_4bit_compute_dtype="bfloat16", bnb_4bit_quant_type= "fp4"):
     return BitsAndBytesConfig(
         bnb_4bit_compute_dtype=bnb_4bit_compute_dtype,
         bnb_4bit_quant_type=bnb_4bit_quant_type,
@@ -89,15 +90,26 @@ class BaseModelWrapper:
         self.model_name = model_name
         logging.info(f"Loading {model_name}")
 
-    def load_model(self, bits: int=4, grad_ckpt: bool=False, lora: bool=False, dtype: str="fp16"):
+    def load_model(self, dtype: str="auto"):
+        bnb_config = self._maybe_create_bnb_config(dtype)
         self.model = AutoModelForCausalLM.from_pretrained(
             self.model_name,
             torch_dtype=torch.float16,
             low_cpu_mem_usage=True,
+            quantization_config = bnb_config
         ).to(0)
 
         self.tokenizer = AutoProcessor.from_pretrained(self.model_name)
         return self.model, self.tokenizer
+    
+    def _maybe_create_bnb_config(self, dtype, auto_bnb=True, auto_bnb_dtype="fp4"):
+        bnb_config = None
+        if dtype == "auto":
+            if auto_bnb:
+                bnb_config = create_bnb_config(bnb_4bit_compute_dtype="bfloat16", bnb_4bit_quant_type=auto_bnb_dtype)
+        if dtype in ["nf4", "fp4"]:
+            bnb_config = create_bnb_config(bnb_4bit_compute_dtype="bfloat16", bnb_4bit_quant_type=dtype)
+        return bnb_config
 
     def get_gen_kwargs(self, args):
         gen_kwargs = {
@@ -129,47 +141,7 @@ class BaseModelWrapper:
         else:
             logging.debug(f"** Sampling enabled")
         return gen_kwargs
-
-    def caption(prompt, args):
-        return ""
-
-class XtunerLlavaModelManager(BaseModelWrapper):
-    def __init__(self, model_name: str="xtuner/llava-llama-3-8b-v1_1-transformers"):
-        self.model_name = "xtuner/llava-llama-3-8b-v1_1-transformers"
-        super().__init__(model_name)
-
-    def load_model(self, bits: int=4, grad_ckpt: bool=False, lora: bool=False, dtype: str="fp16"):
-        self.model = LlavaForConditionalGeneration.from_pretrained(
-        #self.model = AutoModelForCausalLM.from_pretrained(
-            self.model_name,
-            torch_dtype=torch.float16,
-            low_cpu_mem_usage=True,
-            #quantization_config=create_bnb_config()
-        ).to(0)
-
-        self.processor = LlavaProcessor.from_pretrained(self.model_name)
-        self.tokenizer = AutoTokenizer.from_pretrained("xtuner/llava-llama-3-8b-v1_1-transformers")
-        print(f"self.tokenizer: {self.tokenizer}")
-        # tokens = self.tokenizer("foo")
-        # print(f"foo tokens test1: {tokens}")
-        return self.model, self.tokenizer
-
-    def get_inputs(self, image: Image.Image, prompt: str):
-        inputs = self.processor(prompt, image, return_tensors='pt').to(0, torch.float16)
-        return inputs
-
-    def _build_conversational_input_ids(self, prompt, starts_with):
-        return (f"<|start_header_id|>user<|end_header_id|>\n\n<image>\n{prompt}<|eot_id|>"
-          f"<|start_header_id|>assistant<|end_header_id|>\n\n{starts_with}")
-
-    def _truncate_to_whole_sentences(self, caption):
-        # model does not stop generating cleanly and cuts off mid sentence
-        caption = caption.split(".")
-        caption = ". ".join(caption[0:-1]) + "."
-        caption = caption.replace("\n","")
-        caption = caption.replace("  "," ")
-        return caption
-
+    
     def _clean_caption(self, caption, args):
         """
         Removes some nonsense Llava adds.
@@ -194,9 +166,50 @@ class XtunerLlavaModelManager(BaseModelWrapper):
             caption = caption.replace(", who is the main subject of the photo.", ".")
             caption = caption.replace(", who is the main subject.", ".")
             caption = caption.replace("who is the main subject.", ".")
+            caption = caption.replace(", who is the central focus of the composition.", ".")
+            caption = caption.replace("who is the central focus of the composition.", ".")
             caption = self._truncate_to_whole_sentences(caption)
 
             logging.debug(f"**Llava post-cleaning caption: {caption}")
+        return caption
+
+    def caption(prompt, args):
+        return ""
+
+class XtunerLlavaModelManager(BaseModelWrapper):
+    def __init__(self, model_name: str="xtuner/llava-llama-3-8b-v1_1-transformers"):
+        self.model_name = "xtuner/llava-llama-3-8b-v1_1-transformers"
+        super().__init__(model_name)
+        logging.info("Loading Xtuner Llava-Llama3 model...")
+
+    def load_model(self, dtype="auto"):
+        bnb_config = self._maybe_create_bnb_config(dtype, auto_bnb=False)
+        self.model = LlavaForConditionalGeneration.from_pretrained(
+            self.model_name,
+            torch_dtype=torch.float16,
+            low_cpu_mem_usage=True,
+            quantization_config=bnb_config
+        ).to("cuda")
+
+        self.processor = LlavaProcessor.from_pretrained(self.model_name)
+        self.tokenizer = AutoTokenizer.from_pretrained("xtuner/llava-llama-3-8b-v1_1-transformers")
+
+        return self.model, self.tokenizer
+
+    def get_inputs(self, image: Image.Image, prompt: str):
+        inputs = self.processor(prompt, image, return_tensors='pt').to(0, torch.float16)
+        return inputs
+
+    def _build_conversational_input_ids(self, prompt, starts_with):
+        return (f"<|start_header_id|>user<|end_header_id|>\n\n<image>\n{prompt}<|eot_id|>"
+          f"<|start_header_id|>assistant<|end_header_id|>\n\n{starts_with}")
+
+    def _truncate_to_whole_sentences(self, caption):
+        # model does not stop generating cleanly and cuts off mid sentence
+        caption = caption.split(".")
+        caption = ". ".join(caption[0:-1]) + "."
+        caption = caption.replace("\n","")
+        caption = caption.replace("  "," ")
         return caption
 
     def caption(self, prompt, image, args, force_words_ids, bad_words_ids, history=[]):
@@ -227,59 +240,110 @@ class XtunerLlavaModelManager(BaseModelWrapper):
         caption = self._clean_caption(caption, args)
         return caption
 
-class MoaiManager:
+# class MoaiManager:
+#     def __init__(self, model_name: str):
+#         self.model_name = model_name
+#         self.moai_model = None
+#         self.moai_processor = None
+#         self.seg_model = None
+#         self.seg_processor = None
+#         self.od_model = None
+#         self.od_processor = None
+#         self.sgg_model = None
+#         self.ocr_model = None
+#         logging.info("Loading Moai model...")
+
+#     def load_model(self, bits: int=4, grad_ckpt: bool=False, lora: bool=False, dtype: str="fp16"):
+#         moai_model, moai_processor, seg_model, seg_processor, od_model, od_processor, sgg_model, ocr_model \
+#             = prepare_moai(moai_path=self.model_name, bits=bits, grad_ckpt=grad_ckpt, lora=lora, dtype=dtype)
+#         self.moai_model = moai_model
+#         self.moai_processor = moai_processor
+#         self.seg_model = seg_model
+#         self.seg_processor = seg_processor
+#         self.od_model = od_model
+#         self.od_processor = od_processor
+#         self.sgg_model = sgg_model
+#         self.ocr_model = ocr_model
+
+#         return moai_model, moai_processor
+
+#     def get_inputs(self, image: Image.Image, prompt: str):
+#         moai_inputs = self.moai_model.demo_process(image=image,
+#                                     prompt=prompt,
+#                                     processor=self.moai_processor,
+#                                     seg_model=self.seg_model,
+#                                     seg_processor=self.seg_processor,
+#                                     od_model=self.od_model,
+#                                     od_processor=self.od_processor,
+#                                     sgg_model=self.sgg_model,
+#                                     ocr_model=self.ocr_model,
+#                                     device="cuda:0")
+#         return moai_inputs
+
+class CogGLMManager(BaseModelWrapper):
     def __init__(self, model_name: str):
-        self.model_name = model_name
-        self.moai_model = None
-        self.moai_processor = None
-        self.seg_model = None
-        self.seg_processor = None
-        self.od_model = None
-        self.od_processor = None
-        self.sgg_model = None
-        self.ocr_model = None
+        super().__init__(model_name)
+        if not model_name:
+            self.model_name = "THUDM/cogglm-6b"
+        else:
+            self.model_name = model_name
+        logging.info("Loading CogGLM model...")
 
-    def load_model(self, bits: int=4, grad_ckpt: bool=False, lora: bool=False, dtype: str="fp16"):
-        moai_model, moai_processor, seg_model, seg_processor, od_model, od_processor, sgg_model, ocr_model \
-            = prepare_moai(moai_path=self.model_name, bits=bits, grad_ckpt=grad_ckpt, lora=lora, dtype=dtype)
-        self.moai_model = moai_model
-        self.moai_processor = moai_processor
-        self.seg_model = seg_model
-        self.seg_processor = seg_processor
-        self.od_model = od_model
-        self.od_processor = od_processor
-        self.sgg_model = sgg_model
-        self.ocr_model = ocr_model
+    def load_model(self, dtype: str = "auto"):
+        self.tokenizer = AutoTokenizer.from_pretrained(self.model_name, trust_remote_code=True)
+        bnb_config = None
+        if dtype in ["auto","nf4"]:
+            bnb_config = create_bnb_config()
+        self.model = model = AutoModelForCausalLM.from_pretrained(
+            "THUDM/glm-4v-9b",
+            torch_dtype=torch.bfloat16,
+            low_cpu_mem_usage=True,
+            trust_remote_code=True,
+            quantization_config=bnb_config
+        ).eval()
+        if bnb_config is None:
+            # if BNB is used it is automatically sent to cuda device, otherwise need to move it manually
+            self.model = model.to("cuda")
 
-        return moai_model, moai_processor
+    def caption(self, prompt, image, args, force_words_ids, bad_words_ids, history=[]):
+        gen_kwargs = self.get_gen_kwargs(args)
 
-    def get_inputs(self, image: Image.Image, prompt: str):
-        moai_inputs = self.moai_model.demo_process(image=image,
-                                    prompt=prompt,
-                                    processor=self.moai_processor,
-                                    seg_model=self.seg_model,
-                                    seg_processor=self.seg_processor,
-                                    od_model=self.od_model,
-                                    od_processor=self.od_processor,
-                                    sgg_model=self.sgg_model,
-                                    ocr_model=self.ocr_model,
-                                    device="cuda:0")
-        return moai_inputs
+        inputs = self.tokenizer.apply_chat_template([{"role": "user", "image": image, "content": prompt}],
+                                       add_generation_prompt=True, tokenize=True, return_tensors="pt",
+                                       return_dict=True)
+        inputs.to("cuda")
 
-    # def __call__(self, moai_inputs, do_sample=True, temperature=0.9, top_p=0.95, max_new_tokens=256, use_cache=True) -> Any:
-    #     with torch.inference_mode():
-    #         generate_ids = self.moai_model.generate(**moai_inputs, do_sample=do_sample, temperature=temperature, top_p=top_p, max_new_tokens=max_new_tokens, use_cache=use_cache)
-    #     answer = self.moai_processor.batch_decode(generate_ids, skip_special_tokens=True)[0].split("[U")[0]
-    #     return answer
+        outputs = self.model.generate(**inputs, **gen_kwargs, force_words_ids=force_words_ids, bad_words_ids=bad_words_ids)
+
+        len_inputs = inputs['input_ids'].shape[1]
+        outputs_without_prompt = outputs[:, len_inputs:]
+
+        caption = self.tokenizer.decode(outputs_without_prompt[0], skip_special_tokens=True)
+        return caption
 
 class CogVLMManager(BaseModelWrapper):
     def __init__(self, model_name: str):
         super().__init__(model_name)
-        self.model_name = "THUDM/cogvlm-chat-hf"
+        if not model_name:
+            self.model_name = "THUDM/cogvlm-chat-hf"
+            self.cog_version = 1
+        elif model_name.lower() == "THUDM/cogvlm2-llama3-chat-19b".lower():
+            self.model_name = "THUDM/cogvlm2-llama3-chat-19b"
+            self.cog_version = 2
+        else:
+            self.model_name = model_name
+            self.cog_version = 1
         patch_cog() # fixes inv_freq key error with cogvlm, quantization, and newer transformers revisions
+        logging.info("Loading CogVLM model...")
 
-    def load_model(self):
-        self.tokenizer = LlamaTokenizer.from_pretrained("lmsys/vicuna-7b-v1.5")
+    def load_model(self, dtype: str = "auto"):
+        if self.model_name.lower() == "THUDM/cogvlm-chat-hf".lower():
+            self.tokenizer = LlamaTokenizer.from_pretrained("lmsys/vicuna-7b-v1.5")
+        elif self.model_name.lower() == "THUDM/cogvlm2-llama3-chat-19b".lower():
+            self.tokenizer = AutoTokenizer.from_pretrained(self.model_name, trust_remote_code=True)
+            self.tokenizer.pad_token_id = 128002 # for Llama 3
+        else:
+            raise ValueError("Unknown model name")
         self.model = AutoModelForCausalLM.from_pretrained(
             self.model_name,
             torch_dtype=torch.bfloat16,
@@ -297,7 +361,7 @@ class CogVLMManager(BaseModelWrapper):
             starts_with: Optional[str] = None,
     ):
         # based on https://huggingface.co/THUDM/cogvlm-chat-hf/blob/main/modeling_cogvlm.py
-        image_size: int = IMAGE_SIZE
+        image_size: int = IMAGE_SIZE_COG2 if self.cog_version == 2 else IMAGE_SIZE_COG1
         patch_size: int = PATCH_SIZE
         assert images is None or len(images) <= 1, f"not support multi images by now."
         history = history or []
@@ -306,9 +370,8 @@ class CogVLMManager(BaseModelWrapper):
         text += starts_with if starts_with is not None else ""
 
         input_ids = [self.tokenizer.bos_token_id]
-        token_type_ids = [0]
+        token_type_ids = [0] # LANGUAGE_TOKEN_TYPE
         if images is not None and len(images) == 1:
-            # vision
             transform = transforms.Compose(
                 [
                     transforms.Resize(
@@ -319,7 +382,11 @@ class CogVLMManager(BaseModelWrapper):
                 ]
             )
             images = [transform(images[0])]
-            vision_token_num = (image_size // patch_size) * (image_size // patch_size) + 2
+            if self.cog_version == 1:
+                vision_token_num = (image_size // patch_size) * (image_size // patch_size) + 2
+            elif self.cog_version == 2:
+                vision_token_num = (image_size // patch_size // 2) * (image_size // patch_size // 2) + 2
+
             input_ids += [self.tokenizer.pad_token_id] * vision_token_num
             token_type_ids += [1] * vision_token_num
         text_ids = self.tokenizer.encode(text, add_special_tokens=False)
@@ -340,10 +407,6 @@ class CogVLMManager(BaseModelWrapper):
 
         inputs = self._build_conversation_input_ids(query=prompt, history=history, images=[image], starts_with=args.starts_with)
 
-        # inputs['input_ids'].shape: torch.Size([1259])
-        # inputs['attention_mask'].shape: torch.Size([1259])
-        # inputs['images'][0].shape: torch.Size([3, 490, 490])
-
         inputs = {
             "input_ids": inputs["input_ids"].unsqueeze(0).to("cuda"),
             "token_type_ids": inputs['token_type_ids'].unsqueeze(0).to("cuda"),
@@ -352,15 +415,8 @@ class CogVLMManager(BaseModelWrapper):
             "output_hidden_states": True,
             "return_dict": True
         }
-        # inputs['input_ids'].shape: torch.Size([1, 1259])
-        # inputs['attention_mask'].shape: torch.Size([1, 1259])
-        # inputs['images'][0][0].shape: torch.Size([3, 490, 490])
-        # len(inputs['images'][0]): 1
-        # len(inputs['images'][0][0]): 3
 
         outputs = self.model.generate(**inputs, **gen_kwargs, force_words_ids=force_words_ids, bad_words_ids=bad_words_ids)
-        #print(f"type of outputs: {type(outputs)}, outputs shape: {outputs.shape}")
-        #print(f"type of hidden_states: {type(hidden_states)}, outputs shape: {hidden_states.shape}")
 
         len_inputs = inputs['input_ids'].shape[1]
         outputs_without_prompt = outputs[:, len_inputs:]
@@ -369,12 +425,22 @@ class CogVLMManager(BaseModelWrapper):
         return caption
 
 def get_model_wrapper(model_name: str):
-    if "moai" in model_name:
-        return MoaiManager(model_name)
-    elif "llava" in model_name:
-        return XtunerLlavaModelManager(model_name)
-    else:
-        return CogVLMManager(model_name)
+    match model_name.casefold():
+        # case x if "moai" in x:
+        #     #return MoaiManager(model_name)
+        #     return None
+        case x if "llava" in x:
+            return XtunerLlavaModelManager(model_name)
+        case "thudm/glm-4v-9b":
+            return CogGLMManager(model_name)
+        case "thudm/cogvlm2-llama3-chat-19b":
+            return CogVLMManager(model_name)
+        case x if x in ["thudm/cogvlm-chat-hf","thudm/cogagent-chat-hf"]:
+            return CogVLMManager(model_name)
+        case None:
+            return CogVLMManager(model_name)
+        case _:
+            raise ValueError(f"Model {model_name} not supported")
 
 def get_inputs_dict(inputs):
         inputs = {
@@ -518,6 +584,7 @@ if __name__ == "__main__":
     argparser.add_argument("--batch_size", type=int, default=1, help="Batch size for batch processing. Does NOT work with COG! (def: 1)")
     argparser.add_argument("--debug", action="store_true", help="Enable debug logging")
     argparser.add_argument("--disable_4bit", action="store_true", help="Disables 4bit inference for compatibility or experimentation. Bad for VRAM, fallback is bf16.")
+    argparser.add_argument("--dtype", choices=["auto","fp16","bf16","nf4","fp4"], default="auto", help="Data type for inference (def: auto, see docs)")
     argparser.add_argument("--temp", type=float, default=None, help="Temperature for sampling")
     argparser.add_argument("--num_beams", type=int, default=2, help="Number of beams for beam search, default 1 (off)")
     argparser.add_argument("--top_k", type=int, default=None, help="Top-k, filter k highest probability tokens before sampling")
@@ -540,7 +607,7 @@ if __name__ == "__main__":
     argparser.add_argument("--starts_with", type=str, default=None, help="Force start words on the output caption.")
     argparser.add_argument("--remove_starts_with", action="store_true", help="Removes the starts_with words from the output caption.")
     argparser.add_argument("--append_log", action="store_true", help="Sets logging to append mode.")
-    argparser.add_argument("--model", type=str, default="THUDM/cogvlm-chat-hf", help="Model to use for captioning.")
+    argparser.add_argument("--model", type=str, default=None, help="Model to use for captioning.")
     argparser.add_argument("--min_pixels", type=int, default=1, help="Minimum total pixel size to caption, under the limit will be skipped")
     args, unknown_args = argparser.parse_known_args()
 

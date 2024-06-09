@@ -5,7 +5,7 @@ LABEL org.opencontainers.image.licenses="AGPL-3.0-only"
 ARG DEBIAN_FRONTEND=noninteractive
 
 # Don't write .pyc bytecode
-ENV PYTHONDONTWRITEBYTECODE=1
+# ENV PYTHONDONTWRITEBYTECODE=1
 
 # Create workspace working directory
 RUN mkdir /build
@@ -49,7 +49,7 @@ ENV DEBIAN_FRONTEND noninteractive\
 ENV PYTHONUNBUFFERED=1
 
 # Don't write .pyc bytecode
-ENV PYTHONDONTWRITEBYTECODE=1
+# ENV PYTHONDONTWRITEBYTECODE=1
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
@@ -65,7 +65,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     echo "en_US.UTF-8 UTF-8" > /etc/locale.gen
 
 # Install runpodctl
-RUN wget https://github.com/runpod/runpodctl/releases/download/v1.9.0/runpodctl-linux-amd -O runpodctl && \
+RUN wget https://github.com/runpod/runpodctl/releases/download/v1.14.3/runpodctl-linux-amd64 -O runpodctl && \
     chmod a+x runpodctl && \
     mv runpodctl /usr/local/bin
 

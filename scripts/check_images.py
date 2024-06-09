@@ -26,13 +26,13 @@ def main(args):
         except Exception as e:
             print(f"FAILED: {path}")
             failed.append((path,e))
+
     if not failed:
         print("No errors found")
     else:
         print(f" *************** Errors were found ***************")
         for path, e in failed:
             print(f"FAILED: {path} {e}")
-
 
 if __name__ == '__main__':
     print("This script checks that all images in a directory are valid.")

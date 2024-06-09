@@ -733,6 +733,7 @@ def main(args):
 
     try:
         print()
+        # currently broken on most systems?
         #unet = torch.compile(unet, mode="max-autotune")
         #text_encoder = torch.compile(text_encoder, mode="max-autotune")
         #vae = torch.compile(vae, mode="max-autotune")
@@ -833,7 +834,6 @@ def main(args):
         logging.info(
             f"EMA decay enabled, with ema_decay_rate {args.ema_decay_rate}, ema_update_interval: {args.ema_update_interval}, ema_device: {args.ema_device}.")
 
-
     ed_optimizer = EveryDreamOptimizer(args,
                                        optimizer_config,
                                        text_encoder,
@@ -931,7 +931,7 @@ def main(args):
     assert len(train_batch) > 0, "train_batch is empty, check that your data_root is correct"
 
     # actual prediction function - shared between train and validate
-    def get_model_prediction_and_target(image, tokens, zero_frequency_noise_ratio=0.0, return_loss=False, loss_scale=None):
+    def get_model_prediction_and_target(image, tokens, zero_frequency_noise_ratio=0.0, return_loss=False, loss_scale=None, embedding_perturbation=0.0):
         with torch.no_grad():
             with autocast(enabled=args.amp):
                 pixel_values = image.to(memory_format=torch.contiguous_format).to(unet.device)
@@ -967,6 +967,11 @@ def main(args):
                 encoder_hidden_states.hidden_states[-args.clip_skip])
         else:
             encoder_hidden_states = encoder_hidden_states.last_hidden_state
+
+        # https://arxiv.org/pdf/2405.20494
+        perturbation_deviation = embedding_perturbation / math.sqrt(encoder_hidden_states.shape[2])
+        perturbation_delta =  torch.randn_like(encoder_hidden_states) * (perturbation_deviation)
+        encoder_hidden_states = encoder_hidden_states + perturbation_delta
 
         noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
 
@@ -1195,7 +1200,8 @@ def main(args):
                                                                            batch["tokens"],
                                                                            args.zero_frequency_noise_ratio,
                                                                            return_loss=True,
-                                                                           loss_scale=batch["loss_scale"])
+                                                                           loss_scale=batch["loss_scale"],
+                                                                           embedding_perturbation=args.embedding_perturbation)
 
                 del target, model_pred
 
@@ -1362,6 +1368,7 @@ if __name__ == "__main__":
     argparser.add_argument("--disable_amp", action="store_true", default=False, help="disables automatic mixed precision (def: False)")
     argparser.add_argument("--disable_textenc_training", action="store_true", default=False, help="disables training of text encoder (def: False)")
     argparser.add_argument("--disable_unet_training", action="store_true", default=False, help="disables training of unet (def: False) NOT RECOMMENDED")
+    argparser.add_argument("--embedding_perturbation", type=float, default=0.0, help="random perturbation of text embeddings (def: 0.0)")
     argparser.add_argument("--flip_p", type=float, default=0.0, help="probability of flipping image horizontally (def: 0.0) use 0.0 to 1.0, ex 0.5, not good for specific faces!")
     argparser.add_argument("--gpuid", type=int, default=0, help="id of gpu to use for training, (def: 0) (ex: 1 to use GPU_ID 1), use nvidia-smi to find your GPU ids")
     argparser.add_argument("--gradient_checkpointing", action="store_true", default=False, help="enable gradient checkpointing to reduce VRAM use, may reduce performance (def: False)")
