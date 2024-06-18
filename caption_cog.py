@@ -425,7 +425,7 @@ class CogVLMManager(BaseModelWrapper):
         return caption
 
 def get_model_wrapper(model_name: str):
-    match model_name.casefold():
+    match str(model_name or "").casefold():
         # case x if "moai" in x:
         #     #return MoaiManager(model_name)
         #     return None
@@ -437,7 +437,7 @@ def get_model_wrapper(model_name: str):
             return CogVLMManager(model_name)
         case x if x in ["thudm/cogvlm-chat-hf","thudm/cogagent-chat-hf"]:
             return CogVLMManager(model_name)
-        case None:
+        case "":
             return CogVLMManager(model_name)
         case _:
             raise ValueError(f"Model {model_name} not supported")
