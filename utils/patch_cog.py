@@ -7,7 +7,7 @@ from transformers.modeling_utils import PreTrainedModel
 # CogVLM stores inv_freq in the state dictionary but it is not in models._parameters so it cannot be quantized
 # was patched in transformers for other models here: https://github.com/huggingface/transformers/pull/28837/files but cog is not part of transformers
 def _patched_check_quantized_param(
-        self, model: "PreTrainedModel", param_value: "torch.Tensor", param_name: str, state_dict: Dict[str, Any]
+        self, model: "PreTrainedModel", param_value: "torch.Tensor", param_name: str, state_dict: Dict[str, Any], **kwargs
     ) -> bool:
 
     # if "inv_freq" in param_name:  # detect failure case
