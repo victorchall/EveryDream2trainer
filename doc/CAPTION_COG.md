@@ -1,6 +1,6 @@
 # Synthetic Captioning
 
-Script now works with the following:
+Script now works with the following (choose one):
 
     --model "THUDM/cogvlm-chat-hf"
 
@@ -10,11 +10,15 @@ Script now works with the following:
 
     --model "THUDM/glm-4v-9b"
 
-# CogVLM captioning
+    --model "llava-hf/llava-v1.6-vicuna-7b-hf"
 
-CogVLM ([code](https://github.com/THUDM/CogVLM)) ([model](https://huggingface.co/THUDM/cogvlm-chat-hf)) is, so far (Q1 2024), the best model for automatically generating captions. 
+Support for all models in Windows is not gauranteed. Consider using the docker container (see [doc/SETUP.md](SETUP.md))
 
-The model uses about 13.5GB of VRAM due to 4bit inference with the default setting of 1 beam, and up to 4 or 5 beams is possible with a 24GB GPU meaning it is very capable on consumer hardware.  It is slow, ~6-10+ seconds on a RTX 3090, but the quality is worth it over other models. 
+## CogVLM
+
+CogVLM ([code](https://github.com/THUDM/CogVLM)) ([model](https://huggingface.co/THUDM/cogvlm-chat-hf)) is a very high quality, but slow model for captioning.
+
+The model uses about 13.5GB of VRAM with BNB 4bit quant with the default setting of 1 beam, and up to 4 or 5 beams is possible with a 24GB GPU meaning it is very capable on consumer hardware.  It is slow, ~6-10+ seconds on a RTX 3090, but the quality is worth it over other models. 
 
 It is capable of naming and identifying things with proper nouns and has a large vocabulary. It can also readily read text even for hard to read fonts, from oblique angles, or from curved surfaces.
 
@@ -24,19 +28,25 @@ Both the ([Vicuna-based](https://huggingface.co/THUDM/cogvlm-chat-hf)) and ([Lla
 
 Choose these by using one of these two CLI args:
 
-    --model THUDM/cogvlm-chat-hf
+`--model THUDM/cogvlm-chat-hf`
 
-    --model THUDM/cogvlm2-llama3-chat-19B
+`--model THUDM/cogvlm2-llama3-chat-19B`
 
-The script uses the Vicuna model (first) by default if no `--model` arg is specified.
+The script uses the CogVLM Vicuna model (first) by default if no `--model` arg is specified.
 
-## Llava update
+## Llava
 
-This script now (confusiningly) supports (Xtuner's Llava Llama3 8b v1.1)[https://huggingface.co/xtuner/llava-llama-3-8b-v1_1-transformers/tree/main].
+This script now (confusiningly) supports two Llava variants
 
-To use, add `--model "https://huggingface.co/xtuner/llava-llama-3-8b-v1_1-transformers/tree/main"` to your command line.
+(Xtuner's Llava Llama3 8b v1.1)[https://huggingface.co/xtuner/llava-llama-3-8b-v1_1-transformers/tree/main].
 
-When using Llava, the script will perform some clean-up operations to remove some less-than-useful language from the caption because the bad_words part of the Hugginface Transformers API is not supported by Llava.
+ `--model "xtuner/llava-llama-3-8b-v1_1-transformers"` 
+
+When using Xtuner Llava, the script will perform some clean-up operations to remove some less-than-useful language from the caption because the bad_words part of the Hugginface Transformers API is not supported by Llava.
+ 
+Vicuna-based Llava 1.6 7B is also supported and working
+
+ `--model "llava-hf/llava-v1.6-vicuna-7b-hf"`
 
 ## Basics
 
