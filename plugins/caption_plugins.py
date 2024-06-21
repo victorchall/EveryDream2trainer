@@ -231,9 +231,23 @@ class TitleAndTagsFromImageJson(PromptIdentityBase):
 class AllMetadataFromImageJson(PromptIdentityBase):
     def __init__(self, args:Namespace=None):
         super().__init__(key="from_image_json",
-                         description="Adds title and tags hint from metadata.json (in the samefolder as the image) to the prompt", 
+                         description="Adds a dump of [image_path].json to the prompt", 
                          fn=self._title_and_tags_from_metadata_json,
                          args=args)
+        self.exclude_keys = None
+        try:
+            self.exclude_keys = args.exclude_keys.split(",")
+        except:
+            pass
+        logging.info(f"Excluding keys: {self.exclude_keys}")
+        
+    def _filter_out_keys(self, metadata):
+        if self.exclude_keys:
+            for key in self.exclude_keys:
+                if key.casefold() in [x.casefold() for x in metadata.keys()]:
+                    del metadata[key]
+
+        return metadata
 
     def _title_and_tags_from_metadata_json(self, args:Namespace) -> str:
         prompt = args.prompt
@@ -247,6 +261,8 @@ class AllMetadataFromImageJson(PromptIdentityBase):
         if os.path.exists(candidate_json_path):
             with open(candidate_json_path, "r") as f:
                 metadata = json.load(f)
+        
+        metadata = self._filter_out_keys(metadata)
 
         hint = json.dumps(metadata)
 
