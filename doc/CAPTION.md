@@ -1,8 +1,4 @@
-# Captioning tools
-
-## CogVLM
-
-[CogVLM](https://github.com/THUDM/CogVLM) is, so far, the best model for generating synthetic captions.  The script for Cog is enhanced, so read the [CogVLM README](CAPTION_COG.md) for more information.
+# Older Captioning tools
 
 ## Kosmos-2
 
@@ -28,3 +24,9 @@ It's worth reading the documentation [here](https://huggingface.co/microsoft/kos
 `--save_entities_only` This will not attempt to write the caption into the .txt file at all.  **This is recommended with `--phrase_mode` for object detection**. Using this option forces `--save_entities`.
 
 There is a trivial/dumb UI for viewing the grounding in the scripts folder.  Launch it with `python scripts/grounding_ui.py` and it will open a window allowing you to select a directory, and it will display the images and bounding boxes. 
+
+## Blip, Blip2, and git
+
+Older script:
+
+`caption_blipgit.py`

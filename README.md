@@ -77,7 +77,7 @@ Behind the scenes look at how the trainer handles multiaspect and crop jitter
 
 [Validation](doc/VALIDATION.md) - Use a validation split on your data to see when you are overfitting and tune hyperparameters
 
-[Captioning](doc/CAPTION.md) - tools to generate synthetic captioning (recommend [Cog](doc/CAPTION_COG.md))
+[Captioning](doc/CAPTION_COG.md) - Llava, Cog, etc. to generate synthetic captioning (or [Old scripts for git/blip](doc/CAPTION.md))
 
 [Plugins](doc/PLUGINS.md) - (beta) write your own plugins to execute arbitrary code during training
 

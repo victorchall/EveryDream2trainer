@@ -1,6 +1,8 @@
 # Synthetic Captioning
 
-Script now works with the following (choose one):
+`python caption.py [args]`
+
+The main script now works with the following (choose one):
 
     --model "THUDM/cogvlm-chat-hf"
 
@@ -12,9 +14,13 @@ Script now works with the following (choose one):
 
     --model "llava-hf/llava-v1.6-vicuna-7b-hf"
 
-Support for all models in Windows is not gauranteed. Consider using the docker container (see [doc/SETUP.md](SETUP.md))
+Support for all models in Windows is not gauranteed. Consider using the Nvidia-Ubuntu-cuda docker container (see [doc/SETUP.md](SETUP.md)) or WSL2 if you are on windows and want best compatibility.
 
-## CogVLM
+The script uses the CogVLM Vicuna model (first) by default if no `--model` arg is specified.
+
+## Models Info
+
+### CogVLM
 
 CogVLM ([code](https://github.com/THUDM/CogVLM)) ([model](https://huggingface.co/THUDM/cogvlm-chat-hf)) is a very high quality, but slow model for captioning.
 
@@ -32,29 +38,37 @@ Choose these by using one of these two CLI args:
 
 `--model THUDM/cogvlm2-llama3-chat-19B`
 
-The script uses the CogVLM Vicuna model (first) by default if no `--model` arg is specified.
+### CogGLM Vision
 
-## Llava
+Yet another option from the THUDM team.  Specify it by using this CLI arg:
 
-This script now (confusiningly) supports two Llava variants
+`--model THUDM/glm-4v-9b`
 
-(Xtuner's Llava Llama3 8b v1.1)[https://huggingface.co/xtuner/llava-llama-3-8b-v1_1-transformers/tree/main].
+### Llava
+
+[Xtuner's Llava Llama3 8b v1.1](https://huggingface.co/xtuner/llava-llama-3-8b-v1_1-transformers/tree/main).
 
  `--model "xtuner/llava-llama-3-8b-v1_1-transformers"` 
 
 When using Xtuner Llava, the script will perform some clean-up operations to remove some less-than-useful language from the caption because the bad_words part of the Hugginface Transformers API is not supported by Llava.
  
-Vicuna-based Llava 1.6 7B is also supported and working
+Vicuna-based [Llava 1.6 7B](https://huggingface.co/llava-hf/llava-v1.6-vicuna-7b-hf) is also supported and working.
 
  `--model "llava-hf/llava-v1.6-vicuna-7b-hf"`
 
 ## Basics
 
-Run `python caption_cog.py --help` to get a list of options.
+Run `python caption.py --help` to get a list of options.
 
 You can get started just by providing the root path to where all your images are located.  The script will create .txt sidecar files for each image in the same directory, an run recursively through subdirectories.  The default prompt `Write a description.` is used when no prompt is provided.
 
+The simplest possible use:
+
 `python caption_cog.py --image_dir /mnt/mydata/training_data/`
+
+A command in Windows might look more like this:
+
+`python caption_cog.py --image_dir D:\training_data\`
 
 ### Prompt
 
@@ -64,7 +78,7 @@ Basic usage for prompt:
 
 `--prompt "Write a description that includes [...] "` 
 
-I've found the longer the prompt the less effective it can be, but it's worth experimenting with this or tailoring it to your data if feasible, to tease out specific details you want in your captoins.  See [Prompt modification plugins](#prompt-modifcation-plugins) for more capability.
+I've found the longer the prompt the less effective it can be, but it's worth experimenting with this or tailoring it to your data if feasible, to tease out specific details you want in your captoins.  See [Prompt modification plugins](#prompt-modification-plugins) for more capability.
 
 Some prompt ideas:
 
@@ -102,9 +116,11 @@ Another circumstance is to provide a starting phrase such a "An image showcasing
 
 `--no_overwrite` will skip captioning the image if a corresponding .txt file already exists, useful for resuming.
 
-## Prompt modifcation plugins 
+## Prompt modification plugins 
 
-The script has the ability to execute code to alter the prompt before it is sent to the model.  This is an abstract capability and allows users to write their own plugins that execute python code, opening any capability you want to program. 
+The script has the ability to execute arbitrary code to alter the prompt before it is sent to the model.  This allows users to write their own plugins that execute python code, opening any capability you want to program for *in-context learning* or *retrieval augmented techniques*.
+
+Injecting special information to the prompt greatly increases the quality and accuracy of the synthetic captions generated.  If you are scraping data, I would strongly encourage you try to collect any metadata you can about the images for use with this feature. 
 
 Enable a plugin with `--prompt_plugin "plugin_key"` such as `--prompt_plugin "from_leaf_directory"`
 
@@ -144,6 +160,9 @@ Write a description.
 
 * `title_and_tags_from_image_json` Same as above but looks for a file ending in `.json` with the same basename and in the same directory as the image (ex. `/myfolder/001.png`, `/myfolder/001.json`), enabling *per-image* metadata instead of a per-folder metadata file.
 
+* `from_image_json` inserts the entire contents of the json with the same base name as the image. It also supports an extra CLI arg `--exclude_keys` in which you can pass in a CSV of keys you want removed before the contents are added to the prompt.  ex.
+
+`--prompt_plugin from_image_json --exclude keys "date,uploaded by,file size"`
 
 ### Programming your own plugins.
 
