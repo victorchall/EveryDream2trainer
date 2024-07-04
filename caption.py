@@ -485,6 +485,9 @@ class CogVLMManager(BaseModelWrapper):
         return caption
 
 def get_model_wrapper(model_name: str):
+    if model_name is None:
+        logging.info("No model given, defaulting to CogVLM")
+        return CogVLMManager("thudm/cogvlm-chat-hf")
     match model_name.casefold():
         # case x if "moai" in x:
         #     #return MoaiManager(model_name)
