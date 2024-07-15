@@ -2,7 +2,7 @@
 
 **[Runpod Video Tutorial](https://www.youtube.com/watch?v=XAULP-4hsnA)**
 
-Click here -> [EveryDream2 template](https://runpod.io/console/deploy?template=cpl3xoknjz&ref=vfker49t) to load a fully configured Docker image.  Both Tensorboard and Jupyter lab are automatically started for you and you can simply click the links to connect.
+Click here -> [EveryDream2 template](https://runpod.io/console/deploy?template=cpl3xoknjz) to load a fully configured Docker image.  Both Tensorboard and Jupyter lab are automatically started for you and you can simply click the links to connect.
 
 **IMPORTANT**: This will only work on the Community Cloud, not the Secure Cloud!
 
