@@ -4,8 +4,6 @@
 
 Click here -> [EveryDream2 template](https://runpod.io/console/deploy?template=cpl3xoknjz?ref=oko38cd0) to load a fully configured Docker image.  Both Tensorboard and Jupyter lab are automatically started for you and you can simply click the links to connect.
 
-**IMPORTANT**: This will only work on the Community Cloud, not the Secure Cloud!
-
 If you wish to sign up for Runpod, please consider using this [referral link](https://runpod.io?ref=oko38cd0) to help support the project.  2% of your spend is given back in the form of credits back to the project and costs you nothing.
 
 You can also [enable full SSH support](https://www.runpod.io/blog/how-to-achieve-true-ssh-on-runpod) by setting the PUBLIC_KEY environment variable
