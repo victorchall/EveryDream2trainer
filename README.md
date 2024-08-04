@@ -4,7 +4,7 @@ Welcome to v2.0 of EveryDream trainer! Now with more Diffusers, faster, and even
 
 For the most up to date news and community discussions, please join us on Discord!
 
-[![Discord!](.github/discord_sm.png)](https://discord.gg/nQaxwrPT)
+[![Discord!](.github/discord_sm.png)](https://discord.gg/AkUbqnDgYu)
 
 If you find this tool useful, please consider subscribing to the project on Patreon or a one-time donation on Ko-fi.  Your donations keep this project alive as a free open source tool with ongoing enhancements.
 
