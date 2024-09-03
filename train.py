@@ -1001,6 +1001,7 @@ def main(args):
                         / snr
                 )
                 mse_loss_weights[snr == 0] = 1.0
+                mse_loss_weights = 1.0 - mse_loss_weights
                 loss_scale = loss_scale * mse_loss_weights.to(loss_scale.device)
 
             loss_mse = F.mse_loss(model_pred.float(), target.float(), reduction="none")
