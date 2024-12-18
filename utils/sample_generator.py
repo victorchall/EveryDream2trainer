@@ -272,15 +272,15 @@ class SampleGenerator:
                     prompt = prompts[prompt_idx]
                     clean_prompt = clean_filename(prompt)
 
-                    result.save(f"{self.log_folder}/samples/gs{global_step:05}-{sample_index}-{extra_info}{clean_prompt[:100]}.jpg", format="JPEG", quality=95, optimize=True, progressive=False)
-                    with open(f"{self.log_folder}/samples/gs{global_step:05}-{sample_index}-{extra_info}{clean_prompt[:100]}.txt", "w", encoding='utf-8') as f:
+                    result.save(f"{self.log_folder}/samples/gs{global_step:05}-{sample_index:03}-{extra_info}{clean_prompt[:100]}.jpg", format="JPEG", quality=95, optimize=True, progressive=False)
+                    with open(f"{self.log_folder}/samples/gs{global_step:05}-{sample_index:03}-{extra_info}{clean_prompt[:100]}.txt", "w", encoding='utf-8') as f:
                         f.write(str(batch[prompt_idx]))
 
                     tfimage = transforms.ToTensor()(result)
                     if batch[prompt_idx].wants_random_caption:
-                        self.log_writer.add_image(tag=f"sample_{sample_index}{extra_info}", img_tensor=tfimage, global_step=global_step)
+                        self.log_writer.add_image(tag=f"sample_{sample_index:03}{extra_info}", img_tensor=tfimage, global_step=global_step)
                     else:
-                        self.log_writer.add_image(tag=f"sample_{sample_index}_{extra_info}{clean_prompt[:100]}", img_tensor=tfimage, global_step=global_step)
+                        self.log_writer.add_image(tag=f"sample_{sample_index:03}_{extra_info}{clean_prompt[:100]}", img_tensor=tfimage, global_step=global_step)
                     sample_index += 1
 
                     del result
