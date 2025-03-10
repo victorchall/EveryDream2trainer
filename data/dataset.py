@@ -43,6 +43,7 @@ class Tag:
 @define
 class ImageConfig:
     # Captions
+    image_path: str = None
     main_prompts: dict[str, None] = field(factory=dict, converter=safe_set)
     rating: float = None
     max_caption_length: int = None
@@ -77,6 +78,7 @@ class ImageConfig:
     def from_dict(cls, data: dict):
         # Parse standard yaml tag file (with options)
         parsed_cfg = ImageConfig(
+            image_path = data.get("image"),
             main_prompts=safe_set(data.get("main_prompt")), 
             rating=data.get("rating"), 
             max_caption_length=data.get("max_caption_length"), 
@@ -223,13 +225,13 @@ class Dataset:
         """
         image_configs = {}
         with open(json_path, encoding='utf-8', mode='r') as stream:
-            for data in json.load(stream):
+            for img_no, data in enumerate(json.load(stream)):
                 img = data.get("image")
                 cfg = Dataset.__ensure_caption(ImageConfig.parse(data), img)
                 if not img:
                     logging.warning(f" *** Error parsing json image entry in {json_path}: {data}")
                     continue
-                image_configs[img] = cfg
+                image_configs[img_no] = cfg
         return Dataset(image_configs)    
     
     def image_train_items(self, aspects):
@@ -239,10 +241,10 @@ class Dataset:
             #print(f" ********* shuffle: {config.shuffle_tags}")
 
             if len(config.main_prompts) > 1:
-                logging.warning(f" *** Found multiple multiple main_prompts for image {image}, but only one will be applied: {config.main_prompts}")
+                logging.warning(f" *** Found multiple multiple main_prompts for image {config.image_path}, but only one will be applied: {config.main_prompts}")
 
             if len(config.main_prompts) < 1:
-                logging.warning(f" *** No main_prompts for image {image}")
+                logging.warning(f" *** No main_prompts for image {config.image_path}")
 
             tags = []
             tag_weights = []
@@ -264,7 +266,7 @@ class Dataset:
                     image=None,
                     caption=caption,
                     aspects=aspects,
-                    pathname=os.path.abspath(image),
+                    pathname=os.path.abspath(config.image_path) if config.image_path else os.path.abspath(image),
                     flip_p=config.flip_p or 0.0,
                     multiplier=config.multiply or 1.0,
                     cond_dropout=config.cond_dropout,
@@ -274,6 +276,6 @@ class Dataset:
                 )
                 items.append(item)
             except Exception as e:
-                logging.error(f" *** Error preloading image or caption for: {image}, error: {e}")
+                logging.error(f" *** Error preloading image or caption for: {config.image_path}, error: {e}")
                 raise e
         return items
