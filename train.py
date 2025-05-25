@@ -676,6 +676,12 @@ def main(args):
 
         tokenizer = CLIPTokenizer.from_pretrained(model_root_folder, subfolder="tokenizer", use_fast=False)
 
+        if args.rectified_flow:
+            if noise_scheduler.config.prediction_type not in ["v_prediction", "v-prediction"]:
+                logging.error(f"{Fore.LIGHTRED_EX}Rectified Flow requires a model trained with velocity prediction (v_prediction or v-prediction). "
+                              f"Current model's noise_scheduler has prediction_type: {noise_scheduler.config.prediction_type}{Style.RESET_ALL}")
+                exit(1)
+
     except Exception as e:
         traceback.print_exc()
         logging.error(" * Failed to load checkpoint *")
@@ -973,19 +979,36 @@ def main(args):
         perturbation_delta =  torch.randn_like(encoder_hidden_states) * (perturbation_deviation)
         encoder_hidden_states = encoder_hidden_states + perturbation_delta
 
-        noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
+        if args.rectified_flow:
+            # For Rectified Flow:
+            # Input to UNet is x_t_rectified = t_normalized * latents + (1 - t_normalized) * noise
+            # Target is latents - noise (which is x_1 - x_0)
+            # timesteps (integer) are still passed to UNet for conditioning
+            t_normalized = timesteps.float().view(-1, 1, 1, 1) / noise_scheduler.config.num_train_timesteps
+            x_t_rectified = t_normalized * latents + (1 - t_normalized) * noise
+            
+            target = latents - noise
+            del cuda_caption # noise and latents are used in target
 
-        if noise_scheduler.config.prediction_type == "epsilon":
-            target = noise
-        elif noise_scheduler.config.prediction_type in ["v_prediction", "v-prediction"]:
-            target = noise_scheduler.get_velocity(latents, noise, timesteps)
+            with autocast(enabled=args.amp):
+                model_pred = unet(x_t_rectified, timesteps, encoder_hidden_states).sample
+            del x_t_rectified
         else:
-            raise ValueError(f"Unknown prediction type {noise_scheduler.config.prediction_type}")
-        del noise, latents, cuda_caption
+            # Original logic
+            noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
 
-        with autocast(enabled=args.amp):
-            #print(f"types: {type(noisy_latents)} {type(timesteps)} {type(encoder_hidden_states)}")
-            model_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
+            if noise_scheduler.config.prediction_type == "epsilon":
+                target = noise
+            elif noise_scheduler.config.prediction_type in ["v_prediction", "v-prediction"]:
+                target = noise_scheduler.get_velocity(latents, noise, timesteps)
+            else:
+                raise ValueError(f"Unknown prediction type {noise_scheduler.config.prediction_type}")
+            del noise, latents, cuda_caption
+    
+            with autocast(enabled=args.amp):
+                #print(f"types: {type(noisy_latents)} {type(timesteps)} {type(encoder_hidden_states)}")
+                model_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
+            del noisy_latents
 
         if return_loss:
             if loss_scale is None:
@@ -1132,9 +1155,161 @@ def main(args):
         _, batch = next(enumerate(train_dataloader))
         generate_samples(global_step=0, batch=batch)
 
+    # <<< REFLOW Loop Start >>>
+    if args.rectified_flow and args.reflow_steps > 0:
+        logging.info(f"{Fore.CYAN}Starting Rectified Flow process for {args.reflow_steps} iterations.{Style.RESET_ALL}")
+
+        # Ensure original dataloader is preserved if train_dataloader is reassigned
+        original_train_dataloader = train_dataloader 
+
+        for reflow_iter in range(args.reflow_steps):
+            logging.info(f"{Fore.CYAN}Reflow Iteration {reflow_iter + 1}/{args.reflow_steps} - Phase 1: Data Generation{Style.RESET_ALL}")
+            
+            unet.eval()
+            if not args.disable_textenc_training:
+                text_encoder.eval()
+            
+            reflow_data_cache = []
+            num_simulation_steps = args.reflow_sample_steps if args.reflow_sample_steps > 0 else args.sample_steps
+            if num_simulation_steps == 0 : # Default to a reasonable number if sample_steps is also 0
+                num_simulation_steps = 50 
+            logging.info(f"Using {num_simulation_steps} simulation steps for data generation.")
+
+            temp_reflow_pbar = tqdm(enumerate(original_train_dataloader), total=args.reflow_gen_batches, desc=f"Reflow Data Gen (Iter {reflow_iter+1})", leave=False, dynamic_ncols=True)
+            for batch_idx, batch in temp_reflow_pbar:
+                if batch_idx >= args.reflow_gen_batches:
+                    break
+
+                current_batch_size = batch["image"].shape[0]
+                pixel_values = batch["image"].to(device, memory_format=torch.contiguous_format)
+                tokens = batch["tokens"].to(device)
+
+                with torch.no_grad():
+                    latents_x1_original = vae.encode(pixel_values).latent_dist.sample() * 0.18215
+                    del pixel_values
+                    noise_x0 = torch.randn_like(latents_x1_original)
+
+                    encoder_hidden_states_x1 = text_encoder(tokens, output_hidden_states=True)
+                    if args.clip_skip > 0:
+                        encoder_hidden_states_x1 = text_encoder.text_model.final_layer_norm(encoder_hidden_states_x1.hidden_states[-args.clip_skip])
+                    else:
+                        encoder_hidden_states_x1 = encoder_hidden_states_x1.last_hidden_state
+                    
+                    # Simulate ODE: current_x starts at noise_x0 and moves towards a new x1
+                    current_x = noise_x0.clone()
+                    dt = 1.0 / num_simulation_steps
+
+                    sim_pbar = tqdm(range(num_simulation_steps), desc="ODE Sim", leave=False, dynamic_ncols=True)
+                    for t_idx in sim_pbar:
+                        t_val_normalized = t_idx / num_simulation_steps  # t from 0 to (N-1)/N
+                        # Ensure timesteps are correctly scaled for the scheduler's range
+                        timesteps_int = (t_val_normalized * (noise_scheduler.config.num_train_timesteps -1) ).long().clamp(0, noise_scheduler.config.num_train_timesteps - 1) # Map to [0, num_train_timesteps-1]
+                        timesteps_int_batch = timesteps_int.repeat(current_x.shape[0]).to(device)
+                        
+                        with autocast(enabled=args.amp):
+                            predicted_velocity = unet(current_x, timesteps_int_batch, encoder_hidden_states_x1).sample
+                        
+                        current_x += predicted_velocity * dt
+                    
+                    new_x_1_generated = current_x.detach()
+                
+                reflow_data_cache.append({
+                    "x0": noise_x0.cpu(), 
+                    "new_x1": new_x_1_generated.cpu(), 
+                    "tokens": batch["tokens"].cpu() # Store original tokens
+                })
+                temp_reflow_pbar.set_postfix({"cache_size": len(reflow_data_cache)})
+
+            del temp_reflow_pbar #, sim_pbar # sim_pbar is already out of scope
+            gc.collect()
+            torch.cuda.empty_cache()
+
+            logging.info(f"{Fore.CYAN}Reflow Iteration {reflow_iter + 1}/{args.reflow_steps} - Phase 2: Training on Generated Data ({len(reflow_data_cache)} items){Style.RESET_ALL}")
+            
+            unet.train()
+            if not args.disable_textenc_training:
+                text_encoder.train()
+
+            current_global_step_for_reflow_opt = global_step # Capture main global_step before this phase
+            micro_batch_idx_reflow = 0
+
+            for epoch_num in range(args.reflow_train_epochs):
+                logging.info(f"Reflow Training Epoch {epoch_num + 1}/{args.reflow_train_epochs}")
+                random.shuffle(reflow_data_cache)
+                
+                reflow_train_pbar = tqdm(range(0, len(reflow_data_cache), args.batch_size), desc=f"Reflow Train Ep {epoch_num+1}", leave=False, dynamic_ncols=True)
+                for batch_start_idx in reflow_train_pbar:
+                    batch_items = reflow_data_cache[batch_start_idx : batch_start_idx + args.batch_size]
+                    if not batch_items: continue
+
+                    # Collate batch
+                    batch_x0_list = [item["x0"] for item in batch_items]
+                    batch_new_x1_list = [item["new_x1"] for item in batch_items]
+                    batch_tokens_list = [item["tokens"] for item in batch_items]
+
+                    # Assuming tokens are already padded and are of same length from original dataloader
+                    # If not, collate_fn would be needed here. For now, stack if uniform.
+                    try:
+                        batch_x0 = torch.stack(batch_x0_list).to(device)
+                        batch_new_x1 = torch.stack(batch_new_x1_list).to(device)
+                        batch_tokens = torch.stack(batch_tokens_list).to(device)
+                    except RuntimeError as e:
+                        # This might happen if tensors in a batch are not of the same size (e.g. tokens if not padded globally)
+                        # For simplicity, skipping non-uniform batches in reflow for now.
+                        # A proper solution would involve a collate_fn that handles padding.
+                        logging.warning(f"Skipping reflow batch due to tensor stacking error (likely non-uniform token lengths): {e}")
+                        continue
+                    
+                    actual_batch_size = batch_x0.shape[0]
+
+                    with autocast(enabled=args.amp):
+                        enc_hidden_states_reflow = text_encoder(batch_tokens, output_hidden_states=True)
+                        if args.clip_skip > 0:
+                            enc_hidden_states_reflow = text_encoder.text_model.final_layer_norm(enc_hidden_states_reflow.hidden_states[-args.clip_skip])
+                        else:
+                            enc_hidden_states_reflow = enc_hidden_states_reflow.last_hidden_state
+
+                        timesteps_reflow = torch.randint(args.timestep_start, args.timestep_end, (actual_batch_size,), device=device).long()
+                        t_norm_reflow = timesteps_reflow.float().view(-1, 1, 1, 1) / noise_scheduler.config.num_train_timesteps
+                        
+                        xt_input_reflow = t_norm_reflow * batch_new_x1 + (1 - t_norm_reflow) * batch_x0
+                        
+                        model_pred_reflow = unet(xt_input_reflow, timesteps_reflow, enc_hidden_states_reflow).sample
+                        target_reflow = batch_new_x1 - batch_x0
+                    
+                    loss = F.mse_loss(model_pred_reflow.float(), target_reflow.float(), reduction="mean")
+                    
+                    # The 'step' argument for ed_optimizer.step is the local step within an epoch for schedulers like OneCycleLR
+                    # 'epoch_len' is from the main training loop's dataloader.
+                    # We simulate this by using micro_batch_idx_reflow % epoch_len.
+                    optimizer_step_arg = (micro_batch_idx_reflow // args.grad_accum) % epoch_len
+
+                    ed_optimizer.step(loss, step=optimizer_step_arg, global_step=current_global_step_for_reflow_opt)
+                    
+                    reflow_train_pbar.set_postfix({"loss": loss.item()})
+                    micro_batch_idx_reflow += 1 # This counts optimizer steps if grad_accum is 1, else sub-steps
+                    
+                    if micro_batch_idx_reflow % args.grad_accum == 0: # grad_accum is from main args
+                         current_global_step_for_reflow_opt +=1
+
+
+            global_step = current_global_step_for_reflow_opt # Update main global_step
+            
+            del reflow_data_cache, batch_x0, batch_new_x1, batch_tokens, enc_hidden_states_reflow, model_pred_reflow, target_reflow, loss
+            gc.collect()
+            torch.cuda.empty_cache()
+            logging.info(f"{Fore.CYAN}Reflow Iteration {reflow_iter + 1} completed. Global step now: {global_step}{Style.RESET_ALL}")
+
+        logging.info(f"{Fore.CYAN}All {args.reflow_steps} Rectified Flow iterations completed.{Style.RESET_ALL}")
+        # Restore original models to train mode for the main training loop
+        unet.train()
+        if not args.disable_textenc_training:
+            text_encoder.train()
+    # <<< REFLOW Loop End >>>
+
     def make_current_ed_state() -> EveryDreamTrainingState:
         return EveryDreamTrainingState(optimizer=ed_optimizer,
-                                       train_batch=train_batch,
+                                       train_batch=train_batch, # This is the original train_batch object
                                        unet=unet,
                                        text_encoder=text_encoder,
                                        tokenizer=tokenizer,
@@ -1419,6 +1594,11 @@ if __name__ == "__main__":
     argparser.add_argument("--ema_sample_ema_model", action="store_true", default=False, help="Will show samples from EMA model. May be slower when using ema cpu offloading. Can be used with: --ema_sample_nonema_model")
     argparser.add_argument("--ema_resume_model", type=str, default=None, help="The EMA decay checkpoint to resume from for EMA decay, either a local .ckpt file, a converted Diffusers format folder, or a Huggingface.co repo id such as stabilityai/stable-diffusion-2-1-ema-decay")
     argparser.add_argument("--pyramid_noise_discount", type=float, default=None, help="Enables pyramid noise and use specified discount factor for it")
+    argparser.add_argument("--rectified_flow", action="store_true", default=False, help="Enable Rectified Flow (def: False)")
+    argparser.add_argument("--reflow_steps", type=int, default=0, help="Number of reflow iterations (def: 0)")
+    argparser.add_argument("--reflow_sample_steps", type=int, default=0, help="Number of simulation steps for generating data during reflow. If 0, uses args.sample_steps (def: 0)")
+    argparser.add_argument("--reflow_train_epochs", type=int, default=1, help="Number of epochs to train on generated data per reflow iteration (def: 1)")
+    argparser.add_argument("--reflow_gen_batches", type=int, default=1, help="Number of batches from the original dataloader to use for generating the reflow dataset (def: 1)")
 
     # load CLI args to overwrite existing config args
     args = argparser.parse_args(args=argv, namespace=args)

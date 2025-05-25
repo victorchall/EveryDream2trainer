@@ -84,3 +84,5 @@ Behind the scenes look at how the trainer handles multiaspect and crop jitter
 [Contributing](doc/CONTRIBUTING.md)
 
 [Citations and references](doc/CITATIONS.md)
+
+[Rectified Flow and Reflow](doc/ADVANCED_TWEAKING.md#rectified-flow-and-reflow) - Advanced training technique for potentially improved sample quality and faster inference.

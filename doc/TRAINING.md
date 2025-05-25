@@ -80,3 +80,55 @@ Or use relative pathing:
 ```--resume_ckpt "logs\myproj20221213-161620\ckpts\myproj-ep22-gs01099" ^```
 
 You should point to the folder in the logs per above if you want to resume rather than running a conversion back on a 2.0GB or 2.5GB pruned file if possible. 
+
+## Rectified Flow and Reflow Training
+
+Rectified Flow is an advanced training technique that aims to straighten the generation trajectory of diffusion models. This can potentially lead to improved sample quality and allow for inference in fewer steps. The "Reflow" mechanism is an iterative process that further refines this flow.
+
+**Important:** Rectified Flow training requires a base model that was originally trained with **velocity prediction** (often referred to as "v-prediction" models, common in Stable Diffusion 2.x series). Using a model not trained with v-prediction will likely lead to poor results. The script will check for this if `--rectified_flow` is enabled.
+
+### Command-Line Arguments:
+
+*   `--rectified_flow`: (boolean, default: `False`)
+    Enable Rectified Flow training mode. The model will be trained to predict the direct path from noise to image (velocity).
+    *Requires a v-prediction base model.*
+
+*   `--reflow_steps <int>`: (integer, default: `0`)
+    Number of Reflow iterations to perform. If `0`, only the initial Rectified Flow training is done (if `--rectified_flow` is set). Each Reflow step involves:
+    1.  Generating a new dataset by simulating the current model's flow.
+    2.  Retraining the model on this new dataset to further straighten the flow.
+    This is an optional enhancement that can iteratively improve the model's generative path.
+
+*   `--reflow_sample_steps <int>`: (integer, default: `0`)
+    Number of simulation steps used when generating data during each Reflow iteration. If `0`, the value of `--sample_steps` (used for regular sample generation during training) will be used. If `--sample_steps` is also 0, a default of 50 steps is used.
+
+*   `--reflow_train_epochs <int>`: (integer, default: `1`)
+    Number of epochs to train the model on the newly generated dataset during each Reflow iteration.
+
+*   `--reflow_gen_batches <int>`: (integer, default: `1`)
+    Number of batches to draw from the original dataset to generate the data for a single Reflow iteration. The total number of generated samples for a reflow iteration will be `reflow_gen_batches * batch_size`.
+
+### Examples:
+
+**Basic Rectified Flow training (no Reflow iterations):**
+Ensure `resume_ckpt` points to a v-prediction base model.
+
+```bash
+python train.py --config cfgs/train.json ^
+--rectified_flow ^
+--resume_ckpt path/to/your_v_prediction_model.safetensors
+```
+(Replace `cfgs/train.json` with your actual config file if different)
+
+**Rectified Flow training with Reflow iterations:**
+This example performs 2 Reflow iterations. In each iteration, it uses 10 batches from the original dataset to generate new data and then trains on that new data for 1 epoch.
+
+```bash
+python train.py --config cfgs/train.json ^
+--rectified_flow ^
+--reflow_steps 2 ^
+--reflow_gen_batches 10 ^
+--reflow_train_epochs 1 ^
+--resume_ckpt path/to/your_v_prediction_model.safetensors
+```
+(Replace `cfgs/train.json` with your actual config file if different)
