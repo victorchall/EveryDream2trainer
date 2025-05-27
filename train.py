@@ -44,8 +44,8 @@ from diffusers import StableDiffusionPipeline, AutoencoderKL, UNet2DConditionMod
     DPMSolverMultistepScheduler, PNDMScheduler
 #from diffusers.models import AttentionBlock
 from diffusers.optimization import get_scheduler
-from diffusers.utils.import_utils import is_xformers_available
-from transformers import CLIPTextModel, CLIPTokenizer
+#from diffusers.utils.import_utils import is_xformers_available # Moved to model_utils
+from transformers import CLIPTextModel, CLIPTokenizer # CLIPTextModel is used here, CLIPTokenizer also.
 #from accelerate import Accelerator
 from accelerate.utils import set_seed
 
@@ -57,12 +57,17 @@ from data.data_loader import DataLoaderMultiAspect
 from data.every_dream import EveryDreamBatch, build_torch_dataloader
 from data.every_dream_validation import EveryDreamValidator
 from data.image_train_item import ImageTrainItem, DEFAULT_BATCH_ID
-from utils.huggingface_downloader import try_download_model_from_hf
-from utils.convert_diff_to_ckpt import convert as converter
+from utils.convert_diff_to_ckpt import convert as converter # Still used in save_model
 from utils.isolate_rng import isolate_rng
 from utils.check_git import check_git
 from optimizer.optimizers import EveryDreamOptimizer
 from copy import deepcopy
+from utils.model_utils import (
+    load_models, load_ema_models, release_memory, 
+    get_training_noise_scheduler, get_inference_scheduler, load_tokenizer,
+    setup_model_for_training, create_ema_model_if_needed
+)
+
 
 if torch.cuda.is_available():
     from utils.gpu import GPU
@@ -73,48 +78,48 @@ from utils.sample_generator import SampleGenerator
 _SIGTERM_EXIT_CODE = 130
 _VERY_LARGE_NUMBER = 1e9
 
-def get_training_noise_scheduler(train_sampler: str, model_root_folder, trained_betas=None):
-    noise_scheduler = None
-    if train_sampler.lower() == "pndm":
-        logging.info(f" * Using PNDM noise scheduler for training: {train_sampler}")
-        noise_scheduler = PNDMScheduler.from_pretrained(model_root_folder, subfolder="scheduler", trained_betas=trained_betas)
-    elif train_sampler.lower() == "ddim":
-        logging.info(f" * Using DDIM noise scheduler for training: {train_sampler}")
-        noise_scheduler = DDIMScheduler.from_pretrained(model_root_folder, subfolder="scheduler", trained_betas=trained_betas)
-    else:
-        logging.info(f" * Using default (DDPM) noise scheduler for training: {train_sampler}")
-        noise_scheduler = DDPMScheduler.from_pretrained(model_root_folder, subfolder="scheduler", trained_betas=trained_betas)
-    return noise_scheduler
+# def get_training_noise_scheduler(train_sampler: str, model_root_folder, trained_betas=None): # MOVED to model_utils.py
+#     noise_scheduler = None
+#     if train_sampler.lower() == "pndm":
+#         logging.info(f" * Using PNDM noise scheduler for training: {train_sampler}")
+#         noise_scheduler = PNDMScheduler.from_pretrained(model_root_folder, subfolder="scheduler", trained_betas=trained_betas)
+#     elif train_sampler.lower() == "ddim":
+#         logging.info(f" * Using DDIM noise scheduler for training: {train_sampler}")
+#         noise_scheduler = DDIMScheduler.from_pretrained(model_root_folder, subfolder="scheduler", trained_betas=trained_betas)
+#     else:
+#         logging.info(f" * Using default (DDPM) noise scheduler for training: {train_sampler}")
+#         noise_scheduler = DDPMScheduler.from_pretrained(model_root_folder, subfolder="scheduler", trained_betas=trained_betas)
+#     return noise_scheduler
 
-def get_hf_ckpt_cache_path(ckpt_path):
-    return os.path.join("ckpt_cache", os.path.basename(ckpt_path))
+# def get_hf_ckpt_cache_path(ckpt_path): # MOVED to model_utils.py
+#     return os.path.join("ckpt_cache", os.path.basename(ckpt_path))
 
-def convert_to_hf(ckpt_path):
+# def convert_to_hf(ckpt_path): # MOVED to model_utils.py
 
-    hf_cache = get_hf_ckpt_cache_path(ckpt_path)
-    from utils.unet_utils import get_attn_yaml
+#     hf_cache = get_hf_ckpt_cache_path(ckpt_path)
+#     from utils.unet_utils import get_attn_yaml
 
-    if os.path.isfile(ckpt_path):
-        if not os.path.exists(hf_cache):
-            os.makedirs(hf_cache)
-            logging.info(f"Converting {ckpt_path} to Diffusers format")
-            try:
-                import utils.convert_original_stable_diffusion_to_diffusers as convert
-                convert.convert(ckpt_path, f"ckpt_cache/{ckpt_path}")
-            except:
-                logging.info("Please manually convert the checkpoint to Diffusers format (one time setup), see readme.")
-                exit()
-        else:
-            logging.info(f"Found cached checkpoint at {hf_cache}")
+#     if os.path.isfile(ckpt_path):
+#         if not os.path.exists(hf_cache):
+#             os.makedirs(hf_cache)
+#             logging.info(f"Converting {ckpt_path} to Diffusers format")
+#             try:
+#                 import utils.convert_original_stable_diffusion_to_diffusers as convert
+#                 convert.convert(ckpt_path, f"ckpt_cache/{ckpt_path}")
+#             except:
+#                 logging.info("Please manually convert the checkpoint to Diffusers format (one time setup), see readme.")
+#                 exit()
+#         else:
+#             logging.info(f"Found cached checkpoint at {hf_cache}")
 
-        is_sd1attn, yaml = get_attn_yaml(hf_cache)
-        return hf_cache, is_sd1attn, yaml
-    elif os.path.isdir(hf_cache):
-        is_sd1attn, yaml = get_attn_yaml(hf_cache)
-        return hf_cache, is_sd1attn, yaml
-    else:
-        is_sd1attn, yaml = get_attn_yaml(ckpt_path)
-        return ckpt_path, is_sd1attn, yaml
+#         is_sd1attn, yaml = get_attn_yaml(hf_cache)
+#         return hf_cache, is_sd1attn, yaml
+#     elif os.path.isdir(hf_cache): # This was likely meant to be ckpt_path if it's already a diffusers dir
+#         is_sd1attn, yaml = get_attn_yaml(hf_cache) # Or ckpt_path
+#         return hf_cache, is_sd1attn, yaml # Or ckpt_path
+#     else:
+#         is_sd1attn, yaml = get_attn_yaml(ckpt_path)
+#         return ckpt_path, is_sd1attn, yaml
 
 class EveryDreamTrainingState:
     def __init__(self,
@@ -608,128 +613,79 @@ def main(args):
     optimizer_state_path = None
 
     try:
-        # check for a local file
-        hf_cache_path = get_hf_ckpt_cache_path(args.resume_ckpt)
-        if os.path.exists(hf_cache_path) or os.path.exists(args.resume_ckpt):
-            model_root_folder, is_sd1attn, yaml = convert_to_hf(args.resume_ckpt)
-            text_encoder = CLIPTextModel.from_pretrained(model_root_folder, subfolder="text_encoder")
-            vae = AutoencoderKL.from_pretrained(model_root_folder, subfolder="vae")
-            unet = UNet2DConditionModel.from_pretrained(model_root_folder, subfolder="unet")
-        else:
-            # try to download from HF using resume_ckpt as a repo id
-            downloaded = try_download_model_from_hf(repo_id=args.resume_ckpt)
-            if downloaded is None:
-                raise ValueError(f"No local file/folder for {args.resume_ckpt}, and no matching huggingface.co repo could be downloaded")
-            pipe, model_root_folder, is_sd1attn, yaml = downloaded
-            text_encoder = pipe.text_encoder
-            vae = pipe.vae
-            unet = pipe.unet
-            del pipe
+        # === Model Loading ===
+        text_encoder, vae, unet, model_root_folder, is_sd1attn, yaml_path = load_models(
+            resume_ckpt=args.resume_ckpt,
+            amp_enabled=args.amp, # True if not args.disable_amp
+            gradient_checkpointing=args.gradient_checkpointing,
+            attn_type=args.attn_type,
+            # unet_in_bf16=False # Add if you plan to support bf16 for unet loading
+        )
+        # yaml used to be the variable name for yaml_path
+        yaml = yaml_path
 
+        text_encoder_ema = None
+        unet_ema = None
         if use_ema_dacay_training and args.ema_resume_model:
-            print(f"Loading EMA model: {args.ema_resume_model}")
-            ema_model_loaded_from_file=True
-            hf_cache_path = get_hf_ckpt_cache_path(args.ema_resume_model)
-
-            if os.path.exists(hf_cache_path) or os.path.exists(args.ema_resume_model):
-                ema_model_root_folder, ema_is_sd1attn, ema_yaml = convert_to_hf(args.resume_ckpt)
-                text_encoder_ema = CLIPTextModel.from_pretrained(ema_model_root_folder, subfolder="text_encoder")
-                unet_ema = UNet2DConditionModel.from_pretrained(ema_model_root_folder, subfolder="unet")
-
-            else:
-                # try to download from HF using ema_resume_model as a repo id
-                ema_downloaded = try_download_model_from_hf(repo_id=args.ema_resume_model)
-                if ema_downloaded is None:
-                    raise ValueError(
-                        f"No local file/folder for ema_resume_model {args.ema_resume_model}, and no matching huggingface.co repo could be downloaded")
-                ema_pipe, ema_model_root_folder, ema_is_sd1attn, ema_yaml = ema_downloaded
-                text_encoder_ema = ema_pipe.text_encoder
-                unet_ema = ema_pipe.unet
-                del ema_pipe
-
-            # Make sure EMA model is on proper device, and memory released if moved
-            unet_ema_current_device = next(unet_ema.parameters()).device
-            if ema_device != unet_ema_current_device:
-                unet_ema_on_wrong_device = unet_ema
-                unet_ema = unet_ema.to(ema_device)
-                release_memory(unet_ema_on_wrong_device, unet_ema_current_device)
-
-            # Make sure EMA model is on proper device, and memory released if moved
-            text_encoder_ema_current_device = next(text_encoder_ema.parameters()).device
-            if ema_device != text_encoder_ema_current_device:
-                text_encoder_ema_on_wrong_device = text_encoder_ema
-                text_encoder_ema = text_encoder_ema.to(ema_device)
-                release_memory(text_encoder_ema_on_wrong_device, text_encoder_ema_current_device)
-
-
+            ema_model_loaded_from_file = True
+            text_encoder_ema, unet_ema = load_ema_models(
+                ema_resume_model_path=args.ema_resume_model,
+                device=ema_device # The device EMA models should be on
+            )
+        
+        # === Scheduler Loading ===
+        # Determine trained_betas for schedulers if zero terminal SNR is enabled
+        trained_betas_for_scheduler = None
         if args.enable_zero_terminal_snr:
-            # Use zero terminal SNR
-            from utils.unet_utils import enforce_zero_terminal_snr
-            temp_scheduler = DDIMScheduler.from_pretrained(model_root_folder, subfolder="scheduler")
-            trained_betas = enforce_zero_terminal_snr(temp_scheduler.betas).numpy().tolist()
-            inference_scheduler = DDIMScheduler.from_pretrained(model_root_folder, subfolder="scheduler", trained_betas=trained_betas)
-            noise_scheduler = DDPMScheduler.from_pretrained(model_root_folder, subfolder="scheduler", trained_betas=trained_betas)
-            noise_scheduler = get_training_noise_scheduler(args.train_sampler, model_root_folder, trained_betas=trained_betas)
-        else:
-            inference_scheduler = DDIMScheduler.from_pretrained(model_root_folder, subfolder="scheduler")
-            noise_scheduler = get_training_noise_scheduler(args.train_sampler, model_root_folder)
+            from utils.unet_utils import enforce_zero_terminal_snr # Keep this specific import if only used here
+            temp_scheduler_for_betas = DDIMScheduler.from_pretrained(model_root_folder, subfolder="scheduler")
+            trained_betas_for_scheduler = enforce_zero_terminal_snr(temp_scheduler_for_betas.betas).numpy().tolist()
 
-        tokenizer = CLIPTokenizer.from_pretrained(model_root_folder, subfolder="tokenizer", use_fast=False)
+        inference_scheduler = get_inference_scheduler(model_root_folder, args.enable_zero_terminal_snr)
+        noise_scheduler = get_training_noise_scheduler(args.train_sampler, model_root_folder, trained_betas=trained_betas_for_scheduler)
+        
+        # === Tokenizer Loading ===
+        tokenizer = load_tokenizer(model_root_folder)
 
     except Exception as e:
         traceback.print_exc()
         logging.error(" * Failed to load checkpoint *")
         raise
 
-    if args.gradient_checkpointing:
-        unet.enable_gradient_checkpointing()
-        text_encoder.gradient_checkpointing_enable()
-
-    if args.attn_type == "xformers":
-        if (args.amp and is_sd1attn) or (not is_sd1attn):
-            try:
-                unet.enable_xformers_memory_efficient_attention()
-                logging.info("Enabled xformers")
-            except Exception as ex:
-                logging.warning("failed to load xformers, using default SDP attention instead")
-                pass
-        elif (args.disable_amp and is_sd1attn):
-            logging.info("AMP is disabled but model is SD1.X, xformers is incompatible so using default attention")
-    elif args.attn_type == "slice":
-        unet.set_attention_slice("auto")
-    else:
-        logging.info("* Using SDP attention *")
-
-    vae = vae.to(device, dtype=torch.float16 if args.amp else torch.float32)
-    unet = unet.to(device, dtype=torch.float32)
-    if args.disable_textenc_training and args.amp:
-        text_encoder = text_encoder.to(device, dtype=torch.float16)
-    else:
-        text_encoder = text_encoder.to(device, dtype=torch.float32)
-
-
+    # === Model Setup for Training (device placement, train/eval mode, dtypes) ===
+    unet, text_encoder, vae = setup_model_for_training(
+        unet=unet,
+        text_encoder=text_encoder,
+        vae=vae,
+        amp_enabled=args.amp, # True if not args.disable_amp
+        device_str=str(device), # Convert torch.device to string
+        disable_textenc_training=args.disable_textenc_training,
+        disable_unet_training=args.disable_unet_training,
+        gradient_checkpointing=args.gradient_checkpointing
+    )
+    
+    # === EMA Model Creation (if not loaded from file) and Setup ===
     if use_ema_dacay_training:
+        # Create EMA models if they weren't loaded from a checkpoint
         if not ema_model_loaded_from_file:
-            logging.info(f"EMA decay enabled, creating EMA model.")
-
-            with torch.no_grad():
-                if args.ema_device == device:
-                    unet_ema = deepcopy(unet)
-                    text_encoder_ema = deepcopy(text_encoder)
-                else:
-                    unet_ema_first = deepcopy(unet)
-                    text_encoder_ema_first = deepcopy(text_encoder)
-                    unet_ema = unet_ema_first.to(ema_device, dtype=unet.dtype)
-                    text_encoder_ema = text_encoder_ema_first.to(ema_device, dtype=text_encoder.dtype)
-                    del unet_ema_first
-                    del text_encoder_ema_first
-        else:
-            # Make sure correct types are used for models
-            unet_ema = unet_ema.to(ema_device, dtype=unet.dtype)
-            text_encoder_ema = text_encoder_ema.to(ema_device, dtype=text_encoder.dtype)
+            unet_ema, text_encoder_ema = create_ema_model_if_needed(
+                use_ema_decay_training=True, # Already known to be true here
+                ema_model_loaded_from_file=False, # Explicitly false as we are in the creation block
+                unet=unet,
+                text_encoder=text_encoder,
+                ema_device_str=str(ema_device),
+                main_device_str=str(device)
+            )
+        
+        # Ensure EMA models (whether loaded or newly created) are on the correct device and dtype
+        if unet_ema is not None:
+            unet_ema = unet_ema.to(ema_device, dtype=unet.dtype) # Match UNet's dtype
+        if text_encoder_ema is not None:
+            text_encoder_ema = text_encoder_ema.to(ema_device, dtype=text_encoder.dtype) # Match Text Encoder's dtype
     else:
         unet_ema = None
         text_encoder_ema = None
+
 
     try:
         print()
